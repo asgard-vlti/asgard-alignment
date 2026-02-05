@@ -417,8 +417,12 @@ with open(args.toml_file.replace('#',f'{args.beam}'), "r") as f:
     baldr_pupils = config_dict['baldr_pupils']
 
 # init camera 
-roi = baldr_pupils[str(args.beam)] #[None, None, None, None] # 
-c = FLI.fli(roi=roi) #cameraIndex=0, roi=roi)
+#roi = baldr_pupils[str(args.beam)] #[None, None, None, None] # 
+#c = FLI.fli(roi=roi) #cameraIndex=0, roi=roi)
+### update 4-2-26 to use subframes  ######
+#c = FLI.fli(shm_target = f"/dev/shm/baldr{args.beam}.im.shm")
+from xaosim.shmlib import shm 
+c = shm( f"/dev/shm/baldr{args.beam}.im.shm")
 # configure with default configuration file
 
 ### UNCOMMENT WHEN CMDS WORKING AGAIN
@@ -441,29 +445,41 @@ c = FLI.fli(roi=roi) #cameraIndex=0, roi=roi)
 # time.sleep(5)
 
 # check the cropped pupil regions are correct: 
-full_im = c.get_image_in_another_region( )
 
-# Plot the image
+### update 4-2-26 to use subframes  ######
+img_tmp =  c.get_data() 
+if len( img_tmp.shape )>2:
+    img_tmp = np.mean( c.get_data() ,axis=0) # do this just in case it returns data cube (conventions change)
 plt.figure(figsize=(8, 8))
-plt.imshow(np.log10(full_im), cmap='gray',origin='upper' ) #, origin='upper') #extent=[0, full_im.shape[1], 0, full_im.shape[0]]
+plt.imshow(np.log10(img_tmp), cmap='gray',origin='upper' ) #, origin='upper') #extent=[0, full_im.shape[1], 0, full_im.shape[0]]
 plt.colorbar(label='Intensity')
-
-# Overlay red boxes for each cropping region
-for beam_tmp, (row1, row2, column1, column2) in  baldr_pupils.items():
-    plt.plot([column1, column2, column2, column1, column1],
-             [row1, row1, row2, row2, row1],
-             color='red', linewidth=2, label=f'Beam {beam_tmp}' if beam_tmp == 1 else "")
-    plt.text((column1 + column2) / 2, row1 , f'Beam {beam_tmp}', 
-             color='red', fontsize=15, ha='center', va='bottom')
-
-# Add labels and legend
-plt.title('Image with Baldr Cropping Regions')
-plt.xlabel('Columns')
-plt.ylabel('Rows')
-plt.legend(loc='upper right')
 plt.savefig('delme.png')
 plt.show()
 plt.close() 
+# # dont show full frame with cropped region, omment out 
+# full_im = c.get_image_in_another_region( )
+
+# # Plot the image
+# plt.figure(figsize=(8, 8))
+# plt.imshow(np.log10(full_im), cmap='gray',origin='upper' ) #, origin='upper') #extent=[0, full_im.shape[1], 0, full_im.shape[0]]
+# plt.colorbar(label='Intensity')
+
+# # Overlay red boxes for each cropping region
+# for beam_tmp, (row1, row2, column1, column2) in  baldr_pupils.items():
+#     plt.plot([column1, column2, column2, column1, column1],
+#              [row1, row1, row2, row2, row1],
+#              color='red', linewidth=2, label=f'Beam {beam_tmp}' if beam_tmp == 1 else "")
+#     plt.text((column1 + column2) / 2, row1 , f'Beam {beam_tmp}', 
+#              color='red', fontsize=15, ha='center', va='bottom')
+
+# # Add labels and legend
+# plt.title('Image with Baldr Cropping Regions')
+# plt.xlabel('Columns')
+# plt.ylabel('Rows')
+# plt.legend(loc='upper right')
+# plt.savefig('delme.png')
+# plt.show()
+# plt.close() 
 
 
 
@@ -603,10 +619,17 @@ if 1:
             
         time.sleep(args.sleeptime)  # wait for the phase mask to move and settle
 
-        img = np.mean(
-            c.get_data(), #get_some_frames( number_of_frames=10, apply_manual_reduction=True),
-            axis=0,
-        )
+        ## update 4-2-26 use shm rather than FLI wrpaper
+        img_list_tmp = []
+        for _ in range( 10 ):
+            img_list_tmp.append( c.get_data() )
+            time.sleep(0.01) #
+        img = np.mean( img_list_tmp, axis=0 )
+
+        # img = np.mean(
+        #     c.get_data(), #get_some_frames( number_of_frames=10, apply_manual_reduction=True),
+        #     axis=0,
+        # )
 
         img_dict[(x_pos, y_pos)] = img
 ###=========== end 

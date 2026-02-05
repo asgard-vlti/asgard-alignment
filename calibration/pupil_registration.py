@@ -368,56 +368,85 @@ with open(args.toml_file.replace('#',f'{args.beam_ids[0]}') ) as file:
 
 # shm path to FULL () imagr 
 #mySHM = shm(args.global_camera_shm)
-c = FLI.fli() #
-
-# ### BAD PIXELS CAN RUIN PUPIL FIT - SO REDUCE INMAGES , FOR NOW WE TURN OFF SOURCE TO GET A FRESH DARK IN CURRENT SETTINGS 
-#c.build_manual_dark(no_frames = 200 , build_bad_pixel_mask=True, kwargs={'std_threshold':20, 'mean_threshold':6} )
-time.sleep(2)
-
-# c.build_bad_pixel_mask( no_frames = 300 )
-# bad_pixel_mask = FLI.get_bad_pixels( c.reduction_dict['dark'][-1], std_threshold = 20, mean_threshold=6)
-# c.reduction_dict['bad_pixel_mask'].append( bad_pixel_mask )
 
 
 
-img_raw = c.get_data(apply_manual_reduction=True) #mySHM.get_data()
 
-# turn off 
-bad_pixel_mask = FLI.get_bad_pixels( img_raw, std_threshold = 20, mean_threshold=6)
-bad_pixel_list = [(201,273)]
 
-print(img_raw.shape)
 
-for bpix in bad_pixel_list:
-    img_raw[:,bpix[0],bpix[1]] = 0
+# 4-2-26 update to use shm subframe 
+use_shm = True 
+#
+if not use_shm:
+    c = FLI.fli() #
 
-if hasattr(img_raw, "__len__"):
-    if len( np.array(img_raw).shape ) == 3:
-        img=np.mean(img_raw, axis=0)
-    elif len( np.array(img_raw).shape ) == 2:
-        img=img_raw
+    # ### BAD PIXELS CAN RUIN PUPIL FIT - SO REDUCE INMAGES , FOR NOW WE TURN OFF SOURCE TO GET A FRESH DARK IN CURRENT SETTINGS 
+    #c.build_manual_dark(no_frames = 200 , build_bad_pixel_mask=True, kwargs={'std_threshold':20, 'mean_threshold':6} )
+    # time.sleep(2)
+
+    # c.build_bad_pixel_mask( no_frames = 300 )
+    # bad_pixel_mask = FLI.get_bad_pixels( c.reduction_dict['dark'][-1], std_threshold = 20, mean_threshold=6)
+    # c.reduction_dict['bad_pixel_mask'].append( bad_pixel_mask )
+
+    img_raw = c.get_data(apply_manual_reduction=True) #mySHM.get_data()
+
+
+    #turn off 
+    bad_pixel_mask = FLI.get_bad_pixels( img_raw, std_threshold = 20, mean_threshold=6)
+    bad_pixel_list = [(201,273)]
+
+    print(img_raw.shape)
+
+    for bpix in bad_pixel_list:
+        img_raw[:,bpix[0],bpix[1]] = 0
+
+    if hasattr(img_raw, "__len__"):
+        if len( np.array(img_raw).shape ) == 3:
+            img=np.mean(img_raw, axis=0)
+        elif len( np.array(img_raw).shape ) == 2:
+            img=img_raw
+        else:
+            raise UserWarning(f"image in shared memory address {args.target} doresnt have 2 or 3 dimensions. not a valid image(s)")
     else:
-        raise UserWarning(f"image in shared memory address {args.target} doresnt have 2 or 3 dimensions. not a valid image(s)")
+        raise UserWarning(f"image in shared memory address {args.target} doresnt length attribute!")
+
+    for beam_id in args.beam_ids:
+        # get the cropped image 
+        r1,r2,c1,c2 = baldr_pupils[f"{beam_id}"]
+        cropped_img = img[r1:r2, c1:c2] 
+        #interpolate_bad_pixels(img[r1:r2, c1:c2], bad_pixel_mask[r1:r2, c1:c2]) #img[r1:r2, c1:c2] #interpolate_bad_pixels(img[r1:r2, c1:c2], c.reduction_dict['bad_pixel_mask'][-1][r1:r2, c1:c2])
+        if args.fig_path is None:
+            savepath=f"delme{beam_id}.png"
+        else: # we save with default name at fig path 
+            savepath=args.fig_path + f'pupil_reg_beam{beam_id}'
+
+        ell1 = detect_pupil(cropped_img, sigma=2, threshold=0.5, plot=args.plot,savepath=savepath)
+
+        save_pupil_data_toml(beam_id=beam_id, ellipse_params=ell1, toml_path=args.toml_file.replace('#',f'{beam_id}'))
+
 else:
-    raise UserWarning(f"image in shared memory address {args.target} doresnt length attribute!")
+    from xaosim.shmlib import shm 
 
-for beam_id in args.beam_ids:
-    # get the cropped image 
-    r1,r2,c1,c2 = baldr_pupils[f"{beam_id}"]
-    cropped_img = img[r1:r2, c1:c2] 
-    #interpolate_bad_pixels(img[r1:r2, c1:c2], bad_pixel_mask[r1:r2, c1:c2]) #img[r1:r2, c1:c2] #interpolate_bad_pixels(img[r1:r2, c1:c2], c.reduction_dict['bad_pixel_mask'][-1][r1:r2, c1:c2])
+    for beam_id in args.beam_ids:
+        c = shm( f"/dev/shm/baldr{beam_id}.im.shm")
 
-    # mask 
-    if args.fig_path is None:
-        savepath=f"delme{beam_id}.png"
-    else: # we save with default name at fig path 
-        savepath=args.fig_path + f'pupil_reg_beam{beam_id}'
-    
-    ell1 = detect_pupil(cropped_img, sigma=2, threshold=0.5, plot=args.plot,savepath=savepath)
-    
-    save_pupil_data_toml(beam_id=beam_id, ellipse_params=ell1, toml_path=args.toml_file.replace('#',f'{beam_id}'))
+        # mask 
+        img_list_tmp = []
+        for _ in range( 10 ):
+            img_list_tmp.append( c.get_data() )
+            time.sleep(0.01) #
+        cropped_img = np.mean( img_list_tmp, axis=0 )
 
+        if args.fig_path is None:
+            savepath=f"delme{beam_id}.png"
+        else: # we save with default name at fig path 
+            savepath=args.fig_path + f'pupil_reg_beam{beam_id}'
 
+        ell1 = detect_pupil(cropped_img, sigma=2, threshold=0.5, plot=args.plot,savepath=savepath)
+
+        save_pupil_data_toml(beam_id=beam_id, ellipse_params=ell1, toml_path=args.toml_file.replace('#',f'{beam_id}'))
+
+        c.close( erase_file=False )
 # close camera SHM
 c.close( erase_file=False )
 
