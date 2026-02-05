@@ -9,6 +9,7 @@
 //  "w[MOTOR]" Find the position of a motor.
 //  "z[MOTOR]" Find if the motor is homed.
 //  "s[MOTOR] [STEPS]" Move to a fixed number of steps from zero. 
+// This only works with one motor, so only one motor should be enabled at a time.
 //  "?" Ping
 //  "q" Quit this client. Can start another! (only 1 at a time)
 //
@@ -43,7 +44,7 @@ bool looking_for_home[MAX_MOTORS]={false,false,false,false,false,false,false,fal
 bool found_home[MAX_MOTORS]=      {false,false,false,false,false,false,false,false,false,false,false,false};
 bool enable_motors[MAX_MOTORS]=    {false,false,false,false,false,false,false,false,false,false,false,false};
 EthernetClient clients[8];
-int stepit=0;
+int stepit=0, rdir=0, rsteps=0;
 
 void setup() {
   // Ethernet initialization
@@ -156,11 +157,23 @@ void loop() {
         return success(clients[i]);
       }
       else if (c == 'e'){
+        // If the pin is invalid, return failure.
+        if ((pin >= MAX_MOTORS) || (pin < 0)) return failure(clients[i]);
         enable_motors[pin]=true;
         digitalWrite(enable_pins[pin], LOW);
         return success(clients[i]);
       }
       else if (c == 'd'){
+        // If the pin is invalid, return failure.
+        if ((pin >= MAX_MOTORS) || (pin < -1)) return failure(clients[i]);
+        // If the pin number is -1, disable all motors.
+        if (pin == -1){
+          for (int j=0;j<MAX_MOTORS;j++){
+            enable_motors[j]=false;
+            digitalWrite(enable_pins[j], HIGH);
+          }
+          return success(clients[i]);
+        }
         enable_motors[pin]=false;
         digitalWrite(enable_pins[pin], HIGH);
         return success(clients[i]);
@@ -168,27 +181,26 @@ void loop() {
       else if (c == 's') {
         int value = get_value(request);
         // Check we have the right motor.
-        if (pin >= MAX_MOTORS) return failure(clients[i]);
-        // Make sure this motor ie enabled
-        if (!enable_motors[pin]){
-          return failure(clients[i]);
-        }
+        if ((pin >= MAX_MOTORS) || (pin < 0)) return failure(clients[i]);
+        // Make sure this motor is enabled and all others are disabled.
+        enable_one_motor(pin);
         target_pos[pin] = value;
         return success(clients[i]);
       } else if (c=='h'){
-        if (pin >= MAX_MOTORS) return failure(clients[i]);
+        if ((pin >= MAX_MOTORS) || (pin < 0)) return failure(clients[i]);
+        enable_one_motor(pin);
         looking_for_home[pin] = true;
         found_home[pin] = false;
         target_pos[pin] = -36000;
         return success(clients[i]);
       } else if (c=='w'){
-        if (pin >= MAX_MOTORS) return failure(clients[i]);
+        if ((pin >= MAX_MOTORS) || (pin < 0)) return failure(clients[i]);
         else {
            clients[i].println(String(current_pos[pin]));
            return;
         }
       } else if (c=='z'){ //Has zero been found?
-        if (pin >= MAX_MOTORS) return failure(clients[i]); //!!! This just returns "0" which isn't great.
+        if ((pin >= MAX_MOTORS) || (pin < 0)) return failure(clients[i]); 
         else clients[i].println(String(int(found_home[pin])));
       } else {
         Serial.println("Invalid command character.");
@@ -228,35 +240,37 @@ void loop() {
         }
       }
     }
-    if ((target_pos[i] == current_pos[i]) || !enable_motors[i]){
-      continue;
-     // Do nothing.
-    } else {
-      // Print the current steps.
-      Serial.print(i);
-      Serial.print(" ");
-      Serial.print(target_pos[i]);
-      Serial.print(" ");
-      Serial.print(current_pos[i]);
-      Serial.print(" ");
-      Serial.print(stepit);
-      Serial.println();
-      if (stepit){
-        if (target_pos[i] > current_pos[i]) {
-          digitalWrite(DIR_PIN,HIGH); //!!! Need to do this only for 1 of the motors.XXX
-          digitalWrite(STEP_PIN,HIGH);
-          current_pos[i] += 1;
-        }
-        if (target_pos[i] < current_pos[i]) {
-          digitalWrite(DIR_PIN,LOW);
-          digitalWrite(STEP_PIN,HIGH);
-          current_pos[i] -= 1;
-        }
-      } else {
-        digitalWrite(STEP_PIN,LOW);
+    if (!enable_motors[i]) continue;
+    if ((target_pos[i] == current_pos[i]) && rdir==0) continue;
+
+    // Print the current steps.
+    Serial.print(i);
+    Serial.print(" ");
+    Serial.print(target_pos[i]);
+    Serial.print(" ");
+    Serial.print(current_pos[i]);
+    Serial.print(" ");
+    Serial.print(stepit);
+    Serial.println();
+    if (stepit){
+      if (((target_pos[i] > current_pos[i]) && (rdir ==0)) || (rdir==1)) {
+        digitalWrite(DIR_PIN,HIGH); 
+        digitalWrite(STEP_PIN,HIGH);
+        current_pos[i] += 1;
       }
-      stepit = (stepit + 1) % 2;
-    } 
+      if (((target_pos[i] < current_pos[i]) && (rdir ==0)) || (rdir==-1)) {
+        digitalWrite(DIR_PIN,LOW);
+        digitalWrite(STEP_PIN,HIGH);
+        current_pos[i] -= 1;
+      }
+    } else {
+      digitalWrite(STEP_PIN,LOW);
+    }
+    stepit = (stepit + 1) % 2;
+    if (rdir != 0){
+      rsteps -= 1;
+      if (rsteps <= 0) rdir = 0;
+    }
   }
   delay(1); // If not looking for the home sensor.
 }
@@ -291,7 +305,20 @@ void failure(EthernetClient client){
   client.println("F");
   // As Native Ethernet doesn't work... let's flush
 }
+
 void success(EthernetClient client){
   client.println("S");
   // As Native Ethernet doesn't work... let's flush
+}
+
+void enable_one_motor(int pin){
+  for (int j=0;j<MAX_MOTORS;j++){
+    if (j==pin){
+      enable_motors[j]=true;
+      digitalWrite(enable_pins[j], LOW);
+    } else {
+      enable_motors[j]=false;
+      digitalWrite(enable_pins[j], HIGH);
+    }
+  }
 }

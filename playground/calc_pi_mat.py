@@ -77,7 +77,7 @@ if (plane == "CRed"):
     ip = np.pi/180*(2239 - 21.39*N1_dist)
 elif (plane == "Baldr"):
     dps = [67.5,233.9,388.1,547.9]
-    ii = 29.56
+    ii = 29.56 * 3/4
     ip = 20.7
 else:
     raise UserWarning

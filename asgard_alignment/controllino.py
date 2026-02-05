@@ -60,11 +60,12 @@ def get_devices():
 
 
 # stepper motors. First entry corresponds to motor config file, second to the
-# number in the controllino.
+# number in the Teensy.
 STEPPER_NAME_TO_NUM = {
-    "HPOL1": 2,
-    "HPOL2": 1,
-    "HPOL4": 0,
+    "HPOL1": 4,
+    "HPOL2": 5,
+    "HPOL3": 6,
+    "HPOL4": 7,
 }
 
 
