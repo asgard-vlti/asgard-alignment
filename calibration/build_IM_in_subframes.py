@@ -102,14 +102,14 @@ parser.add_argument(
 parser.add_argument(
     "--beam_id",
     type=lambda s: [int(item) for item in s.split(",")],
-    default=[4], # 1, 2, 3, 4],
+    default=[3], # 1, 2, 3, 4],
     help="Comma-separated beam IDs to apply. Default: 1,2,3,4"
 )
 
 parser.add_argument(
     "--phasemask",
     type=str,
-    default="H3",
+    default="H4",
     help="Comma-separated beam IDs to apply. Default: 1,2,3,4"
 )
 
@@ -247,7 +247,8 @@ time.sleep(1)
 zwfs_pupils = {}
 clear_pupils = {}
 normalized_pupils = {}
-rel_offset = 200.0 #um phasemask offset for clear pupil
+# for new phasemask H band is close to edge so offset MUST be negative direction
+rel_offset = -200.0 #um phasemask offset for clear pupil
 print( 'Moving FPM out to get clear pupils')
 for beam_id in args.beam_id:
     message = f"moverel BMX{beam_id} {rel_offset}"
@@ -339,8 +340,8 @@ if args.signal_space.lower() not in ["dm", "pixel"] :
 ############
 # BUILDING IM 
 
-n_modes = len(modal_basis)
-number_of_pokes_per_cmd = 4 
+n_modes = modal_basis.shape[0]
+number_of_pokes_per_cmd = 8 
 signs = [(-1)**n for n in range(number_of_pokes_per_cmd )]
 pos_idx = [k for k,s in enumerate(signs) if s > 0]
 neg_idx = [k for k,s in enumerate(signs) if s < 0]
@@ -412,7 +413,7 @@ for beam_id in args.beam_id:
     # set back to zero on the given probe channel
     dm_shm_dict[beam_id].set_data( 0 * cmd )
     # close
-    dm_shm_dict[beam_id].close(erase_file=False)
+    #dm_shm_dict[beam_id].close(erase_file=False)
 
 
 # Save components as seperate fits too so we can analyse and keep record  
@@ -457,10 +458,10 @@ for b in args.beam_id:
 tstamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
 tstamp_rough = datetime.datetime.now().strftime("%d-%m-%Y")
 
-fits_path = "/home/asg/Progs/repos/asgard-alignment/calibration/reports/IM/{tstamp_rough}/IM_{tstamp}.fits"
+fits_path = f"/home/asg/Progs/repos/asgard-alignment/calibration/reports/IM/{tstamp_rough}/IM_{args.phasemask}_{tstamp}.fits"
 os.makedirs(os.path.dirname(fits_path), exist_ok=True)
 hdul.writeto(fits_path, overwrite=True)
-
+print( f"saved fits file with IM telemetry {fits_path}")
 
 ### Previous non optimized way 
 # #############
@@ -583,8 +584,6 @@ for beam_id in args.beam_id:
 
 ## A QUICK LOOK 
 
-
-
 for beam_id in args.beam_id:
     U,S,Vt = np.linalg.svd( IM_mat[beam_id], full_matrices=True)
     #singular values
@@ -600,6 +599,7 @@ for beam_id in args.beam_id:
         os.makedirs( args.fig_path )
     
     plt.savefig(f'{args.fig_path}' + f'IM_singularvalues_beam{beam_id}.png', bbox_inches='tight', dpi=200)
+    plt.show()
     plt.close()
 
 
@@ -635,68 +635,69 @@ for beam_id in args.beam_id:
 # plt.show()
 
 
-for beam_id in args.beam_id:
 
-    ################################
-    # the reference intensities
-    im_list = [ np.mean( zwfs_pupils[beam_id],axis=0), np.mean( clear_pupils[beam_id],axis=0), normalized_pupils[beam_id] ]
-    title_list = ['<I0>','<N0>','normalized pupil']
-    cbar_list = ["UNITLESS"] * len(im_list)
-    util.nice_heatmap_subplots( im_list , title_list=title_list, cbar_label_list=cbar_list) 
-    plt.savefig(f'{args.fig_path}' + f'reference_intensities_beam{beam_id}.jpeg', bbox_inches='tight', dpi=200)
-    #plt.show()
+# for beam_id in args.beam_id:
 
-    ################################
-    # the interaction signal 
-    modes2look = [0,1,65,67]
-    im_list = [IM_mat[beam_id][m].reshape(12,12) for m in modes2look]
+#     ################################
+#     # the reference intensities
+#     im_list = [ np.mean( zwfs_pupils[beam_id],axis=0), np.mean( clear_pupils[beam_id],axis=0), normalized_pupils[beam_id] ]
+#     title_list = ['<I0>','<N0>','normalized pupil']
+#     cbar_list = ["UNITLESS"] * len(im_list)
+#     util.nice_heatmap_subplots( im_list , title_list=title_list, cbar_label_list=cbar_list) 
+#     plt.savefig(f'{args.fig_path}' + f'reference_intensities_beam{beam_id}.jpeg', bbox_inches='tight', dpi=200)
+#     #plt.show()
 
-    title_list = [f'mode {m}' for m in modes2look]
-    cbar_list = ["UNITLESS"] * len(im_list)
-    util.nice_heatmap_subplots( im_list , cbar_label_list=cbar_list, savefig=f'{args.fig_path}' + f'IM_first16modes_beam{beam_id}.png') 
-    plt.savefig(f'{args.fig_path}' + f'IM_some_modes_beam{beam_id}.jpeg', bbox_inches='tight', dpi=200)
-    #plt.show()
+#     ################################
+#     # the interaction signal 
+#     modes2look = [0,1,65,67]
+#     im_list = [IM_mat[beam_id][m].reshape(12,12) for m in modes2look]
 
-    ################################
-    # the eigenmodes 
-    U, S, Vt = np.linalg.svd(IM_mat[beam_id], full_matrices=False)  # shapes: (M, M), (min(M,N),), (min(M,N), N)
+#     title_list = [f'mode {m}' for m in modes2look]
+#     cbar_list = ["UNITLESS"] * len(im_list)
+#     util.nice_heatmap_subplots( im_list , cbar_label_list=cbar_list, savefig=f'{args.fig_path}' + f'IM_first16modes_beam{beam_id}.png') 
+#     plt.savefig(f'{args.fig_path}' + f'IM_some_modes_beam{beam_id}.jpeg', bbox_inches='tight', dpi=200)
+#     #plt.show()
 
-    # (a) Plot singular values
-    plt.figure(figsize=(6, 4))
-    plt.semilogy(S, 'o-')
-    plt.title("Singular Values of IM_HO")
-    plt.xlabel("Index")
-    plt.ylabel("Singular value (log scale)")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(f"{args.fig_path}" + f'IM_singular_values_beam{beam_id}.png', bbox_inches='tight', dpi=200)
+#     ################################
+#     # the eigenmodes 
+#     U, S, Vt = np.linalg.svd(IM_mat[beam_id], full_matrices=False)  # shapes: (M, M), (min(M,N),), (min(M,N), N)
 
-    # (b) Intensity eigenmodes (Vt)
-    plt.figure(figsize=(15, 3))
-    for i in range(min(5, Vt.shape[0])):
-        ax = plt.subplot(1, 5, i+1)
-        im = ax.imshow(util.get_DM_command_in_2D(Vt[i]), cmap='viridis')
-        ax.set_title(f"Vt[{i}]")
-        plt.colorbar(im, ax=ax)
-    plt.suptitle("First 5 intensity eigenmodes (Vt) mapped to 2D")
-    plt.tight_layout()
-    plt.savefig(f"{args.fig_path}" + f'IM_first5_intensity_eigenmodes_beam{beam_id}.png', bbox_inches='tight', dpi=200)
+#     # (a) Plot singular values
+#     plt.figure(figsize=(6, 4))
+#     plt.semilogy(S, 'o-')
+#     plt.title("Singular Values of IM_HO")
+#     plt.xlabel("Index")
+#     plt.ylabel("Singular value (log scale)")
+#     plt.grid(True)
+#     plt.tight_layout()
+#     plt.savefig(f"{args.fig_path}" + f'IM_singular_values_beam{beam_id}.png', bbox_inches='tight', dpi=200)
 
-
-    # (c) System eigenmodes (U)
-    plt.figure(figsize=(15, 3))
-    for i in range(min(5, U.shape[1])):
-        ax = plt.subplot(1, 5, i+1)
-        im = ax.imshow(util.get_DM_command_in_2D(U[:, i]), cmap='plasma')
-        ax.set_title(f"U[:, {i}]")
-        plt.colorbar(im, ax=ax)
-    plt.suptitle("First 5 system eigenmodes (U) mapped to 2D")
-    plt.tight_layout()
-    plt.savefig(f"{args.fig_path}" + f'IM_first5_system_eigenmodes_beam{beam_id}.png', bbox_inches='tight', dpi=200)
-    #plt.show()
+#     # (b) Intensity eigenmodes (Vt)
+#     plt.figure(figsize=(15, 3))
+#     for i in range(min(5, Vt.shape[0])):
+#         ax = plt.subplot(1, 5, i+1)
+#         im = ax.imshow(util.get_DM_command_in_2D(Vt[i]), cmap='viridis')
+#         ax.set_title(f"Vt[{i}]")
+#         plt.colorbar(im, ax=ax)
+#     plt.suptitle("First 5 intensity eigenmodes (Vt) mapped to 2D")
+#     plt.tight_layout()
+#     plt.savefig(f"{args.fig_path}" + f'IM_first5_intensity_eigenmodes_beam{beam_id}.png', bbox_inches='tight', dpi=200)
 
 
-    plt.close("all")
+#     # (c) System eigenmodes (U)
+#     plt.figure(figsize=(15, 3))
+#     for i in range(min(5, U.shape[1])):
+#         ax = plt.subplot(1, 5, i+1)
+#         im = ax.imshow(util.get_DM_command_in_2D(U[:, i]), cmap='plasma')
+#         ax.set_title(f"U[:, {i}]")
+#         plt.colorbar(im, ax=ax)
+#     plt.suptitle("First 5 system eigenmodes (U) mapped to 2D")
+#     plt.tight_layout()
+#     plt.savefig(f"{args.fig_path}" + f'IM_first5_system_eigenmodes_beam{beam_id}.png', bbox_inches='tight', dpi=200)
+#     #plt.show()
+
+
+#     plt.close("all")
 
 
 
