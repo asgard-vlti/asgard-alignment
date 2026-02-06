@@ -17,7 +17,6 @@ from scipy.ndimage import binary_erosion
 import asgard_alignment.controllino as co # for turning on / off source \
 from asgard_alignment.DM_shm_ctrl import dmclass
 import common.DM_basis_functions as dmbases
-import asgard_alignment.controllino as co
 import common.phasemask_centering_tool as pct
 import common.phasescreens as ps 
 import pyBaldr.utilities as util 
@@ -212,6 +211,10 @@ for beam_id in args.beam_id:
 # for reading camera config ! 
 camclient = FLI.fli(args.global_camera_shm, roi = [None,None,None,None])
 
+# Open SHM once for each subframe 
+cam_shm = {b: shm(f"/dev/shm/baldr{b}.im.shm") for b in args.beam_id}
+
+
 # set up DM SHMs 
 print( 'setting up DMs')
 dm_shm_dict = {}
@@ -235,6 +238,43 @@ for beam_id in args.beam_id:
     #     dm_shm_dict[beam_id].activate_calibrated_flat()
 
 
+
+
+# Get bias in each subframe to account for aduoffset pixelwize
+    # from asgard_alignment import controllino as co
+    # myco = co.Controllino('172.16.8.200')
+
+    # myco.turn_off("SBB")
+    # time.sleep(10)
+    
+    # dark_raw = c.get_data()
+
+    # myco.turn_on("SBB")
+    # time.sleep(10)
+
+print("turning off internal SBB source for bias")
+send_and_get_response("off SBB")
+
+time.sleep(10)
+
+dark_dict = {}
+for beam_id in args.beam_id:
+    dark_tmp = []
+    for _ in range( 1000 ):
+        dark_tmp.append( cam_shm[beam_id].get_data() )
+        time.sleep(0.01) #
+    dark_dict[beam_id] = np.mean( dark_tmp , axis=0)
+
+send_and_get_response("on SBB")
+time.sleep(3)
+print("turning back on internal SBB source, check plot that darks are ok")
+
+# check 
+util.nice_heatmap_subplots( im_list=[dark_dict[beam_id] for beam_id in args.beam_id], title_list=[f"beam{beam_id}" for beam_id in args.beam_id] )
+plt.show() 
+
+
+print(f"moving to phasemask {args.phasemask} reference position")
 # Move to phase mask
 for beam_id in args.beam_id:
     message = f"fpm_movetomask phasemask{beam_id} {args.phasemask}"
@@ -271,14 +311,14 @@ inner_pupil_filt = {} # strictly inside (not on boundary)
 
 for beam_id in args.beam_id:
 
-    c = shm( f"/dev/shm/baldr{beam_id}.im.shm")
+    
     N0s = []
     for _ in range( no_imgs ):
-        N0s.append( c.get_data() )
+        N0s.append( cam_shm[beam_id].get_data()  - dark_dict[beam_id] )
         time.sleep(0.01) #
 
     
-    clear_pupils[beam_id] = N0s
+    clear_pupils[beam_id] = N0s  
 
 
     ############
@@ -313,10 +353,10 @@ input("phasemasks aligned? ensure alignment then press enter")
 print( 'Getting ZWFS pupils')
 for beam_id in args.beam_id:
 
-    c = shm( f"/dev/shm/baldr{beam_id}.im.shm")
+    
     I0s = []
     for _ in range( no_imgs ):
-        I0s.append( c.get_data() )
+        I0s.append( cam_shm[beam_id].get_data() - dark_dict[beam_id] )
         time.sleep(0.01) #
 
     zwfs_pupils[beam_id] = I0s 
@@ -347,8 +387,7 @@ pos_idx = [k for k,s in enumerate(signs) if s > 0]
 neg_idx = [k for k,s in enumerate(signs) if s < 0]
 n_plus, n_minus = len(pos_idx), len(neg_idx)
 
-# Open SHM once
-cam_shm = {b: shm(f"/dev/shm/baldr{b}.im.shm") for b in args.beam_id}
+
 
 # Infer frame shape once
 frame0 = cam_shm[args.beam_id[0]].get_data()
@@ -375,7 +414,7 @@ for i, m in enumerate(modal_basis):
         for b in args.beam_id:
             imgs = []
             for _ in range(no_imgs):
-                imgs.append(cam_shm[b].get_data())
+                imgs.append(cam_shm[b].get_data() - dark_dict[b])
                 time.sleep(0.01)
             img_tmp = np.mean(imgs, axis=0).astype(np.float32)
 
