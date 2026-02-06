@@ -86,14 +86,14 @@ parser.add_argument(
 parser.add_argument(
     "--beam_id",
     type=lambda s: [int(item) for item in s.split(",")],
-    default=[4],
+    default=[3],
     help="Comma-separated beam IDs to apply. Default: 1,2,3,4"
 )
 
 parser.add_argument(
     "--phasemask",
     type=str,
-    default="H3",
+    default="H4",
     help="which phasemask do we use"
 )
 
@@ -123,6 +123,7 @@ mds_socket = context.socket(zmq.REQ)
 mds_socket.setsockopt(zmq.RCVTIMEO, timeout)
 mds_socket.connect( f"tcp://{host}:{port}")
 
+state_dict = {"message_history": [], "socket": mds_socket}
 
 pupil_masks = {}
 I2A_dict = {}
@@ -155,7 +156,7 @@ T = 1900 #K lab thermal source temperature
 lambda_cut_on, lambda_cut_off =  1.38, 1.82 # um
 wvl = util.find_central_wavelength(lambda_cut_on, lambda_cut_off, T) # central wavelength of Nice setup
 F_number = 21.2
-coldstop_diam = 4.8
+coldstop_diam = 8.1 #4.8
 mask_diam = 1.22 * F_number * wvl / phasemask_parameters[args.phasemask]['diameter']
 eta = 0.647/4.82 #~= 1.1/8.2 (i.e. UTs) # ratio of secondary obstruction (UTs)
 
@@ -180,11 +181,54 @@ if get_new_dark:
         print(f"Error running script: {e}")
 
 
-#---------- CAMERA 
-c = FLI.fli() #shm(args.global_camera_shm)
-c.build_manual_bias(number_of_frames=200)
-c.build_manual_dark(no_frames = 200 , build_bad_pixel_mask=True, kwargs={'std_threshold':20, 'mean_threshold':6} )
 
+def send_and_get_response(message):
+    # st.write(f"Sending message to server: {message}")
+    state_dict["message_history"].append(
+        f":blue[Sending message to server: ] {message}\n"
+    )
+    state_dict["socket"].send_string(message)
+    response = state_dict["socket"].recv_string()
+    if "NACK" in response or "not connected" in response:
+        colour = "red"
+    else:
+        colour = "green"
+    # st.markdown(f":{colour}[Received response from server: ] {response}")
+    state_dict["message_history"].append(
+        f":{colour}[Received response from server: ] {response}\n"
+    )
+    return response.strip()
+
+
+
+#---------- CAMERA 
+# c = FLI.fli() #shm(args.global_camera_shm)
+# c.build_manual_bias(number_of_frames=200)
+# c.build_manual_dark(no_frames = 200 , build_bad_pixel_mask=True, kwargs={'std_threshold':20, 'mean_threshold':6} )
+
+cam_shm = {b: shm(f"/dev/shm/baldr{b}.im.shm") for b in args.beam_id}
+
+
+print("turning off internal SBB source for bias")
+send_and_get_response("off SBB")
+
+time.sleep(10)
+
+dark_dict = {}
+for beam_id in args.beam_id:
+    dark_tmp = []
+    for _ in range( 1000 ):
+        dark_tmp.append( cam_shm[beam_id].get_data() )
+        time.sleep(0.01) #
+    dark_dict[beam_id] = np.mean( dark_tmp , axis=0)
+
+send_and_get_response("on SBB")
+time.sleep(3)
+print("turning back on internal SBB source, check plot that darks are ok")
+
+# check 
+util.nice_heatmap_subplots( im_list=[dark_dict[beam_id] for beam_id in args.beam_id], title_list=[f"beam{beam_id} dark" for beam_id in args.beam_id] )
+plt.show() 
 # # read in dark and get bad pixels 
 
 # tstamp_rough = datetime.datetime.now().strftime("%d-%m-%Y")
@@ -210,6 +254,7 @@ c.build_manual_dark(no_frames = 200 , build_bad_pixel_mask=True, kwargs={'std_th
 
 def apply_flat( beam_list, DM_flat ):
     print( 'setting up DMs')
+    #####! Maybe a bug here , verify!!!
     dm_shm_dict = {}
     for beam in beam_list:
         dm_shm_dict[beam] = dmclass( beam_id=beam) 
@@ -255,6 +300,7 @@ for beam_id in args.beam_id:
         dm_shm_dict[beam_id].activate_flat()
     else:
         dm_shm_dict[beam_id].activate_calibrated_flat()
+        #####! Maybe a bug here , verify function (it reinits dm_shm_dict!!!
         apply_flat( [beam_id], DM_flat = 'heim' ) # onksy commissioning heimdallr flat was good starting point
     # apply DM flat offset 
 
@@ -266,7 +312,7 @@ response = mds_socket.recv_string()#.decode("ascii")
 print(f"moved to phasemask {args.phasemask}")
 
 #---------- Clear pupil reference 
-BMX_offset_tmp = 200.0 #um
+BMX_offset_tmp = -200.0 #um
 message = f"moverel BMX{beam_id} {BMX_offset_tmp}"
 mds_socket.send_string(message)
 response = mds_socket.recv_string()#.decode("ascii")
@@ -280,12 +326,17 @@ time.sleep(10)
 
 
 # get images
-img = np.mean( c.get_data( apply_manual_reduction=True) , axis=0)
-r1,r2,c1,c2 = baldr_pupils[f"{beam_id}"]
-meas_pupil = img[r1:r2, c1:c2] #
+img_tmp = []
+for _ in range(50):
+    img_tmp.append( cam_shm[beam_id].get_data() - dark_dict[beam_id] )
+meas_pupil = np.mean( img_tmp ,axis = 0 )
+
+# img = np.mean( c.get_data( apply_manual_reduction=True) , axis=0)
+# r1,r2,c1,c2 = baldr_pupils[f"{beam_id}"]
+# meas_pupil = img[r1:r2, c1:c2] #
 
 ### CLEAR REFERENCE MEASURED 
-N0_m = img[r1:r2, c1:c2]
+N0_m = meas_pupil #img[r1:r2, c1:c2]
 
 ############## +++++++
 plt.figure(); plt.imshow( N0_m / np.max( N0_m[pupil_masks[beam_id]]) ) ; plt.colorbar(); plt.savefig('delme.png')
@@ -401,11 +452,15 @@ plt.savefig('delme.png')
 I0_t = util.interpolate_pupil_to_measurement( P_theory0, Ic_theory0, M, N, m, n, x_c, y_c, new_radius)
 
 
-img = np.mean( c.get_data( apply_manual_reduction=True) , axis=0)
-r1,r2,c1,c2 = baldr_pupils[f"{beam_id}"]
-I0_m = img[r1:r2, c1:c2] #
+# img = np.mean( c.get_data( apply_manual_reduction=True) , axis=0)
+# r1,r2,c1,c2 = baldr_pupils[f"{beam_id}"]
+# I0_m = img[r1:r2, c1:c2] #
 
-
+# using subframes now 
+img_tmp = []
+for _ in range(50):
+    img_tmp.append( cam_shm[beam_id].get_data() - dark_dict[beam_id] )
+I0_m = np.mean( img_tmp ,axis = 0 )
 
 
 # # MOVE PHASEMASK OUT MANUALLY 
@@ -487,11 +542,19 @@ for aa in amps:
     dm_shm_dict[beam_id].set_data( aa * cc )
     time.sleep(5)
 
-    img = np.mean( c.get_data(apply_manual_reduction=True) , axis=0)
+    #img = np.mean( c.get_data(apply_manual_reduction=True) , axis=0)
     # need MASK BAD PIXELS 
-    r1,r2,c1,c2 = baldr_pupils[f"{beam_id}"]
+    #r1,r2,c1,c2 = baldr_pupils[f"{beam_id}"]
 
-    I0_m = img[r1:r2, c1:c2]
+    #I0_m = img[r1:r2, c1:c2]
+    
+    # use subframes now 
+    img_tmp = []
+    for _ in range(50):
+        img_tmp.append( cam_shm[beam_id].get_data() - dark_dict[beam_id] )
+    I0_m = np.mean( img_tmp ,axis = 0 )
+
+    
     I0_m -= np.nanmin(I0_m)
     I0_m /= (np.nanmax(I0_m) - np.nanmin(I0_m)) 
 

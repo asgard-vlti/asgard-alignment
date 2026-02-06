@@ -10,7 +10,7 @@ import argparse
 import os
 import json
 import time
-
+import zmq 
 from astropy.io import fits
 import matplotlib.gridspec as gridspec
 
@@ -285,8 +285,16 @@ parser.add_argument(
 parser.add_argument(
     "--beam_id",
     type=lambda s: [int(item) for item in s.split(",")],
-    default=[1, 2, 3, 4],
+    default=[3],#[1, 2, 3, 4],
     help="Comma-separated beam IDs. Default: 1,2,3,4"
+)
+
+#Camera shared memory path (used to get camera settings )
+parser.add_argument(
+    "--global_camera_shm",
+    type=str,
+    default="/dev/shm/cred1.im.shm",
+    help="Camera shared memory path. Default: /dev/shm/cred1.im.shm"
 )
 
 # Plot: default is True, with an option to disable.
@@ -382,10 +390,14 @@ parser.add_argument(
 args=parser.parse_args()
 
 
-
-
-############################################
-########## 1. register baldr pupil 
+# set up context and state dict to move motors 
+context = zmq.Context()
+context.socket(zmq.REQ)
+socket = context.socket(zmq.REQ)
+socket.setsockopt(zmq.RCVTIMEO, args.timeout)
+server_address = f"tcp://{args.host}:{args.port}"
+socket.connect(server_address)
+state_dict = {"message_history": [], "socket": socket}
 
 
 # for reading camera config ! 
@@ -394,9 +406,36 @@ camclient = FLI.fli(args.global_camera_shm, roi = [None,None,None,None])
 # Open SHM once for each subframe 
 cam_shm = {b: shm(f"/dev/shm/baldr{b}.im.shm") for b in args.beam_id}
 
-
-
 no_imgs = 10 # number of images to average (on internal source 10 is fine for detector purposes)
+
+# BMX, BMY phasemask relative offsets for going between ZWFS and clear pupil
+rel_offset = -200.0 #um phasemask offset for clear pupil
+
+############################################
+########## 1. register baldr pupil 
+
+
+
+
+print(f"\n======================\nmoving to phasemask {args.phasemask} reference position")
+# Move to phase mask
+for beam_id in args.beam_id:
+    message = f"fpm_movetomask phasemask{beam_id} {args.phasemask}"
+    res = send_and_get_response(message)
+    print(f"moved to phasemask {args.phasemask} with response: {res}")
+
+time.sleep(1)
+
+print( 'Moving FPM out to get clear pupils')
+for beam_id in args.beam_id:
+    message = f"moverel BMX{beam_id} {rel_offset}"
+    res = send_and_get_response(message)
+    print(res) 
+    time.sleep( 1 )
+    message = f"moverel BMY{beam_id} {rel_offset}"
+    res = send_and_get_response(message)
+    print(res) 
+
 # detect them 
 for beam_id in args.beam_id:
     
@@ -485,7 +524,18 @@ for beam_id in args.beam_id:
 
 ############################################
 ########## 2. register DM 
-input("press enter when ready to register DM")
+
+
+print(f"\n======================\nmoving to phasemask {args.phasemask} reference position")
+# Move to phase mask
+for beam_id in args.beam_id:
+    message = f"fpm_movetomask phasemask{beam_id} {args.phasemask}"
+    res = send_and_get_response(message)
+    print(f"moved to phasemask {args.phasemask} with response: {res}")
+
+time.sleep(1)
+
+input("\n======================\npress enter when ready to register DM (ensure phasemask is aligned!)")
 
 
 
@@ -668,7 +718,7 @@ for ii, beam_id in enumerate( args.beam_id ):
 
 ############################################
 ########## 3. register Strehl pixels 
-input("press enter when ready to register Strehl pixels")
+input("\n======================\npress enter when ready to register Strehl pixels")
 
 
 
@@ -805,14 +855,6 @@ def plot_strehl_pixel_registration(data , exterior_filter, secondary_filter, sav
 
 tstamp_rough = datetime.datetime.now().strftime("%d-%m-%Y")
 
-# set up commands to move motors phasemask
-context = zmq.Context()
-context.socket(zmq.REQ)
-socket = context.socket(zmq.REQ)
-socket.setsockopt(zmq.RCVTIMEO, args.timeout)
-server_address = f"tcp://{args.host}:{args.port}"
-socket.connect(server_address)
-state_dict = {"message_history": [], "socket": socket}
 
 
 ## Get ZWFS and CLEAR reference pupils 
@@ -840,7 +882,7 @@ clear_pupils = {}
 secondary_filter_dict = {}
 exterior_filter_dict = {}
 #initial_pos = {}
-rel_offset = -200.0 #um phasemask offset for clear pupil
+
 print( 'Moving FPM out to get clear pupils')
 for beam_id in args.beam_id:
 
@@ -955,7 +997,7 @@ except Exception as e:
 
 ############################################
 ########## 4. Build IM 
-input("press enter when ready to start calibrating the Interaction Matrix for Baldr")
+input("\n======================\npress enter when ready to start calibrating the Interaction Matrix for Baldr")
 
 
 # By default HO in this construction of the IM will always contain zonal actuation of each DM actuator.
@@ -1031,7 +1073,7 @@ time.sleep(3)
 print("turning back on internal SBB source, check plot that darks are ok")
 
 # check 
-util.nice_heatmap_subplots( im_list=[dark_dict[beam_id] for beam_id in args.beam_id], title_list=[f"beam{beam_id}" for beam_id in args.beam_id] )
+util.nice_heatmap_subplots( im_list=[dark_dict[beam_id] for beam_id in args.beam_id], title_list=[f"beam{beam_id} dark" for beam_id in args.beam_id] )
 plt.show() 
 
 
@@ -1049,7 +1091,7 @@ zwfs_pupils = {}
 clear_pupils = {}
 normalized_pupils = {}
 # for new phasemask H band is close to edge so offset MUST be negative direction
-rel_offset = -200.0 #um phasemask offset for clear pupil
+
 print( 'Moving FPM out to get clear pupils')
 for beam_id in args.beam_id:
     message = f"moverel BMX{beam_id} {rel_offset}"
@@ -1108,7 +1150,7 @@ for beam_id in args.beam_id:
 
 #############
 # ZWFS Pupil
-input("phasemasks aligned? ensure alignment then press enter")
+input("\n======================\nphasemasks aligned? ensure alignment then press enter")
 
 
 print( 'Getting ZWFS pupils')
