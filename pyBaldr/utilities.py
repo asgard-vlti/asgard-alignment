@@ -3504,6 +3504,393 @@ def put_b_in_cmd_space( b, zwfs , debug = True):
 
 
 
+##############
+# STUFF FOR FEB BALDR COMISSIONING 
+
+def compute_correlation_map(intensity_frames, strehl_ratios):
+    # intensity_frames: k x N x M array (k frames of N x M pixels)
+    # strehl_ratios: k array (Strehl ratio for each frame)
+    
+    k, N, M = intensity_frames.shape
+    correlation_map = np.zeros((N, M))
+    
+    for i in range(N):
+        for j in range(M):
+            pixel_intensity_series = intensity_frames[:, i, j]
+            correlation_map[i, j], _ = pearsonr(pixel_intensity_series, strehl_ratios)
+    
+    return correlation_map
+
+
+def piecewise_continuous(x, interc, slope_1, slope_2, x_knee):
+    # piecewise linear (hinge) model 
+    return interc + slope_1 * x + slope_2 * np.maximum(0.0, x - x_knee)
+
+
+def fit_piecewise_continuous(x, y, n_grid=60, trim=0.1): 
+    # fits a piecewise linear (hinge) model , typically used for OPD model from ZWFS pixels exterior to pupil
+
+    def _fit_hinge_given_x0(x, y, x0):
+        h = np.maximum(0.0, x - x0)
+
+        # linear in (a, b, d): y ≈ a + b*x + d*h
+        A = np.column_stack([np.ones_like(x), x, h])
+
+        # robust solve via least_squares on linear params
+        def resid(p):
+            return (A @ p) - y
+
+        p0 = np.linalg.lstsq(A, y, rcond=None)[0]
+        res = least_squares(resid, p0, loss="soft_l1", f_scale=np.std(y) + 1e-12)
+        a, b, d = res.x
+        return a, b, d, res.cost ##return a, b, d, np.mean(res.fun**2) #<- this could be more robust?
+
+    def _fit_hinge_gridsearch(x, y, n_grid=60, trim=0.1):
+        # grid search to fit a reasonable knee point 
+        x = np.asarray(x, float)
+        y = np.asarray(y, float)
+
+        # candidate x0 values within central range (avoid extremes)
+        xs = np.sort(x)
+        lo = xs[int(trim * len(xs))]
+        hi = xs[int((1-trim) * len(xs))]
+
+        x0_grid = np.linspace(lo, hi, n_grid)
+
+        best = None
+        for x0 in x0_grid:
+            a, b, d, cost = _fit_hinge_given_x0(x, y, x0)
+            if (best is None) or (cost < best["cost"]):
+                #best = dict(a=a, b_left=b, b_right=b+d, d=d, x0=x0, cost=cost)
+                best = dict(
+                            interc=a,
+                            slope_1=b,
+                            slope_2=d,
+                            #slope_left=b,
+                            #slope_right=b + d,
+                            x_knee=x0,
+                            cost=cost,
+                        )
+        return best
+
+    params = _fit_hinge_gridsearch(x,y, n_grid=80, trim=0.15)
+
+    return params
+
+
+
+def lucky_img( I0_meas,  image_processing_fn, performance_model, model_params,  quantile_threshold = 0.05 , keep = "<threshold" ):
+    """
+    Select a subset of reference ZWFS pupil intensities based on a
+    performance metric (e.g. OPD, Strehl), using a model based function on the measured intensities and a quantile cut
+    ("lucky imaging" style selection).
+    
+    :param I0_meas: list of measured (aggregated) reference zwfs pupil intensities (generally filtered in a particular region, e.g. exterior pixels for Strehl or OPD model)
+    :param image_processing_fn: callable function that takes an single item in I0_meas list (e.g. a 2D image) and converts it to a signal that is converted to performance metric, i.e. input, to performance_model
+    :param performance_model: callable model for performance metric (e.g opd or strehl model), signature = performance_model( I0_meas, **model_params)
+        the performance model must take a list-like array containing measurements as input to convert it to some performance metric (e.g. opd or strehl)
+    :param model_param: (dictionary) Description dictionary of the performance_model parameters to pass 
+    :param quantile_threshold: (float) threshold in the performance_model quantile 
+    :param keep: (string) do filter for where performance is <threshold or >threshold (input = '<threshold' | '>threshold' )
+    """
+
+    img_signal = np.array([image_processing_fn( ii ) for ii in I0_meas])
+    perf_est = performance_model(img_signal, **model_params)
+
+    perf_threshold = np.quantile( perf_est, quantile_threshold )
+    
+    if keep == "<threshold": 
+        I0_lucky = np.array( I0_meas )[ perf_est < perf_threshold ]
+    elif keep == ">threshold": 
+        I0_lucky = np.array( I0_meas )[ perf_est > perf_threshold ]
+    else: 
+        raise UserWarning("invalid keep input. try either '<threshold' or '>threshold'")
+    return I0_lucky
+
+
+
+# Util for co-aligning (center and rotate) frames from a measured pupil, and theoretical pupil
+
+
+# atempt 3.5 
+import numpy as np
+from scipy.ndimage import shift as nd_shift
+from scipy.ndimage import rotate as nd_rotate
+from scipy.ndimage import gaussian_filter
+from skimage.filters import sobel
+from skimage.morphology import binary_erosion, disk
+
+def align_prior_to_meas_using_spiders_matched_filter(
+    I_meas,
+    I_prior,
+    N0_meas,
+    N0_prior,
+    pupil_mask=None,
+    detect_pupil_fn=None,   # must return (cx, cy, ...)
+    sigma_meas_hp=2.0,
+    sigma_prior_hp=5.0,
+    rotate_order=3,
+    shift_order=3,
+    # spider feature knobs
+    mask_erosion_px=2,
+    use_edge_term=True,
+    edge_weight=0.5,
+    # matched filter knobs
+    angle_search_deg=(-180.0, 180.0),
+    angle_step_deg=0.5,
+    refine=True,
+    refine_half_width_deg=2.0,
+    refine_step_deg=0.05,
+    # optional radial weighting to favor mid-pupil (spiders live there)
+    radial_weight=True,
+    radial_weight_power=0.5,
+    debug_plot=False,
+):
+    """
+    Align prior -> meas by:
+      1) detect & center pupils (translation)
+      2) build spider feature maps on centered N0 images (DoG + optional Sobel)
+      3) matched filter: rotate prior spider-map over a grid and maximize NCC score
+      4) rotate centered prior (I_prior and N0_prior) by best dtheta
+
+    Returns dict with aligned images + diagnostics.
+    """
+
+    def _image_center(shape):
+        ny, nx = shape
+        return (ny - 1) / 2.0, (nx - 1) / 2.0
+
+    def _shift_bool_mask(mask, shift):
+        m = nd_shift(mask.astype(float), shift=shift, order=0, mode="constant", cval=0.0)
+        return m > 0.5
+
+    def _make_centered_mask_from_detect(N0_centered):
+        if detect_pupil_fn is None:
+            raise ValueError("detect_pupil_fn must be provided if pupil_mask is None.")
+
+        cx, cy, *rest = detect_pupil_fn(N0_centered, plot=False)
+
+        r_guess = None
+        if len(rest) >= 2 and np.isfinite(rest[0]) and np.isfinite(rest[1]):
+            a, b = rest[0], rest[1]
+            r_guess = 0.5 * (abs(a) + abs(b))
+
+        if (r_guess is None) or (not np.isfinite(r_guess)) or (r_guess <= 1):
+            yy, xx = np.indices(N0_centered.shape)
+            w = np.clip(N0_centered - np.median(N0_centered), 0, None)
+            wsum = np.sum(w) + 1e-18
+            mx = np.sum(xx * w) / wsum
+            my = np.sum(yy * w) / wsum
+            rr = np.sqrt((xx - mx) ** 2 + (yy - my) ** 2)
+            r_guess = np.quantile(rr[w > np.quantile(w, 0.7)], 0.9)
+
+        yy, xx = np.indices(N0_centered.shape)
+        rr = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+        mask = rr <= r_guess
+
+        if mask_erosion_px and mask_erosion_px > 0:
+            mask_e = binary_erosion(mask, disk(mask_erosion_px))
+            if np.any(mask_e):
+                mask = mask_e
+
+        return mask, float(r_guess)
+
+    def _spider_features(N0_c, mask_c, sigma_hp):
+        """
+        Spider-friendly feature map:
+          - normalize by median in mask
+          - high-pass (subtract Gaussian)
+          - invert so dark spiders become positive
+          - optional Sobel edges to emphasize spider boundaries
+          - restrict to mask
+        """
+        N0_c = np.asarray(N0_c, float)
+        med = np.median(N0_c[mask_c]) if np.any(mask_c) else np.median(N0_c)
+        Nn = N0_c / (med + 1e-18)
+
+        low = gaussian_filter(Nn, sigma=sigma_hp)
+        hp = Nn - low
+
+        feat = np.clip(-hp, 0.0, None)  # spiders dark -> positive
+
+        if use_edge_term:
+            e = sobel(Nn)
+            e *= mask_c.astype(float)
+            escale = np.median(e[mask_c]) + 1e-18
+            e = e / escale
+            feat = feat + edge_weight * np.clip(e, 0.0, None)
+
+        feat *= mask_c.astype(float)
+        return feat
+
+    def _make_radial_weight(mask_c, cy0, cx0, power=0.5):
+        yy, xx = np.indices(mask_c.shape)
+        rr = np.sqrt((xx - cx0) ** 2 + (yy - cy0) ** 2)
+
+        # estimate pupil radius from mask
+        rmax = np.max(rr[mask_c]) if np.any(mask_c) else np.max(rr)
+        r = rr / (rmax + 1e-18)
+
+        # bump in mid radii: (r(1-r))^power
+        w = (r * (1.0 - r))
+        w = np.clip(w, 0.0, None) ** power
+        w *= mask_c.astype(float)
+        w /= (np.max(w) + 1e-18)
+        return w
+
+    def _ncc_score(A, B, W=None):
+        """
+        Normalized cross-correlation (cosine similarity) with optional weights.
+        """
+        if W is None:
+            a = A.ravel()
+            b = B.ravel()
+        else:
+            a = (A * W).ravel()
+            b = (B * W).ravel()
+
+        a = a - np.mean(a)
+        b = b - np.mean(b)
+        denom = (np.linalg.norm(a) * np.linalg.norm(b) + 1e-18)
+        return float(np.dot(a, b) / denom)
+
+    # -----------------------
+    I_meas  = np.asarray(I_meas, dtype=float)
+    I_prior = np.asarray(I_prior, dtype=float)
+    N0_meas = np.asarray(N0_meas, dtype=float)
+    N0_prior= np.asarray(N0_prior, dtype=float)
+
+    if detect_pupil_fn is None:
+        raise ValueError("detect_pupil_fn must be provided.")
+
+    cy0, cx0 = _image_center(I_meas.shape)
+
+    # --- detect and center ---
+    cx_m, cy_m, *_ = detect_pupil_fn(N0_meas, plot=False)
+    cx_p, cy_p, *_ = detect_pupil_fn(N0_prior, plot=False)
+
+    dy_m, dx_m = (cy0 - cy_m), (cx0 - cx_m)
+    dy_p, dx_p = (cy0 - cy_p), (cx0 - cx_p)
+
+    I_meas_c   = nd_shift(I_meas,   shift=(dy_m, dx_m), order=shift_order, mode="constant", cval=0.0)
+    I_prior_c  = nd_shift(I_prior,  shift=(dy_p, dx_p), order=shift_order, mode="constant", cval=0.0)
+    N0_meas_c  = nd_shift(N0_meas,  shift=(dy_m, dx_m), order=shift_order, mode="constant", cval=0.0)
+    N0_prior_c = nd_shift(N0_prior, shift=(dy_p, dx_p), order=shift_order, mode="constant", cval=0.0)
+
+    # --- mask in centered coords ---
+    if pupil_mask is None:
+        mask_c, r_guess = _make_centered_mask_from_detect(N0_meas_c)
+    else:
+        m = np.asarray(pupil_mask, bool)
+        if m.shape != N0_meas.shape:
+            raise ValueError(f"pupil_mask shape {m.shape} != N0_meas shape {N0_meas.shape}")
+        mask_c = _shift_bool_mask(m, shift=(dy_m, dx_m))
+
+        if mask_erosion_px and mask_erosion_px > 0:
+            mask_e = binary_erosion(mask_c, disk(mask_erosion_px))
+            if np.any(mask_e):
+                mask_c = mask_e
+
+        if not np.any(mask_c):
+            mask_c, r_guess = _make_centered_mask_from_detect(N0_meas_c)
+        else:
+            yy, xx = np.indices(mask_c.shape)
+            rr = np.sqrt((xx - cx0)**2 + (yy - cy0)**2)
+            r_guess = float(np.max(rr[mask_c]))
+
+    # --- spider feature maps ---
+    sp_meas  = _spider_features(N0_meas_c,  mask_c, sigma_hp=sigma_meas_hp)
+    sp_prior = _spider_features(N0_prior_c, mask_c, sigma_hp=sigma_prior_hp)
+
+    # optional radial weights (helps suppress center + edge artifacts)
+    W = _make_radial_weight(mask_c, cy0, cx0, power=radial_weight_power) if radial_weight else None
+
+    # --- matched-filter rotation scan ---
+    a0, a1 = angle_search_deg
+    angles = np.arange(a0, a1 + angle_step_deg/2, angle_step_deg, dtype=float)
+
+    scores = np.zeros_like(angles)
+    for i, ang in enumerate(angles):
+        sp_rot = nd_rotate(sp_prior, angle=ang, reshape=False, order=1, mode="constant", cval=0.0)
+        scores[i] = _ncc_score(sp_meas, sp_rot, W=W)
+
+    i_best = int(np.argmax(scores))
+    best_ang = float(angles[i_best])
+    best_score = float(scores[i_best])
+
+    # --- local refinement around best angle ---
+    if refine:
+        a_lo = best_ang - refine_half_width_deg
+        a_hi = best_ang + refine_half_width_deg
+        fine_angles = np.arange(a_lo, a_hi + refine_step_deg/2, refine_step_deg, dtype=float)
+        fine_scores = np.zeros_like(fine_angles)
+
+        for i, ang in enumerate(fine_angles):
+            sp_rot = nd_rotate(sp_prior, angle=ang, reshape=False, order=1, mode="constant", cval=0.0)
+            fine_scores[i] = _ncc_score(sp_meas, sp_rot, W=W)
+
+        j = int(np.argmax(fine_scores))
+        best_ang = float(fine_angles[j])
+        best_score = float(fine_scores[j])
+
+        # replace coarse arrays with refined, for output clarity
+        angles_used = fine_angles
+        scores_used = fine_scores
+    else:
+        angles_used = angles
+        scores_used = scores
+
+    # convention: dtheta is what we apply to PRIOR to match MEAS
+    dtheta_deg = best_ang
+    dtheta_rad = np.deg2rad(dtheta_deg)
+
+    # --- rotate prior intensity images by best angle ---
+    I_prior_aligned = nd_rotate(I_prior_c, angle=dtheta_deg, reshape=False,
+                                order=rotate_order, mode="constant", cval=0.0)
+    N0_prior_aligned = nd_rotate(N0_prior_c, angle=dtheta_deg, reshape=False,
+                                 order=rotate_order, mode="constant", cval=0.0)
+
+    # What we usually want is the theory always in the measurement frame (fastest for an RTC)
+    shift_meas=(dy_m, dx_m)
+    shift_prior=(dy_p, dx_p)
+    dy_net = shift_meas[0] - shift_prior[0]
+    dx_net = shift_meas[1] - shift_prior[1]
+    net_shift_prior_to_meas = (-dy_net, -dx_net)
+
+    I_prior_aligned_in_meas_frame = nd_shift(I_prior, shift=net_shift_prior_to_meas,
+                                            order=shift_order, mode="constant", cval=0.0)
+    I_prior_aligned_in_meas_frame = nd_rotate(I_prior_aligned_in_meas_frame, angle=dtheta_deg,
+                                            reshape=False, order=rotate_order, mode="constant", cval=0.0)
+
+    N0_prior_aligned_in_meas_frame = nd_shift(N0_prior, shift=net_shift_prior_to_meas,
+                                            order=shift_order, mode="constant", cval=0.0)
+    N0_prior_aligned_in_meas_frame = nd_rotate(N0_prior_aligned_in_meas_frame, angle=dtheta_deg,
+                                            reshape=False, order=rotate_order, mode="constant", cval=0.0)
+
+    return dict(
+        cy0=cy0, cx0=cx0,
+        shift_meas=shift_meas,
+        shift_prior=shift_prior,
+        mask_centered=mask_c,
+        r_guess=r_guess,
+        dtheta_rad=dtheta_rad,
+        dtheta_deg=dtheta_deg,
+        best_score=best_score,
+        angles=angles_used,
+        scores=scores_used,
+        I_meas_centered=I_meas_c,
+        I_prior_centered=I_prior_c,
+        I_prior_aligned=I_prior_aligned,
+        I_prior_aligned_in_meas_frame=I_prior_aligned_in_meas_frame,
+
+        N0_meas_centered=N0_meas_c,
+        N0_prior_centered=N0_prior_c,
+        N0_prior_aligned=N0_prior_aligned,
+        N0_prior_aligned_in_meas_frame=N0_prior_aligned_in_meas_frame,
+        spiders_meas=sp_meas,
+        spiders_prior=sp_prior,
+        weight=W,
+    )
 
 
 

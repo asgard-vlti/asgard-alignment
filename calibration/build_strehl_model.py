@@ -498,3 +498,122 @@ for beam_id in args.beam_id:
 # hdulist.writeto(args.fig_path + f"strehl_model_telem_beam_{beam_id}_phasemask{args.phasemask}.fits", overwrite=True)
 
 
+
+
+"""
+from baldr app 
+
+
+
+N_N0_samples = 100
+zwfs_ns.dm.current_cmd = zwfs_ns.dm.dm_flat.copy()
+N0_list = []
+for _ in range(N_N0_samples):
+    N0_sample = bldr.get_N0( calibration_opd_input,   
+                    calibration_amp_input ,  
+                    calibration_opd_internal,  
+                    zwfs_ns , 
+                    detector=detector, 
+                    use_pyZelda = False)
+
+    N0_list.append( N0_sample ) 
+
+N0 = np.mean( N0_list , axis=0)
+N0_norm = np.mean( N0[interior_pup_filt] ) 
+
+util.nice_heatmap_subplots( im_list = [ N0 ] , cbar_label_list = ['N0'] )
+
+
+# 1 init DM phase screens 
+number_of_screen_initiations = 50
+scrn_list = []
+for _ in range(number_of_screen_initiations):
+    #scrn = ps.PhaseScreenKolmogorov(nx_size=zwfs_ns.grid.N, pixel_scale=dx, r0=zwfs_ns.atmosphere.r0, L0=zwfs_ns.atmosphere.l0, random_seed=1)
+    dm_scrn = ps.PhaseScreenKolmogorov(nx_size=24, pixel_scale = zwfs_ns.grid.D / 24, r0=r0, L0=10, random_seed=None)
+    scrn_list.append( dm_scrn ) 
+
+# 2. init telemetry to build model ()
+telem = {
+    "N0":N0,
+    "N0_norm":N0_norm,
+    "i":[],
+    "s":[],
+    "opd_rms_est":[], # opd
+    "opd_rms_true":[] # opd 
+}
+
+# 3. measure telemetry 
+scrn_scaling_grid = np.logspace(-1,0.2,5)
+for it in range(len(scrn_list)):
+    print( f"input aberation {it}/{len(scrn_list)}" )
+    # roll screen
+    #scrn.add_row()     
+    for ph_scale in scrn_scaling_grid: 
+        #scaling_factor=0.05, drop_indicies = [0, 11, 11 * 12, -1] , plot_cmd=False
+        zwfs_ns.dm.current_cmd =  util.create_phase_screen_cmd_for_DM(scrn_list[it],  scaling_factor=ph_scale , drop_indicies = [0, 11, 11 * 12, -1] , plot_cmd=False) 
+    
+        opd_current_dm =  bldr.get_dm_displacement(
+                            command_vector=zwfs_ns.dm.current_cmd,
+                            gain=zwfs_ns.dm.opd_per_cmd,
+                            sigma=zwfs_ns.grid.dm_coord.act_sigma_wavesp,
+                            X=zwfs_ns.grid.wave_coord.X,
+                            Y=zwfs_ns.grid.wave_coord.Y,
+                            x0=zwfs_ns.grid.dm_coord.act_x0_list_wavesp,
+                            y0=zwfs_ns.grid.dm_coord.act_y0_list_wavesp
+                        )
+        
+
+        i = bldr.get_frame(
+            np.zeros_like( calibration_opd_internal),
+            calibration_amp_input,
+            np.zeros_like( calibration_opd_internal),
+            zwfs_ns, 
+            detector=detector,
+            use_pyZelda=False
+        ).astype(float)
+
+        s = i / N0_norm  # we do like this because its strehl model! 
+
+        opd_true = np.std( opd_current_dm[zwfs_ns.grid.pupil_mask.astype(bool)] ) # *  2*np.pi / zwfs_ns.optics.wvl0 * (  opd_current_dm  )
+        opd_est =  np.std( zwfs_ns.dm.opd_per_cmd * np.array( zwfs_ns.dm.current_cmd) )
+        #plt.figure(); plt.imshow( util.get_DM_command_in_2D( zwfs_ns.dm.opd_per_cmd * np.array( zwfs_ns.dm.current_cmd)));plt.colorbar();plt.show()
+
+        telem['i'].append( i )
+        telem['s'].append( s )
+        telem['opd_rms_true'].append( opd_true )
+        telem['opd_rms_est'].append( opd_est )
+
+
+
+
+correlation_map = util.compute_correlation_map(np.array( telem['s'] ), np.array( telem['opd_rms_est'] ) )
+
+
+yy, xx = np.ogrid[:telem['s'][0].shape[0], :telem['s'][0].shape[0]]
+snr = (np.mean( np.array( telem['s'] ) , axis =0 ) / np.std(  np.array( telem['s'] ) , axis =0  )) 
+radial_constraint = ((xx - telem['s'][0].shape[0]//2)**2 + (yy - telem['s'][0].shape[0]//2)**2 <= 20**2) * ( (xx - telem['s'][0].shape[0]//2)**2 + (yy - telem['s'][0].shape[0]//2)**2 >= 6**2 )
+# some criteria to filter (this could be way more advanced if we wanted)
+strehl_filt = (correlation_map < -0.7) & (snr > 1.) & radial_constraint
+strehl_pixels = np.where( strehl_filt )
+
+
+util.nice_heatmap_subplots( im_list = [ correlation_map, strehl_filt ] , cbar_label_list = ['Pearson R','filt'] )
+#savefig = save_results_path + 'strehl_vs_intensity_pearson_R.png' ) #fig_path + 'strehl_vs_intensity_pearson_R.png' )
+
+plt.figure()
+plt.plot( [np.mean( ss[strehl_filt] ) for ss in telem['s']] , 1e9 * np.array( telem['opd_rms_est'] )  ,'.', label='est')
+plt.plot( [np.mean( ss[strehl_filt] ) for ss in telem['s']] , 1e9 * np.array( telem['opd_rms_true'] )  ,'.', label='true')
+plt.xlabel('<s>')
+plt.ylabel('OPD RMS [nm RMS]')
+plt.legend()
+plt.show()
+
+
+
+filtered_sigs = np.array( [np.mean( ss[strehl_filt] ) for ss in telem['s']] )
+opd_nm_est =  1e9 * np.array( telem['opd_rms_est'] ) 
+
+opd_model_params = util.fit_piecewise_continuous(x=filtered_sigs, y=opd_nm_est, n_grid=80, trim=0.15)
+
+
+"""
