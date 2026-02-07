@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser(description="DM shared memory shape saving opti
 parser.add_argument(
     "--beam_id",
     type=lambda s: [int(item) for item in s.split(",")],
-    default=[1],
+    default=[3],
     help="Comma-separated beam IDs to apply. Default: 1,2,3,4"
 )
 
@@ -28,7 +28,7 @@ parser.add_argument(
 parser.add_argument(
     "--shm_channel",
     type=int,
-    default=2,
+    default=3,
     help="which channel (int) from the DM shared memory to save. Typically channel 0 is the flat, channel 1 is alignment shape (e.g. cross), channel 2 is baldr, channel 3 is heimdallr. Default: %(default)s"
 )
 
@@ -84,4 +84,4 @@ for beam_id in args.beam_id:
 
     print(f"DM shape from beam {beam_id}, shm channel = {args.shm_channel} saved successfully as:\n   {args.filename}")
     
-    dm.close(erase_file=False)  # Close the shared memory without erasing it
+    #dm.close(erase_file=False)  # Close the shared memory without erasing it

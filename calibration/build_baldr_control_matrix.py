@@ -10,7 +10,7 @@ import argparse
 import subprocess
 import glob
 import argparse
-
+import datetime
 import common.DM_basis_functions as dmbases
 import pyBaldr.utilities as util 
 
@@ -29,11 +29,13 @@ the RTC in one spot. Right here.
 
 """
 
+tstamp_rough = datetime.datetime.now().strftime("%d-%m-%Y")
 
 default_toml = os.path.join("/usr/local/etc/baldr/", "baldr_config_#.toml") 
 
 
 parser = argparse.ArgumentParser(description="build control model")
+
 
 # TOML file path; default is relative to the current file's directory.
 parser.add_argument(
@@ -47,14 +49,14 @@ parser.add_argument(
 parser.add_argument(
     "--beam_id",
     type=int,
-    default=2,
+    default=3,
     help="what beam are we considering. Default: %(default)s"
 )
 
 parser.add_argument(
     "--phasemask",
     type=str,
-    default="H5",
+    default="H4",
     help="what phasemask was used for building the IM. THis is to search the right entry in the configuration file. Default: %(default)s"
 )
 
@@ -94,7 +96,7 @@ parser.add_argument("--filter_edge_actuators",
 
 parser.add_argument("--fig_path", 
                     type=str, 
-                    default='/home/asg/ben_bld_data/17-9-25night8/', 
+                    default=f'/home/asg/ben_bld_data/{tstamp_rough}/', 
                     help="path/to/output/image/ for the saved figures"
                     )
 
@@ -407,68 +409,69 @@ print( f"updated configuration file {args.toml_file.replace('#',f'{args.beam_id}
 
 
 ## A QUICK LOOK 
-for beam_id in [args.beam_id]:
+if 0:
+    for beam_id in [args.beam_id]:
 
-    ################################
-    # the reference intensities
-    im_list = [ I0.reshape(32,32), np.array(N0).reshape(32,32), np.array( norm_pupil).reshape(32,32), util.get_DM_command_in_2D(dm_mask) ]
-    title_list = ['<I0>','<N0>','normalized pupil','mask']
-    cbar_list = ["UNITLESS"] * len(im_list)
-    util.nice_heatmap_subplots( im_list , title_list=title_list, cbar_label_list=cbar_list) 
-    plt.savefig(f'{args.fig_path}' + f'reference_intensities_beam{beam_id}.jpeg', bbox_inches='tight', dpi=200)
-    plt.show()
+        ################################
+        # the reference intensities
+        im_list = [ I0.reshape(32,32), np.array(N0).reshape(32,32), np.array( norm_pupil).reshape(32,32), util.get_DM_command_in_2D(dm_mask) ]
+        title_list = ['<I0>','<N0>','normalized pupil','mask']
+        cbar_list = ["UNITLESS"] * len(im_list)
+        util.nice_heatmap_subplots( im_list , title_list=title_list, cbar_label_list=cbar_list) 
+        plt.savefig(f'{args.fig_path}' + f'reference_intensities_beam{beam_id}.jpeg', bbox_inches='tight', dpi=200)
+        plt.show()
 
-    ################################
-    # the interaction signal 
-    modes2look = [0,1,65,67]
-    im_list = [util.get_DM_command_in_2D(IM[m])for m in modes2look]
+        ################################
+        # the interaction signal 
+        modes2look = [0,1,65,67]
+        im_list = [util.get_DM_command_in_2D(IM[m])for m in modes2look]
 
-    title_list = [f'mode {m}' for m in modes2look]
-    cbar_list = ["UNITLESS"] * len(im_list)
-    util.nice_heatmap_subplots( im_list , cbar_label_list=cbar_list, savefig=f'{args.fig_path}' + f'IM_first16modes_beam{beam_id}.png') 
-    plt.savefig(f'{args.fig_path}' + f'IM_some_modes_beam{beam_id}.jpeg', bbox_inches='tight', dpi=200)
-    plt.show()
+        title_list = [f'mode {m}' for m in modes2look]
+        cbar_list = ["UNITLESS"] * len(im_list)
+        util.nice_heatmap_subplots( im_list , cbar_label_list=cbar_list, savefig=f'{args.fig_path}' + f'IM_first16modes_beam{beam_id}.png') 
+        plt.savefig(f'{args.fig_path}' + f'IM_some_modes_beam{beam_id}.jpeg', bbox_inches='tight', dpi=200)
+        plt.show()
 
-    ################################
-    # the eigenmodes 
-    U, S, Vt = np.linalg.svd(IM_HO, full_matrices=False)  # shapes: (M, M), (min(M,N),), (min(M,N), N)
+        ################################
+        # the eigenmodes 
+        U, S, Vt = np.linalg.svd(IM_HO, full_matrices=False)  # shapes: (M, M), (min(M,N),), (min(M,N), N)
 
-    # (a) Plot singular values
-    plt.figure(figsize=(6, 4))
-    plt.semilogy(S, 'o-')
-    plt.title("Singular Values of IM_HO")
-    plt.xlabel("Index")
-    plt.ylabel("Singular value (log scale)")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(f"{args.fig_path}" + f'IM_singular_values_beam{beam_id}.png', bbox_inches='tight', dpi=200)
+        # (a) Plot singular values
+        plt.figure(figsize=(6, 4))
+        plt.semilogy(S, 'o-')
+        plt.title("Singular Values of IM_HO")
+        plt.xlabel("Index")
+        plt.ylabel("Singular value (log scale)")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(f"{args.fig_path}" + f'IM_singular_values_beam{beam_id}.png', bbox_inches='tight', dpi=200)
 
-    # (b) Intensity eigenmodes (Vt)
-    plt.figure(figsize=(15, 3))
-    for i in range(min(5, Vt.shape[0])):
-        ax = plt.subplot(1, 5, i+1)
-        im = ax.imshow(util.get_DM_command_in_2D(Vt[i]), cmap='viridis')
-        ax.set_title(f"Vt[{i}]")
-        plt.colorbar(im, ax=ax)
-    plt.suptitle("First 5 intensity eigenmodes (Vt) mapped to 2D")
-    plt.tight_layout()
-    plt.savefig(f"{args.fig_path}" + f'IM_first5_intensity_eigenmodes_beam{beam_id}.png', bbox_inches='tight', dpi=200)
-
-
-    # (c) System eigenmodes (U)
-    plt.figure(figsize=(15, 3))
-    for i in range(min(5, U.shape[1])):
-        ax = plt.subplot(1, 5, i+1)
-        im = ax.imshow(util.get_DM_command_in_2D(U[:, i]), cmap='plasma')
-        ax.set_title(f"U[:, {i}]")
-        plt.colorbar(im, ax=ax)
-    plt.suptitle("First 5 system eigenmodes (U) mapped to 2D")
-    plt.tight_layout()
-    plt.savefig(f"{args.fig_path}" + f'IM_first5_system_eigenmodes_beam{beam_id}.png', bbox_inches='tight', dpi=200)
-    plt.show()
+        # (b) Intensity eigenmodes (Vt)
+        plt.figure(figsize=(15, 3))
+        for i in range(min(5, Vt.shape[0])):
+            ax = plt.subplot(1, 5, i+1)
+            im = ax.imshow(util.get_DM_command_in_2D(Vt[i]), cmap='viridis')
+            ax.set_title(f"Vt[{i}]")
+            plt.colorbar(im, ax=ax)
+        plt.suptitle("First 5 intensity eigenmodes (Vt) mapped to 2D")
+        plt.tight_layout()
+        plt.savefig(f"{args.fig_path}" + f'IM_first5_intensity_eigenmodes_beam{beam_id}.png', bbox_inches='tight', dpi=200)
 
 
-    plt.close("all")
+        # (c) System eigenmodes (U)
+        plt.figure(figsize=(15, 3))
+        for i in range(min(5, U.shape[1])):
+            ax = plt.subplot(1, 5, i+1)
+            im = ax.imshow(util.get_DM_command_in_2D(U[:, i]), cmap='plasma')
+            ax.set_title(f"U[:, {i}]")
+            plt.colorbar(im, ax=ax)
+        plt.suptitle("First 5 system eigenmodes (U) mapped to 2D")
+        plt.tight_layout()
+        plt.savefig(f"{args.fig_path}" + f'IM_first5_system_eigenmodes_beam{beam_id}.png', bbox_inches='tight', dpi=200)
+        plt.show()
+
+
+        plt.close("all")
 
 ### test 
 test_reco = input("press enter to continue recon tests. 0 to finish ...")
@@ -478,13 +481,13 @@ if test_reco != '0':
     import numpy as np
     import os, time, toml, matplotlib.pyplot as plt
     from asgard_alignment.DM_shm_ctrl import dmclass
-    from asgard_alignment import FLI_Cameras as FLI
-
+    #from asgard_alignment import FLI_Cameras as FLI
+    from xaosim.shmlib import shm 
     # ---------- configurable test knobs ----------
     TEST_BEAM   = int(args.beam_id)             # use the beam we just wrote
     N_TRIALS    = 40                            # number of random TT trials
     AMP_STD     = 0.05                          # DM units (per-mode stdev)
-    CAM_SHM     = "/dev/shm/cred1.im.shm"       # global camera SHM
+    CAM_SHM     = "/dev/shm/baldr{args.beam_id}.im.shm"       # global camera SHM
     FIG_DIR     = os.path.expanduser(args.fig_path or "~/Downloads/")
     # --------------------------------------------
 
@@ -499,40 +502,42 @@ if test_reco != '0':
     M2C_LO   = np.array(ctrl["M2C_LO"], dtype=float)                    # (144 x LO)
     LO_count = int(ctrl.get("LO", 2))                                   # how many LO modes were built
     sigspace = str(ctrl.get("signal_space", "dm")).lower()              # 'dm' or 'pixel'
-
+    inner_pupil_filt = np.array(ctrl["inner_pupil_filt"]).astype(bool)
     # Pixel-space references saved by build_IM.py (already normalized)
     I0_flat      = np.array(ctrl["I0"], dtype=float)                     # (1024,)
-    N0_flat      = np.array(ctrl["norm_pupil"], dtype=float)             # (1024,)
-    r1, r2, c1, c2 = map(int, ctrl["crop_pixels"])                       # global crop -> local 32x32
+    N0_flat      = np.array(ctrl["N0"], dtype=float) #np.array(ctrl["norm_pupil"], dtype=float)             # (1024,)
+    dark      = np.array(ctrl["dark"], dtype=float)  
+
+    #r1, r2, c1, c2 = map(int, ctrl["crop_pixels"])                       # global crop -> local 32x32
 
     # Sanity guardrails
     assert LO_count >= 2, "LO must include at least tip & tilt (LO>=2)."
     assert I2M_LO.shape[0] >= 2, "I2M_LO must have at least 2 rows for tip/tilt."
 
     # Connect camera (global SHM) and determine buffer length (# reads per burst)
-    cam = FLI.fli(CAM_SHM, roi=[None, None, None, None])
+    cam = shm(f"/dev/shm/baldr{args.beam_id}.im.shm") #FLI.fli(CAM_SHM, roi=[None, None, None, None])
 
-    ## NOW WE GET DARKS TO BE CONSISTENT WITH BUILD_IM
-    print("turning off calibration source to get darks ...")
-    cam.build_manual_dark(no_frames = 200 , build_bad_pixel_mask=True, kwargs={'std_threshold':20, 'mean_threshold':6} )
-    print("darks acquired. turn calibration source back on and press enter to continue ...")
+    # ## NOW WE GET DARKS TO BE CONSISTENT WITH BUILD_IM
+    # print("turning off calibration source to get darks ...")
+    # cam.build_manual_dark(no_frames = 200 , build_bad_pixel_mask=True, kwargs={'std_threshold':20, 'mean_threshold':6} )
+    # print("darks acquired. turn calibration source back on and press enter to continue ...")
 
-    time.sleep(0.5)
+    #time.sleep(0.5)
     
-    nrs = cam.mySHM.get_data().shape[0]   # number of reads per buffer (burst)
+    #nrs = cam.mySHM.get_data().shape[0]   # number of reads per buffer (burst)
 
     # DM control on a side channel (like build_IM)
     dm  = dmclass(beam_id=TEST_BEAM, main_chn=3)
 
     # Helper: wait for a fresh buffer, then return normalized 32x32 (crop) as 1D (1024,)
-    def grab_norm_frame_flat():
-        t0 = cam.mySHM.get_counter()
-        while (cam.mySHM.get_counter() - t0) < 2 * nrs:
-            time.sleep(1.0 / float(cam.config["fps"]))
-        frames = cam.get_data(apply_manual_reduction=True)              # (nrs, H, W)
-        sub    = frames[:, r1:r2, c1:c2].mean(axis=0)                   # 2D mean
-        sub   /= sub.sum()                                              # post-TTonsky normalization
-        return sub.reshape(-1)                                          # (1024,)
+    # def grab_norm_frame_flat():
+    #     t0 = cam.mySHM.get_counter()
+    #     while (cam.mySHM.get_counter() - t0) < 2 * nrs:
+    #         time.sleep(1.0 / float(cam.config["fps"]))
+    #     frames = cam.get_data(apply_manual_reduction=True)              # (nrs, H, W)
+    #     sub    = frames[:, r1:r2, c1:c2].mean(axis=0)                   # 2D mean
+    #     sub   /= sub.sum()                                              # post-TTonsky normalization
+    #     return sub.reshape(-1)                                          # (1024,)
 
     # Run trials
     rng = np.random.default_rng(0)
@@ -552,10 +557,15 @@ if test_reco != '0':
             # command DM in SHM space: u = M2C_LO @ a_lo   (144,)
             u_cmd = M2C_LO @ a_lo
             dm.set_data(u_cmd)
-
+            time.sleep(0.1)
             # acquire normalized pupil and form Baldr signal s = (I - I0)/N0 (pixel-space)
-            I_norm_flat = grab_norm_frame_flat()                        # (1024,)
-            s_pix       = (I_norm_flat - I0_flat) / N0_flat             # (1024,)
+            #I_norm_flat = grab_norm_frame_flat()                        # (1024,)
+            img_tmp = []
+            for _ in range(10):
+                img_tmp.append( cam.get_data().reshape(-1) - dark )
+                time.sleep(0.01)
+            I_norm_flat = np.mean(img_tmp,axis=0)
+            s_pix       = I_norm_flat / np.mean( N0_flat[inner_pupil_filt])   - I0_flat / np.mean( N0_flat[inner_pupil_filt])              # (1024,)
 
             # map to chosen signal space
             if sigspace == "dm":

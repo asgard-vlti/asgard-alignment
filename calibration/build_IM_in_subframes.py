@@ -120,12 +120,12 @@ parser.add_argument(
 )
 
 
-# parser.add_argument(
-#     "--basis_name",
-#     type=str,
-#     default="zonal",
-#     help="basis used to build interaction matrix (IM). zonal, zernike, zonal"
-# )
+parser.add_argument(
+    "--basis_name",
+    type=str,
+    default='zernike', #"zonal",
+    help="basis used to build interaction matrix (IM). zonal, zernike, zonal"
+)
 
 # parser.add_argument(
 #     "--Nmodes",
@@ -326,11 +326,11 @@ for beam_id in args.beam_id:
     # in baldr python rtc I0_setpoint_runtime is done in build_rt_model and is defined I0 / np.mean( N0[inner_pupil_filt] )
     # so this definition is critical. We try filter edge pupils around pupil perimeter and secondary (for Solarstein source)
     # same convention as BaldrApp.baldr_core.build_IM for inner_pupil_filt
-    inner_pupil_filt[beam_id] = binary_erosion( pupil_mask[beam_id] * (~secondary_mask[beam_id].astype(bool)), structure=np.ones((3, 3), dtype=bool) )
+    inner_pupil_filt[beam_id] = binary_erosion( pupil_mask[beam_id]  * (~secondary_mask[beam_id].astype(bool)), structure=np.ones((3, 3), dtype=bool) )
     ## BELOW IS OLD CONVENTION (pixelwise normalized_pupils, with outside pupil set to interior mean) , 
     #  keep for C++ rtc legacy (wrtten. to toml)
     # this is not needed for new python rtc standards    
-    pixel_filter = secondary_mask[beam_id].astype(bool)  | (~(util.remove_boundary(pupil_mask[beam_id]).astype(bool)) ) #| (~bad_pix_mask_tmp )
+    pixel_filter = np.array( secondary_mask[beam_id].astype(bool) )  |  np.array( (~(util.remove_boundary(np.array( pupil_mask[beam_id])).astype(bool)) ) ) #| (~bad_pix_mask_tmp )
     normalized_pupils[beam_id] = np.mean( clear_pupils[beam_id] , axis=0) 
     normalized_pupils[beam_id][ pixel_filter ] = np.mean( np.mean(clear_pupils[beam_id],0)[~pixel_filter]  ) # set exterior and boundary pupils to interior mean
 
@@ -364,8 +364,10 @@ for beam_id in args.beam_id:
 
 #basis_name = args.basis_name #"zonal" #"ZERNIKE"
 LO_basis = dmbases.zer_bank(2, args.LO+1 )
-zonal_basis = np.array([dm_shm_dict[beam_id].cmd_2_map2D(ii) for ii in np.eye(140)]) 
-#zonal_basis = dmbases.zer_bank(4, 143 )
+if args.basis_name == 'zonal':
+    zonal_basis = np.array([dm_shm_dict[beam_id].cmd_2_map2D(ii) for ii in np.eye(140)])
+elif args.basis_name == 'zernike':
+    zonal_basis = dmbases.zer_bank(4, 143 ) #143 if 
 modal_basis = np.array( LO_basis.tolist() +  zonal_basis.tolist() ) 
 # should be 144 x 140 (we deal with errors in 140 actuator space (columns), but SHM takes 144 vector as input (rows)) 
 # this is why we do transpose 

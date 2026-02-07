@@ -16,6 +16,7 @@ from scipy.integrate import quad
 from scipy import ndimage
 import scipy.ndimage as ndimage
 from scipy.spatial import distance
+from scipy.stats import pearsonr
 from scipy import signal
 from scipy.ndimage import binary_erosion
 from scipy.interpolate import RegularGridInterpolator
@@ -31,6 +32,12 @@ from pathlib import Path
 import itertools
 import corner
 
+from scipy.ndimage import shift as nd_shift
+from scipy.ndimage import rotate as nd_rotate
+from scipy.ndimage import gaussian_filter
+from skimage.filters import sobel
+from skimage.morphology import binary_erosion as binary_erosion_morph
+from skimage.morphology import disk
 #####
 # ANYTHING THAT RELIES ON THESE SDK'S NEEDS
 # TO BE UPDATED WITH  SHM
@@ -3507,6 +3514,8 @@ def put_b_in_cmd_space( b, zwfs , debug = True):
 ##############
 # STUFF FOR FEB BALDR COMISSIONING 
 
+
+
 def compute_correlation_map(intensity_frames, strehl_ratios):
     # intensity_frames: k x N x M array (k frames of N x M pixels)
     # strehl_ratios: k array (Strehl ratio for each frame)
@@ -3541,9 +3550,10 @@ def fit_piecewise_continuous(x, y, n_grid=60, trim=0.1):
             return (A @ p) - y
 
         p0 = np.linalg.lstsq(A, y, rcond=None)[0]
-        res = least_squares(resid, p0, loss="soft_l1", f_scale=np.std(y) + 1e-12)
-        a, b, d = res.x
-        return a, b, d, res.cost ##return a, b, d, np.mean(res.fun**2) #<- this could be more robust?
+        res = leastsq(resid, p0 )#, f_scale=np.std(y) + 1e-12) #loss="soft_l1", 
+        print(res)
+        a, b, d = res[0] #res.x
+        return a, b, d, 1 #res.cost ##return a, b, d, np.mean(res.fun**2) #<- this could be more robust?
 
     def _fit_hinge_gridsearch(x, y, n_grid=60, trim=0.1):
         # grid search to fit a reasonable knee point 
@@ -3613,12 +3623,7 @@ def lucky_img( I0_meas,  image_processing_fn, performance_model, model_params,  
 
 
 # atempt 3.5 
-import numpy as np
-from scipy.ndimage import shift as nd_shift
-from scipy.ndimage import rotate as nd_rotate
-from scipy.ndimage import gaussian_filter
-from skimage.filters import sobel
-from skimage.morphology import binary_erosion, disk
+
 
 def align_prior_to_meas_using_spiders_matched_filter(
     I_meas,
@@ -3689,7 +3694,7 @@ def align_prior_to_meas_using_spiders_matched_filter(
         mask = rr <= r_guess
 
         if mask_erosion_px and mask_erosion_px > 0:
-            mask_e = binary_erosion(mask, disk(mask_erosion_px))
+            mask_e = binary_erosion_morph(mask, disk(mask_erosion_px))
             if np.any(mask_e):
                 mask = mask_e
 
@@ -3787,7 +3792,7 @@ def align_prior_to_meas_using_spiders_matched_filter(
         mask_c = _shift_bool_mask(m, shift=(dy_m, dx_m))
 
         if mask_erosion_px and mask_erosion_px > 0:
-            mask_e = binary_erosion(mask_c, disk(mask_erosion_px))
+            mask_e = binary_erosion_morph(mask_c, disk(mask_erosion_px))
             if np.any(mask_e):
                 mask_c = mask_e
 
