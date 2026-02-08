@@ -378,7 +378,7 @@ modal_basis = np.array( LO_basis.tolist() +  zonal_basis.tolist() )
 M2C = modal_basis.copy().reshape(modal_basis.shape[0],-1).T # mode 2 command matrix 
 
 
-if args.signal_space.lower() not in ["dm", "pixel"] :
+if args.signal_space.lower() not in ["dm", "pix"] :
     raise UserWarning("signal space must either be 'dm' or 'pixel'")
 
 

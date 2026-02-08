@@ -671,7 +671,7 @@ M2C = modal_basis.copy().reshape(modal_basis.shape[0],-1).T # mode 2 command mat
 # time.sleep(1)
 # #dms[beam_id].activate_flat()
 
-if args.signal_space.lower() not in ["dm", "pixel"] :
+if args.signal_space.lower() not in ["dm", "pix"] :
     raise UserWarning("signal space must either be 'dm' or 'pixel'")
 
 #cam_config = c.config
@@ -752,7 +752,7 @@ for i,m in enumerate(modal_basis):
             ## post TTonsky
             errsig = I2A_dict[beam_id] @   (I_plus - I_minus)  / args.poke_amp  
             #errsig = I2A_dict[beam_id] @ ( float( c.config["gain"] ) / float( c.config["fps"] )  * (I_plus - I_minus)  / args.poke_amp ) # 1 / DMcmd * (s * gain)  projected to DM space
-        elif args.signal_space.lower() == 'pixel':
+        elif args.signal_space.lower() == 'pix':
             ## post TTonsky
             errsig =  (I_plus - I_minus)  / args.poke_amp  # 1 / DMcmd * (s * gain)  projected to Pixel space
             #errsig = ( float( c.config["gain"] ) / float( c.config["fps"] )  * (I_plus - I_minus)  / args.poke_amp ) # 1 / DMcmd * (s * gain)  projected to Pixel space
