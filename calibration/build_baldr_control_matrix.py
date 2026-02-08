@@ -487,7 +487,7 @@ if test_reco != '0':
     TEST_BEAM   = int(args.beam_id)             # use the beam we just wrote
     N_TRIALS    = 40                            # number of random TT trials
     AMP_STD     = 0.05                          # DM units (per-mode stdev)
-    CAM_SHM     = "/dev/shm/baldr{args.beam_id}.im.shm"       # global camera SHM
+    CAM_SHM     = f"/dev/shm/baldr{args.beam_id}.im.shm"       # subframe camera SHM
     FIG_DIR     = os.path.expanduser(args.fig_path or "~/Downloads/")
     # --------------------------------------------
 
@@ -538,6 +538,161 @@ if test_reco != '0':
     #     sub    = frames[:, r1:r2, c1:c2].mean(axis=0)                   # 2D mean
     #     sub   /= sub.sum()                                              # post-TTonsky normalization
     #     return sub.reshape(-1)                                          # (1024,)
+
+
+
+
+    # ------------------------------------------------------------
+    # ramp Tip and Tilt separately, measure e vs amp
+    # Default: amps = linspace(-0.2, +0.2, 20)
+    # Produces:
+    #   - tip_ramp_response_beamX.png
+    #   - tilt_ramp_response_beamX.png
+    # ------------------------------------------------------------
+
+    amps = np.linspace(-0.2, 0.2, 20)
+
+    # storage
+    tip_true   = []
+    tip_rec    = []
+    tilt_true  = []
+    tilt_rec   = []
+
+    # safety
+    zero144 = np.zeros(144, dtype=float)
+
+    # TIP ramp (mode index 0)
+    try:
+        for a in amps:
+            a_lo = np.zeros(LO_count, dtype=float)
+            a_lo[0] = a
+
+            u_cmd = M2C_LO @ a_lo                      # (144,)
+            dm.set_data(u_cmd)
+            time.sleep(0.1)
+
+            img_tmp = []
+            for _ in range(10):
+                img_tmp.append(cam.get_data().reshape(-1) - dark)
+                time.sleep(0.01)
+            I_norm_flat = np.mean(img_tmp, axis=0)
+
+            s_pix = (
+                I_norm_flat / np.mean(N0_flat[inner_pupil_filt])
+                - I0_flat / np.mean(N0_flat[inner_pupil_filt])
+            )
+
+            if sigspace == "dm":
+                s = I2A @ s_pix                         # (140,)
+            else:
+                s = s_pix                               # (1024,)
+
+            a_hat_lo = I2M_LO @ s                       # (LO,)
+            tip_true.append(a)
+            tip_rec.append(a_hat_lo[0])
+
+        dm.set_data(zero144)
+
+    finally:
+        try:
+            dm.set_data(zero144)
+        except Exception:
+            pass
+
+    tip_true = np.array(tip_true, dtype=float)
+    tip_rec  = np.array(tip_rec, dtype=float)
+    tip_err  = tip_rec - tip_true
+
+    # Plot TIP response
+    plt.figure(figsize=(6, 4))
+    plt.plot(tip_true, tip_rec, marker="o", linestyle="-", label="reconstructed")
+    plt.plot(tip_true, tip_true, "--", label="ideal")
+    p = np.polyfit(tip_true, tip_rec, 1)
+    plt.title(
+        f"Tip ramp response (beam{TEST_BEAM}, {args.phasemask})\n"
+        f"slope={p[0]:.3g}  offset={p[1]:.3g}  RMSE={np.sqrt(np.mean(tip_err**2)):.3g}"
+    )
+    plt.xlabel("commanded tip amplitude [DM units]")
+    plt.ylabel("reconstructed tip [DM units]")
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    out_png_tip = os.path.join(args.fig_path, f"tip_ramp_response_beam{TEST_BEAM}.png")
+    plt.tight_layout()
+    plt.savefig(out_png_tip, dpi=180)
+    plt.show()
+    plt.close()
+
+
+    # TILT ramp (mode index 1)
+    try:
+        for a in amps:
+            a_lo = np.zeros(LO_count, dtype=float)
+            a_lo[1] = a
+
+            u_cmd = M2C_LO @ a_lo                      # (144,)
+            dm.set_data(u_cmd)
+            time.sleep(0.1)
+
+            img_tmp = []
+            for _ in range(10):
+                img_tmp.append(cam.get_data().reshape(-1) - dark)
+                time.sleep(0.01)
+            I_norm_flat = np.mean(img_tmp, axis=0)
+
+            s_pix = (
+                I_norm_flat / np.mean(N0_flat[inner_pupil_filt])
+                - I0_flat / np.mean(N0_flat[inner_pupil_filt])
+            )
+
+            if sigspace == "dm":
+                s = I2A @ s_pix                         # (140,)
+            else:
+                s = s_pix                               # (1024,)
+
+            a_hat_lo = I2M_LO @ s                       # (LO,)
+            tilt_true.append(a)
+            tilt_rec.append(a_hat_lo[1])
+
+        dm.set_data(zero144)
+
+    finally:
+        try:
+            dm.set_data(zero144)
+        except Exception:
+            pass
+
+    tilt_true = np.array(tilt_true, dtype=float)
+    tilt_rec  = np.array(tilt_rec, dtype=float)
+    tilt_err  = tilt_rec - tilt_true
+
+    # Plot TILT response
+    plt.figure(figsize=(6, 4))
+    plt.plot(tilt_true, tilt_rec, marker="o", linestyle="-", label="reconstructed")
+    plt.plot(tilt_true, tilt_true, "--", label="ideal")
+    p = np.polyfit(tilt_true, tilt_rec, 1)
+    plt.title(
+        f"Tilt ramp response (beam{TEST_BEAM}, {args.phasemask})\n"
+        f"slope={p[0]:.3g}  offset={p[1]:.3g}  RMSE={np.sqrt(np.mean(tilt_err**2)):.3g}"
+    )
+    plt.xlabel("commanded tilt amplitude [DM units]")
+    plt.ylabel("reconstructed tilt [DM units]")
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    out_png_tilt = os.path.join(args.fig_path, f"tilt_ramp_response_beam{TEST_BEAM}.png")
+    plt.tight_layout()
+    plt.savefig(out_png_tilt, dpi=180)
+    plt.show()
+    plt.close()
+
+    print(f"[OK] Saved TT ramp plots:\n  {out_png_tip}\n  {out_png_tilt}")
+
+
+
+
+
+    # ------------------------------------------------------------
+    # random Tip and Tilt, measure e vs amp
+    # ------------------------------------------------------------
 
     # Run trials
     rng = np.random.default_rng(0)
@@ -621,8 +776,6 @@ if test_reco != '0':
     print(f"RMSE Tilt: {rmse_tilt:.4g}")
     print(f"RMSE All : {rmse_all:.4g}")
     print(f"Saved plot: {out_png}")
-
-
 
 
 
