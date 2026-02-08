@@ -300,8 +300,10 @@ for beam_id in args.beam_id:
         dm_shm_dict[beam_id].activate_flat()
     else:
         dm_shm_dict[beam_id].activate_calibrated_flat()
+
         #####! Maybe a bug here , verify function (it reinits dm_shm_dict!!!
-        apply_flat( [beam_id], DM_flat = 'heim' ) # onksy commissioning heimdallr flat was good starting point
+        # uncomment if you want to start from a heimdallr flat
+        #apply_flat( [beam_id], DM_flat = 'heim' ) # onksy commissioning heimdallr flat was good starting point
     # apply DM flat offset 
 
 
@@ -329,6 +331,7 @@ time.sleep(10)
 img_tmp = []
 for _ in range(50):
     img_tmp.append( cam_shm[beam_id].get_data() - dark_dict[beam_id] )
+    time.sleep(0.01)
 meas_pupil = np.mean( img_tmp ,axis = 0 )
 
 # img = np.mean( c.get_data( apply_manual_reduction=True) , axis=0)
@@ -460,6 +463,7 @@ I0_t = util.interpolate_pupil_to_measurement( P_theory0, Ic_theory0, M, N, m, n,
 img_tmp = []
 for _ in range(50):
     img_tmp.append( cam_shm[beam_id].get_data() - dark_dict[beam_id] )
+    time.sleep(0.01)
 I0_m = np.mean( img_tmp ,axis = 0 )
 
 
@@ -552,6 +556,7 @@ for aa in amps:
     img_tmp = []
     for _ in range(50):
         img_tmp.append( cam_shm[beam_id].get_data() - dark_dict[beam_id] )
+        time.sleep(0.03)
     I0_m = np.mean( img_tmp ,axis = 0 )
 
     

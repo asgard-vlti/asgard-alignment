@@ -364,11 +364,15 @@ for beam_id in args.beam_id:
 
 #basis_name = args.basis_name #"zonal" #"ZERNIKE"
 LO_basis = dmbases.zer_bank(2, args.LO+1 )
-if args.basis_name == 'zonal':
-    zonal_basis = np.array([dm_shm_dict[beam_id].cmd_2_map2D(ii) for ii in np.eye(140)])
-elif args.basis_name == 'zernike':
-    zonal_basis = dmbases.zer_bank(4, 143 ) #143 if 
+if 'zonal' in args.basis_name.lower().strip():
+    zonal_basis = np.array([dm_shm_dict[beam_id].cmd_2_map2D(ii) for ii in np.eye(140)]) 
+elif 'zernike' in args.basis_name.lower().strip():
+    zonal_basis = dmbases.zer_bank(4, 143 ) # ignore bad 'zonal_basis' naming
+else:
+    raise UserWarning(f'invalid --basis_name={args.basis_name} input. must be "zonal" or "zernike",')
 modal_basis = np.array( LO_basis.tolist() +  zonal_basis.tolist() ) 
+
+
 # should be 144 x 140 (we deal with errors in 140 actuator space (columns), but SHM takes 144 vector as input (rows)) 
 # this is why we do transpose 
 M2C = modal_basis.copy().reshape(modal_basis.shape[0],-1).T # mode 2 command matrix 

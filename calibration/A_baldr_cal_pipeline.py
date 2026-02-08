@@ -348,12 +348,12 @@ parser.add_argument(
 )
 
 
-# parser.add_argument(
-#     "--basis_name",
-#     type=str,
-#     default="zonal",
-#     help="basis used to build interaction matrix (IM). zonal, zernike, zonal"
-# )
+parser.add_argument(
+    "--basis_name",
+    type=str,
+    default="zonal", #"zonal" | "zernike" | someothers
+    help="basis used to build interaction matrix (IM). zonal, zernike, zonal"
+)
 
 # parser.add_argument(
 #     "--Nmodes",
@@ -846,8 +846,8 @@ def plot_strehl_pixel_registration(data , exterior_filter, secondary_filter, sav
     if savefig is not None:
         plt.savefig( savepath, bbox_inches='tight', dpi=200)
         print( f"saving image {savepath}")
-    #plt.show()
-    plt.close()
+    plt.show()
+    #plt.close()
 
 
 
@@ -1133,7 +1133,7 @@ for beam_id in args.beam_id:
     ## BELOW IS OLD CONVENTION (pixelwise normalized_pupils, with outside pupil set to interior mean) , 
     #  keep for C++ rtc legacy (wrtten. to toml)
     # this is not needed for new python rtc standards    
-    pixel_filter = secondary_mask[beam_id].astype(bool)  | (~(util.remove_boundary(pupil_mask[beam_id]).astype(bool)) ) #| (~bad_pix_mask_tmp )
+    pixel_filter = secondary_mask[beam_id].astype(bool)  | (~(util.remove_boundary(np.array(pupil_mask[beam_id])).astype(bool)) ) #| (~bad_pix_mask_tmp )
     normalized_pupils[beam_id] = np.mean( clear_pupils[beam_id] , axis=0) 
     normalized_pupils[beam_id][ pixel_filter ] = np.mean( np.mean(clear_pupils[beam_id],0)[~pixel_filter]  ) # set exterior and boundary pupils to interior mean
 
@@ -1167,8 +1167,13 @@ for beam_id in args.beam_id:
 
 #basis_name = args.basis_name #"zonal" #"ZERNIKE"
 LO_basis = dmbases.zer_bank(2, args.LO+1 )
-zonal_basis = np.array([dm_shm_dict[beam_id].cmd_2_map2D(ii) for ii in np.eye(140)]) 
-#zonal_basis = dmbases.zer_bank(4, 143 )
+if 'zonal' in args.basis_name.lower().strip():
+    zonal_basis = np.array([dm_shm_dict[beam_id].cmd_2_map2D(ii) for ii in np.eye(140)]) 
+elif 'zernike' in args.basis_name.lower().strip():
+    zonal_basis = dmbases.zer_bank(4, 143 ) # ignore bad 'zonal_basis' naming
+else:
+    raise UserWarning(f'invalid --basis_name={args.basis_name} input. must be "zonal" or "zernike",')
+
 modal_basis = np.array( LO_basis.tolist() +  zonal_basis.tolist() ) 
 # should be 144 x 140 (we deal with errors in 140 actuator space (columns), but SHM takes 144 vector as input (rows)) 
 # this is why we do transpose 
