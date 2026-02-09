@@ -268,15 +268,15 @@ else:
 
 
 
-## NED TO CHECK THIS AGAIN - BUG, do this in the ZONAL scope of building I2M_HO
-# if args.filter_edge_actuators:
-#     # tight mask to restrict edge actuators 
-#     dm_mask_144 = np.nan_to_num( util.get_DM_command_in_2D( I2A @ np.array([int(a) for a in inside_edge_filt]) ) ).reshape(-1)
-#     # typically 44 actuators 
-# else:
-#     # puypil mask
-#     dm_mask_144 = np.nan_to_num( util.get_DM_command_in_2D( I2A @ np.array( pupil_mask ).reshape(-1) ) ).reshape(-1)
-#     # typically 71 actuators 
+# NED TO CHECK THIS AGAIN - BUG, do this in the ZONAL scope of building I2M_HO
+if args.filter_edge_actuators:
+    # tight mask to restrict edge actuators 
+    dm_mask_144 = np.nan_to_num( util.get_DM_command_in_2D( I2A @ np.array([int(a) for a in inside_edge_filt]) ) ).reshape(-1)
+    # typically 44 actuators 
+else:
+    # puypil mask
+    dm_mask_144 = np.nan_to_num( util.get_DM_command_in_2D( I2A @ np.array( pupil_mask ).reshape(-1) ) ).reshape(-1)
+    # typically 71 actuators 
 
 # filter out exterior actuators in command space (from pupol) - redudant if (args.filter_edge_actuators: # do this in the mode space!)
 
@@ -289,7 +289,7 @@ else:
 # dm_mask_144 = np.nan_to_num( util.get_DM_command_in_2D( I2A @ tight_pup_wo_sec ) ) 
 
 # original
-dm_mask_144 = np.nan_to_num( util.get_DM_command_in_2D( I2A @ np.array( pupil_mask ).reshape(-1) ) ).reshape(-1)
+#dm_mask_144 = np.nan_to_num( util.get_DM_command_in_2D( I2A @ np.array( pupil_mask ).reshape(-1) ) ).reshape(-1)
 
 #util.nice_heatmap_subplots( [dm_mask_144.reshape(12,12),dm_tight_mask_144.reshape(12,12)], savefig='delme.png')
 
