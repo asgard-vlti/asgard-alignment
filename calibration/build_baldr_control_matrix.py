@@ -151,8 +151,11 @@ with open(args.toml_file.replace('#',f'{args.beam_id}'), "r") as f:
     I0 = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("I0", None) )
     N0 = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("N0", None) )#.astype(bool)
     norm_pupil = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("norm_pupil", None) )# matrix bool
-    intrn_flx_I0 = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("intrn_flx_I0", None) )# matrix bool
     
+    dark_cov = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("dark_cov", None) )# matrix bool
+    
+    # ## OLD LEGACY STUFF 
+    intrn_flx_I0 = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("intrn_flx_I0", None) )# matrix bool
     print(f"ENSURE FLUX NORMALIZATION EXISTS AND IS NOT LOW (i.e. ~ 1). intrn_flx_I0={intrn_flx_I0}")
     # also the current calibrated strehl modes 
     I2rms_sec = np.array(config_dict.get(f"beam{args.beam_id}", {}).get("strehl_model", {}).get(f"{args.phasemask}", {}).get("secondary", None)).astype(float)
@@ -202,16 +205,19 @@ else:
 IM_LO = IM[:LO]
 IM_HO = IM[LO:]
 
+M2C_LO = M2C[:,:LO]
+M2C_HO = M2C[:,LO:]
 
 # define effective pupil mask on IM measurement space
-pup_im_std = np.std( IM_HO.T, axis=0 )
+pup_im_std = np.std( IM_HO, axis=0 )
 pup_mask = (pup_im_std - np.min(pup_im_std)) / (np.max( pup_im_std ) - np.min( pup_im_std ))
 pup_mask[pup_mask < 0.2] = 0 # normalize 0-1, anything below 0.2 force to 0
 
 # IM is now always in measurement (pixel) space, so we define dm_mask via I2A consistently 
-dm_mask = I2A @ pup_mask
+dm_mask = I2A @ pup_mask.reshape(-1)
 
-
+util.nice_heatmap_subplots( im_list = [pup_mask, util.get_DM_command_in_2D(dm_mask)], title_list=['pupil mask\nmeas space','pupil mask\nproj to dm space'])
+plt.show()
 
 ########################################
 ## LO MODES 
@@ -256,14 +262,36 @@ if args.inverse_method_HO.lower() == 'pinv':
     #dm_mask = I2A @ np.array( pupil_mask ).reshape(-1)
 
 elif args.inverse_method_HO.lower() == 'map': # minimum variance of maximum posterior estimator 
-    #phase_cov = np.eye( IM.shape[0] )
+    
     #noise_cov = np.eye( IM.shape[1] ) 
     #I2M = (phase_cov @ IM @ np.linalg.inv(IM.T @ phase_cov @ IM + noise_cov) ).T #have to transpose to keep convention.. although should be other way round
     #I2M = phase_cov @ IM.T @ np.linalg.inv(IM @ phase_cov @ IM.T + noise_cov)
     #I2M_LO , I2M_HO = util.project_matrix( I2M , [util.convert_12x12_to_140(t) for t in LO] )
     phase_cov_HO = np.eye( IM_HO.shape[0] )
-    noise_cov_HO = np.eye( IM_HO.shape[1] ) 
+    if args.signal_space.strip().lower() == 'dm':
+        if dark_cov is not None:
+            noise_cov_HO = I2A @ dark_cov.reshape(-1) #np.eye( IM_HO.shape[1] ) 
+        else:
+            print('input dark_cov is None, using indentiy matrix')
+            noise_cov_HO = np.eye( IM_HO.shape[1] )  
 
+        # still need to update this so we caa deal with input model! 
+        phase_cov = I2A @ np.eye( IM.shape[0] )
+
+    elif args.signal_space.strip().lower() == 'pix':
+        if dark_cov is not None:
+            noise_cov_HO = dark_cov.reshape(-1) #np.eye( IM_HO.shape[1] ) 
+        else:
+            print('input dark_cov is None, using indentiy matrix')
+            noise_cov_HO = np.eye( IM_HO.shape[1] )  
+
+        # still need to update this so we caa deal with input model!
+        phase_cov = np.eye( IM.shape[0] )
+    else:
+        raise UserWarning("invalid signal_space., --signal_space = dm | pix")
+    
+    
+    
     I2M_HO = phase_cov_HO @ IM_HO.T @ np.linalg.inv(IM_HO @ phase_cov_HO @ IM_HO.T + noise_cov_HO)
 
     # for plotting later
@@ -313,35 +341,72 @@ elif 'svd_truncation' in args.inverse_method_HO.lower() :
 
 
 
-elif "eigen" in args.inverse_method_HO.lower():
+elif "eigen" in args.inverse_method_HO.lower(): # only for HO modes
     # Parse k from something like "eigen_30"
     try:
         k_eff_req = int(args.inverse_method_HO.lower().split("eigen_")[-1])
     except Exception:
         raise ValueError("For eigen HO inversion use --inverse_method_HO eigen_<k>, e.g. eigen_30")
 
-    eps = 1e-12  # or reuse your eps variable if you have one
 
-    # IM_HO is (Nho, Nmeas) in your convention, so use H_HO = (Nmeas, Nho)
-    H_HO = IM_HO.T   # (Nmeas, Nho)
 
-    U, S, Vt = np.linalg.svd(H_HO, full_matrices=False)
+    # Keep my convention: IM_HO is (modes, measurement)
+    eps = 1e-12 # avoid 1/0
+    U, S, Vt = np.linalg.svd(IM_HO, full_matrices=False)
 
     k_eff = min(k_eff_req, S.shape[0])
 
-    U_k  = U[:, :k_eff]        # (Nmeas, k_eff)
-    S_k  = S[:k_eff]           # (k_eff,)
-    Vt_k = Vt[:k_eff, :]       # (k_eff, Nho)
-    V_k  = Vt_k.T              # (Nho, k_eff)
+    U_k  = U[:, :k_eff]        # (Nho, k)
+    S_k  = S[:k_eff]           # (k,)
+    Vt_k = Vt[:k_eff, :]       # (k, Nmeas)
+    V_k  = Vt_k.T              # (Nmeas, k)
 
-    # Measurement -> eigen coefficients (controller runs on these)
-    # This maps y (Nmeas,) -> a (k_eff,)
-    I2M_HO = U_k.T              # (k_eff, Nmeas)
+    # measurement y (Nmeas,) -> eigen coeffs a (k,)
+    I2M_HO = V_k.T             # (k, Nmeas)
 
-    # Eigen coeffs -> HO command basis (whatever basis IM_HO rows represent)
-    # This maps a (k_eff,) -> x_HO (Nho,)
-    M2C_HO = V_k @ np.diag(1.0 / (S_k + eps))   # (Nho, k_eff)
+    # eigen coeffs a (k,) -> DM command u (144,)
+    # IMPORTANT: use the original HO command basis mapping 
+    M2C_HO_raw = M2C_HO        # (144, Nho) from earlier slice
+    M2C_HO = M2C_HO_raw @ U_k @ np.diag(1.0 / (S_k + eps))   # (144, k)
 
+
+    # check 
+    modes2plot = 5
+    if args.signal_space.strip().lower() == 'dm':
+        try:
+            util.nice_heatmap_subplots(im_list = [util.get_DM_command_in_2D( I2M_HO[:,ii] ) for ii in range(modes2plot)], title_list=[f"eigenmode {ii}" for ii in range(modes2plot)])
+        except:
+            print("SOMETHING WENT WRONG WITH PLOTTING EIGEN MODES ")
+    else:
+        try:
+            util.nice_heatmap_subplots(im_list = [I2M_HO[:,ii].reshape(32,32) for ii in range(modes2plot)], title_list=[f"eigenmode {ii}" for ii in range(modes2plot)])
+        except:
+            print("SOMETHING WENT WRONG WITH PLOTTING EIGEN MODES ")
+    # # old from simulation 
+    # eps = 1e-12  # or reuse your eps variable if you have one
+
+    # # IM_HO is (Nho, Nmeas) in your convention, so use H_HO = (Nmeas, Nho)
+    # H_HO = IM_HO.T   # (Nmeas, Nho)
+
+    # U, S, Vt = np.linalg.svd(H_HO, full_matrices=False)
+
+    # k_eff = min(k_eff_req, S.shape[0])
+
+    # U_k  = U[:, :k_eff]        # (Nmeas, k_eff)
+    # S_k  = S[:k_eff]           # (k_eff,)
+    # Vt_k = Vt[:k_eff, :]       # (k_eff, Nho)
+    # V_k  = Vt_k.T              # (Nho, k_eff)
+
+    # # Measurement -> eigen coefficients (controller runs on these)
+    # # This maps y (Nmeas,) -> a (k_eff,)
+    # I2M_HO = U_k.T              # (k_eff, Nmeas)
+
+    # # Eigen coeffs -> HO command basis (whatever basis IM_HO rows represent)
+    # # This maps a (k_eff,) -> x_HO (Nho,)
+
+    # # REDEFINE M2C_HO
+    # M2C_HO = V_k @ np.diag(1.0 / (S_k + eps))   # (Nho, k_eff)
+    # end old
 
 
     # for plotting later if you want
@@ -405,9 +470,7 @@ if args.project_TT_out_HO and LO > 0:
     # I2M_HO must be (Nho, Nmeas) for this to be valid.
     I2M_HO = I2M_HO @ (np.eye(P_LO.shape[0]) - P_LO)
 
-    # keep M2C_HO, M2C_LO the same (this is measurement-side projection)
-    M2C_LO = M2C[:,:LO]
-    M2C_HO = M2C[:,LO:]
+
 
 
 # # old, doing it in command space , need to update with doing it in intensity space 
@@ -465,6 +528,8 @@ if args.project_TT_out_HO and LO > 0:
 # bad_pixels = [] # np.where( np.array( c.reduction_dict['bad_pixel_mask'][-1])[r1:r2,c1:c2].reshape(-1)   )[0].tolist(),
 
 # ====================
+
+
 dict2write = {f"beam{args.beam_id}":{f"{args.phasemask}":{"ctrl_model": {
                                                "inverse_method_LO": args.inverse_method_LO,
                                                "inverse_method_HO": args.inverse_method_HO,
@@ -902,38 +967,6 @@ if test_reco != '0':
 # HO single-mode validation (ramp + random), like TT
 # ============================================================
 
-def _ensure_I2M_rows_are_modes(I2M_loaded: np.ndarray, n_meas: int) -> np.ndarray:
-    """
-    Expect I2M to end up (Nmodes, Nmeas).
-    Your TOML stores I2M_* as transpose of the raw inverse (so it SHOULD already be (Nmodes, Nmeas)).
-    But if it comes back (Nmeas, Nmodes), this flips it.
-    """
-    I2M_loaded = np.asarray(I2M_loaded, dtype=float)
-    if I2M_loaded.ndim != 2:
-        raise ValueError(f"I2M must be 2D, got {I2M_loaded.shape}")
-
-    if I2M_loaded.shape[1] == n_meas:
-        return I2M_loaded  # already (Nmodes, Nmeas)
-    if I2M_loaded.shape[0] == n_meas:
-        return I2M_loaded.T  # was (Nmeas, Nmodes)
-    raise ValueError(f"I2M shape {I2M_loaded.shape} not compatible with n_meas={n_meas}")
-
-def _ensure_M2C_is_act_by_modes(M2C_loaded: np.ndarray) -> np.ndarray:
-    """
-    Expect M2C to end up (Nact, Nmodes).
-    If it's (Nmodes, Nact), transpose it.
-    """
-    M2C_loaded = np.asarray(M2C_loaded, dtype=float)
-    if M2C_loaded.ndim != 2:
-        raise ValueError(f"M2C must be 2D, got {M2C_loaded.shape}")
-
-    # your DM interface uses 144-length vectors, so axis with 144 should be Nact
-    if M2C_loaded.shape[0] == 144:
-        return M2C_loaded
-    if M2C_loaded.shape[1] == 144:
-        return M2C_loaded.T
-    # fall back: keep as-is
-    return M2C_loaded
 
 # ---- Load HO pieces from the written TOML (same style as TT) ----
 I2M_HO = np.array(ctrl["I2M_HO"], dtype=float)
@@ -943,8 +976,8 @@ M2C_HO = np.array(ctrl["M2C_HO"], dtype=float)
 # s is either I2A @ s_pix -> length 140 OR s_pix -> length 1024
 n_meas = 140 if sigspace == "dm" else int(I0_flat.size)
 
-I2M_HO = _ensure_I2M_rows_are_modes(I2M_HO, n_meas=n_meas)
-M2C_HO = _ensure_M2C_is_act_by_modes(M2C_HO)
+# I2M_HO = _ensure_I2M_rows_are_modes(I2M_HO, n_meas=n_meas)
+# M2C_HO = _ensure_M2C_is_act_by_modes(M2C_HO)
 
 N_HO_CTRL = int(I2M_HO.shape[0])     # number of HO control modes (could be Nho or k_eff if eigen)
 N_HO_CMD  = int(M2C_HO.shape[1])     # number of HO command basis modes

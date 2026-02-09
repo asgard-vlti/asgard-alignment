@@ -590,63 +590,63 @@ for beam_id in args.beam_id:
 
 
 
-# incase we want to test this with dynamic dm cmds (e.g phasescreen)
-current_cmd_list = [np.zeros(144)  for _ in args.beam_id]
-img_4_corners  = [[] for _ in args.beam_id] 
-transform_dicts = []
-bilin_interp_matricies = []
+    # incase we want to test this with dynamic dm cmds (e.g phasescreen)
+    img_4_corners  = [[] for _ in args.beam_id] 
+    transform_dicts = []
+    bilin_interp_matricies = []
 
 
 
 
-print(f'GOING VERY SLOW ({sleeptime}s delays) DUE TO SHM DELAY DM')
-for act in dm_4_corners: # 4 corner indicies are in 140 length vector (not 144 2D map)
-    print(f"actuator {act}")
-    img_list_push = [[] for _ in args.beam_id]
-    img_list_pull = [[] for _ in args.beam_id]
-    poke_vector = np.zeros(140) # 4 corner indicies are in 140 length vector (not 144 2D map)
-    for nn in range(number_of_pokes):
-        print( f'poke {nn}')
-        poke_vector[act] = (-1)**nn * poke_amplitude
-        
-        
-        # send DM commands 
+    print(f'GOING VERY SLOW ({sleeptime}s delays) DUE TO SHM DELAY DM')
+    for act in dm_4_corners: # 4 corner indicies are in 140 length vector (not 144 2D map)
+        print(f"actuator {act}")
+        img_list_push = [[] for _ in args.beam_id]
+        img_list_pull = [[] for _ in args.beam_id]
+        poke_vector = np.zeros(140) # 4 corner indicies are in 140 length vector (not 144 2D map)
+        for nn in range(number_of_pokes):
+            print( f'poke {nn}')
+            poke_vector[act] = (-1)**nn * poke_amplitude
+            
+            
+            # send DM commands 
+            for ii, beam_id in enumerate( args.beam_id):
+                dm_shm_dict[beam_id].set_data( dm_shm_dict[beam_id].cmd_2_map2D(poke_vector, fill=0) ) 
+                ## Try without #DM_flat_offset[beam_id]  )
+                
+                img_list_tmp = []
+                for _ in range( 10 ):
+                    img_list_tmp.append( cam_shm[beam_id].get_data() )
+                    time.sleep(0.01) #
+                cropped_img = np.mean( img_list_tmp, axis=0 )
+
+
+                if np.mod(nn,2):
+                    img_list_push[ii].append(  cropped_img  )
+                else:
+                    img_list_pull[ii].append( cropped_img )
+                
+                # zero the poke
+                dm_shm_dict[beam_id].set_data( dm_shm_dict[beam_id].cmd_2_map2D( 0 * poke_vector, fill=0) ) 
+            
+
+
+            time.sleep(sleeptime)
+
         for ii, beam_id in enumerate( args.beam_id):
-            dm_shm_dict[beam_id].set_data( dm_shm_dict[beam_id].cmd_2_map2D(poke_vector, fill=0) ) 
-            ## Try without #DM_flat_offset[beam_id]  )
-            
-            img_list_tmp = []
-            for _ in range( 10 ):
-                img_list_tmp.append( cam_shm[beam_id].get_data() )
-                time.sleep(0.01) #
-            cropped_img = np.mean( img_list_tmp, axis=0 )
+            delta_img = abs( np.mean(img_list_push[ii],axis=0) - np.mean(img_list_pull[ii],axis=0) )
+            # the mean difference in images from push/pulls on the current actuator
+            img_4_corners[ii].append( np.array( pupil_mask[beam_id] ).astype(float) * delta_img ) #  We multiply by the pupil mask to ignore all external pixels! These can be troublesome with hot pixels etc 
 
 
-            if np.mod(nn,2):
-                img_list_push[ii].append(  cropped_img  )
-            else:
-                img_list_pull[ii].append( cropped_img )
-            
-            # zero the poke
-            dm_shm_dict[beam_id].set_data( dm_shm_dict[beam_id].cmd_2_map2D( 0 * poke_vector, fill=0) ) 
-        
+    ##
+    ## now analyse data and write files
+    
+    ## we do beam specific directory from fig_path
+    if not os.path.exists( args.fig_path + f"beam{beam_id}/"):
+        os.makedirs(  args.fig_path + f"beam{beam_id}/" )
 
-
-        time.sleep(sleeptime)
-
-    for ii, beam_id in enumerate( args.beam_id):
-        delta_img = abs( np.mean(img_list_push[ii],axis=0) - np.mean(img_list_pull[ii],axis=0) )
-        # the mean difference in images from push/pulls on the current actuator
-        img_4_corners[ii].append( np.array( pupil_mask[beam_id] ).astype(float) * delta_img ) #  We multiply by the pupil mask to ignore all external pixels! These can be troublesome with hot pixels etc 
-
-
-##
-## now analyse data and write files
- 
-## we do beam specific directory from fig_path
-if not os.path.exists( args.fig_path + f"beam{beam_id}/"):
-    os.makedirs(  args.fig_path + f"beam{beam_id}/" )
-
+# out of beam_id loop, we re-enter to write the dictionarys
 # Calibrating coordinate transforms 
 dict2write={}
 for ii, beam_id in enumerate( args.beam_id ):
@@ -848,8 +848,8 @@ def plot_strehl_pixel_registration(data , exterior_filter, secondary_filter, sav
 
     plt.tight_layout()
     if savefig is not None:
-        plt.savefig( savepath, bbox_inches='tight', dpi=200)
-        print( f"saving image {savepath}")
+        plt.savefig( savefig, bbox_inches='tight', dpi=200)
+        print( f"saving image {savefig}")
     plt.show()
     #plt.close()
 
@@ -1035,21 +1035,14 @@ for _ in range(number_of_screen_initiations):
 for beam_id in args.beam_id:
 
     # read in baldr confgig 
-    with open(args.toml_file.replace('#',f'{args.beam_id}'), "r") as f:
+    with open(args.toml_file.replace('#',f'{beam_id}'), "r") as f:
 
         config_dict = toml.load(f)
         
 
-        #  read in the current calibrated matricies 
-        # pupil_mask = np.array(config_dict.get(f"beam{args.beam_id}", {}).get("pupil_mask", {}).get("mask", None) ).astype(bool)   # matrix bool
-        # I2A = np.array( config_dict[f'beam{args.beam_id}']['I2A'] )
-        # IM = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("IM", None) ).astype(float)
-        # M2C = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("M2C", None) ).astype(float)
-
-    
-        inner_pupil_filt = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("inner_pupil_filt", None) )#.astype(bool)
+        inner_pupil_filt = np.array(config_dict.get(f"beam{beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("inner_pupil_filt", None) )#.astype(bool)
         # clear pupil 
-        N0 = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("N0", None) )#.astype(bool)
+        N0 = np.array(config_dict.get(f"beam{beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("N0", None) )#.astype(bool)
 
         N0_norm = np.mean( N0[inner_pupil_filt.astype(bool)] ) # defined in build_IM_in_subframe (interaction matrix standard)
 
@@ -1170,7 +1163,7 @@ for beam_id in args.beam_id:
 
     # write to toml..
 
-    dict2write = {f"beam{args.beam_id}":{f"{args.phasemask}":{"ctrl_model": {
+    dict2write = {f"beam{beam_id}":{f"{args.phasemask}":{"ctrl_model": {
                                                     "strehl_filter":np.array(strehl_filt).astype(int).reshape(-1).tolist(),
                                                     "opd_m_interc":opd_model_params['interc'],
                                                     "opd_m_slope_1":opd_model_params['slope_1'],
@@ -1184,9 +1177,9 @@ for beam_id in args.beam_id:
 
 
     # Check if file exists; if so, load and update.
-    if os.path.exists(args.toml_file.replace('#',f'{args.beam_id}')):
+    if os.path.exists(args.toml_file.replace('#',f'{beam_id}')):
         try:
-            current_data = toml.load(args.toml_file.replace('#',f'{args.beam_id}'))
+            current_data = toml.load(args.toml_file.replace('#',f'{beam_id}'))
         except Exception as e:
             print(f"Error loading TOML file: {e}")
             current_data = {}
@@ -1196,10 +1189,10 @@ for beam_id in args.beam_id:
 
     current_data = util.recursive_update(current_data, dict2write)
 
-    with open(args.toml_file.replace('#',f'{args.beam_id}'), "w") as f:
+    with open(args.toml_file.replace('#',f'{beam_id}'), "w") as f:
         toml.dump(current_data, f)
 
-    print( f"updated configuration file {args.toml_file.replace('#',f'{args.beam_id}')}")
+    print( f"updated configuration file {args.toml_file.replace('#',f'{beam_id}')}")
 
 
 
@@ -1282,7 +1275,7 @@ for beam_id in args.beam_id:
 
     # get covariance of dark (for MAP recon)
     # D: (N, P) flattened dark frames
-    Dtmp = np.asarray(dark_dict[beam_id] , dtype=float)
+    Dtmp = np.asarray(dark_tmp , dtype=float)
 
     mu = Dtmp.mean(axis=0, keepdims=True)      # (1, P)
     Xtmp  = Dtmp.reshape(-1) - Dtmp.mean(axis=0, keepdims=True).reshape(-1)                              # zero-mean fluctuations (N, P)
