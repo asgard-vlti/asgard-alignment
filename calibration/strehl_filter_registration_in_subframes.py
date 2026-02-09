@@ -274,7 +274,7 @@ clear_pupils = {}
 secondary_filter_dict = {}
 exterior_filter_dict = {}
 #initial_pos = {}
-rel_offset = 200.0 #um phasemask offset for clear pupil
+rel_offset = -200.0 #um phasemask offset for clear pupil
 print( 'Moving FPM out to get clear pupils')
 for beam_id in args.beam_id:
 
