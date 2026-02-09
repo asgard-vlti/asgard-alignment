@@ -141,12 +141,13 @@ parser.add_argument(
     help="amplitude to poke DM modes for building interaction matrix"
 )
 
-parser.add_argument(
-    "--signal_space",
-    type=str,
-    default='dm',
-    help="what space do we consider the signal on. either dm (uses I2A) or pixel"
-)
+# We now always build IM in measurement space and consider signal space in build_baldr_control
+# parser.add_argument(
+#     "--signal_space",
+#     type=str,
+#     default='dm',
+#     help="what space do we consider the signal on. either dm (uses I2A) or pixel"
+# )
 
 parser.add_argument(
     "--DM_flat",
@@ -378,8 +379,9 @@ modal_basis = np.array( LO_basis.tolist() +  zonal_basis.tolist() )
 M2C = modal_basis.copy().reshape(modal_basis.shape[0],-1).T # mode 2 command matrix 
 
 
-if args.signal_space.lower() not in ["dm", "pix"] :
-    raise UserWarning("signal space must either be 'dm' or 'pixel'")
+# Now we always build IM in measurement space 
+# if args.signal_space.lower() not in ["dm", "pix"] :
+#     raise UserWarning("signal space must either be 'dm' or 'pixel'")
 
 
 
@@ -402,7 +404,7 @@ ny, nx = frame0.shape
 # Preallocate storage
 Iplus_stack  = {b: np.zeros((n_modes, n_plus,  ny, nx), dtype=np.float32) for b in args.beam_id}
 Iminus_stack = {b: np.zeros((n_modes, n_minus, ny, nx), dtype=np.float32) for b in args.beam_id}
-IM_mat       = {b: np.zeros((n_modes, 140 if args.signal_space=='dm' else ny*nx), dtype=np.float32) for b in args.beam_id}
+IM_mat       = {b: np.zeros((n_modes, ny*nx), dtype=np.float32) for b in args.beam_id}
 
 for i, m in enumerate(modal_basis):
     print(f"executing cmd {i}/{n_modes-1}")
@@ -442,10 +444,11 @@ for i, m in enumerate(modal_basis):
         I_plus  = np.mean(Iplus_stack[b][i],  axis=0).reshape(-1) / norm_factor
         I_minus = np.mean(Iminus_stack[b][i], axis=0).reshape(-1) / norm_factor
 
-        if args.signal_space.lower() == "dm":
-            errsig = (I2A_dict[b] @ (I_plus - I_minus)) / args.poke_amp
-        else:
-            errsig = (I_plus - I_minus) / args.poke_amp
+        # if args.signal_space.lower() == "dm":
+        #     errsig = (I2A_dict[b] @ (I_plus - I_minus)) / args.poke_amp
+        # else:
+        # ALWAYS IN MEASUREMENT SPACE 
+        errsig = (I_plus - I_minus) / args.poke_amp
 
         IM_mat[b][i] = errsig.astype(np.float32).reshape(-1) 
 
@@ -575,7 +578,7 @@ for beam_id in args.beam_id:
     dict2write = {f"beam{beam_id}":{f"{args.phasemask}":{"ctrl_model": {
                                                     "build_method":"double-sided-poke",
                                                     "DM_flat":args.DM_flat.lower(),
-                                                    "signal_space":args.signal_space.lower(),
+                                                    #"signal_space":args.signal_space.lower(),
                                                     "crop_pixels": np.array( baldr_pupils[f"{beam_id}"] ).tolist(), # global corners (r1,r2,c1,c2) of sub pupil cropping region  (local frame)
                                                     "pupil_pixels" : np.where(  np.array( pupil_mask[beam_id] ).reshape(-1) )[0].tolist(),  # pupil pixels in local frame 
                                                     "interior_pixels" : np.where( np.array( inner_pupil_filt[beam_id].reshape(-1) )   )[0].tolist(), # strictly interior pupil pixels in local frame

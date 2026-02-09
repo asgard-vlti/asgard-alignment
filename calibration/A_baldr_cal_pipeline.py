@@ -20,6 +20,8 @@ from pyBaldr import utilities as util
 from asgard_alignment.DM_shm_ctrl import dmclass
 import common.DM_basis_functions as dmbases
 import common.DM_registration as DM_registration
+import common.phasescreens as ps  
+
 
 import pyzelda.ztools as ztools
 import datetime
@@ -1002,245 +1004,202 @@ except Exception as e:
 # input("\n======================\npress enter when ready to start calibrating the OPD model for Baldr")
 
 
-
-
-# import common.phasescreens as ps  
-
-
-
-
 # ############ setup
 
-# # cam and dm 
 
-# # set up DM SHMs 
-# print( 'setting up DMs')
 
-# print("turning off internal SBB source for bias")
-# send_and_get_response("off SBB")
 
-# time.sleep(10)
+# hard coded parameters 
+opd_per_cmd = 3000
 
-# dark_dict = {}
-# for beam_id in args.beam_id:
-#     dark_tmp = []
-#     for _ in range( 1000 ):
-#         dark_tmp.append( cam_shm[beam_id].get_data() )
-#         time.sleep(0.01) #
-#     dark_dict[beam_id] = np.mean( dark_tmp , axis=0)
+r0 = 0.1 * (1.65/0.5)**(6/5) #wavelenfgth scaling
+L0 = 0.1 #m #doesnt matter here  
 
-# send_and_get_response("on SBB")
-# time.sleep(3)
-# print("turning back on internal SBB source, check plot that darks are ok")
 
-# # check 
-# util.nice_heatmap_subplots( im_list=[dark_dict[beam_id] for beam_id in args.beam_id], title_list=[f"beam{beam_id} dark" for beam_id in args.beam_id] )
-# plt.show() 
+
+
+# 1 init DM phase screens 
+number_of_screen_initiations = 50
+scrn_list = []
+for _ in range(number_of_screen_initiations):
+    #scrn = ps.PhaseScreenKolmogorov(nx_size=zwfs_ns.grid.N, pixel_scale=dx, r0=zwfs_ns.atmosphere.r0, L0=zwfs_ns.atmosphere.l0, random_seed=1)
+    dm_scrn = ps.PhaseScreenKolmogorov(nx_size=24, 
+                                       pixel_scale = 1.8 / 24, 
+                                       r0=r0, 
+                                       L0=L0, 
+                                       random_seed=None)
+    scrn_list.append( dm_scrn ) 
+
+
+
+for beam_id in args.beam_id:
+
+    # read in baldr confgig 
+    with open(args.toml_file.replace('#',f'{args.beam_id}'), "r") as f:
+
+        config_dict = toml.load(f)
+        
+
+        #  read in the current calibrated matricies 
+        # pupil_mask = np.array(config_dict.get(f"beam{args.beam_id}", {}).get("pupil_mask", {}).get("mask", None) ).astype(bool)   # matrix bool
+        # I2A = np.array( config_dict[f'beam{args.beam_id}']['I2A'] )
+        # IM = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("IM", None) ).astype(float)
+        # M2C = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("M2C", None) ).astype(float)
+
     
-# # mds for taking dark 
+        inner_pupil_filt = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("inner_pupil_filt", None) )#.astype(bool)
+        # clear pupil 
+        N0 = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("N0", None) )#.astype(bool)
 
-# MDS_port = 5555
-# MDS_host = "192.168.100.2" # simmode : "127.0.0.1" #'localhost'
-# context = zmq.Context()
-# context.socket(zmq.REQ)
-# socket = context.socket(zmq.REQ)
-# socket.setsockopt(zmq.RCVTIMEO, 5000)
-# server_address = f"tcp://{MDS_host}:{MDS_port}"
-# socket.connect(server_address)
-# state_dict = {"message_history": [], "socket": socket}
+        N0_norm = np.mean( N0[inner_pupil_filt.astype(bool)] ) # defined in build_IM_in_subframe (interaction matrix standard)
 
 
-# # read in baldr confgig 
-# with open(args.toml_file.replace('#',f'{args.beam_id}'), "r") as f:
+    print("turning off internal SBB source for bias")
+    send_and_get_response("off SBB")
 
-#     config_dict = toml.load(f)
-    
-
-#     #  read in the current calibrated matricies 
-#     # pupil_mask = np.array(config_dict.get(f"beam{args.beam_id}", {}).get("pupil_mask", {}).get("mask", None) ).astype(bool)   # matrix bool
-#     # I2A = np.array( config_dict[f'beam{args.beam_id}']['I2A'] )
-#     # IM = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("IM", None) ).astype(float)
-#     # M2C = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("M2C", None) ).astype(float)
-
-   
-#     inner_pupil_filt = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("inner_pupil_filt", None) )#.astype(bool)
-#     # clear pupil 
-#     N0 = np.array(config_dict.get(f"beam{args.beam_id}", {}).get(f"{args.phasemask}", {}).get("ctrl_model", None).get("N0", None) )#.astype(bool)
+    time.sleep(5)
 
 
+    dark_tmp = []
+    for _ in range( 1000 ):
+        dark_tmp.append( cam_shm[beam_id].get_data() )
+        time.sleep(0.01) #
+    dark = np.mean( dark_tmp , axis=0)
+
+    send_and_get_response("on SBB")
+    time.sleep(3)
+    print("turning back on internal SBB source, check plot that darks are ok")
+
+    # check 
+    util.nice_heatmap_subplots( im_list=[dark] )
+    plt.show() 
 
 
-# # hard coded parameters 
-# opd_per_cmd = 3000
+    # 2. init telemetry to build model ()
+    telem = {
+        "N0":N0,
+        "N0_norm":N0_norm,
+        "i":[],
+        "s":[],
+        "opd_rms_est":[], # opd
+    }
 
-# N0_norm = np.mean( N0[inner_pupil_filt.astype(bool)] ) # defined in build_IM_in_subframe (interaction matrix standard)
-
-# r0 = 0.1 * (1.65/0.5)**(6/5) #wavelenfgth scaling
-# L0 = 0.1 #m #doesnt matter here  
-
-
-
-
-# # 1 init DM phase screens 
-# number_of_screen_initiations = 50
-# scrn_list = []
-# for _ in range(number_of_screen_initiations):
-#     #scrn = ps.PhaseScreenKolmogorov(nx_size=zwfs_ns.grid.N, pixel_scale=dx, r0=zwfs_ns.atmosphere.r0, L0=zwfs_ns.atmosphere.l0, random_seed=1)
-#     dm_scrn = ps.PhaseScreenKolmogorov(nx_size=24, 
-#                                        pixel_scale = 1.8 / 24, 
-#                                        r0=r0, 
-#                                        L0=L0, 
-#                                        random_seed=None)
-#     scrn_list.append( dm_scrn ) 
-
-
-
-# for beam_id in args.beam_id:
-
-
-#     print("turning off internal SBB source for bias")
-#     send_and_get_response("off SBB")
-
-#     time.sleep(5)
-
-
-#     dark_tmp = []
-#     for _ in range( 1000 ):
-#         dark_tmp.append( cam.get_data() )
-#         time.sleep(0.01) #
-#     dark = np.mean( dark_tmp , axis=0)
-
-#     send_and_get_response("on SBB")
-#     time.sleep(3)
-#     print("turning back on internal SBB source, check plot that darks are ok")
-
-#     # check 
-#     util.nice_heatmap_subplots( im_list=[dark] )
-#     plt.show() 
-
-
-#     # 2. init telemetry to build model ()
-#     telem = {
-#         "N0":N0,
-#         "N0_norm":N0_norm,
-#         "i":[],
-#         "s":[],
-#         "opd_rms_est":[], # opd
-#     }
-
-#     # 3. measure telemetry 
-#     scrn_scaling_grid = np.logspace(-1,0.2,5)
-#     for it in range(len(scrn_list)):
-#         print( f"input aberation {it}/{len(scrn_list)}" )
-#         # roll screen
-#         #scrn.add_row()     
-#         for ph_scale in scrn_scaling_grid: 
-#             #scaling_factor=0.05, drop_indicies = [0, 11, 11 * 12, -1] , plot_cmd=False
-#             cmd =  util.create_phase_screen_cmd_for_DM(scrn_list[it],  
-#                                                     scaling_factor=ph_scale , 
-#                                                     drop_indicies = None, #[0, 11, 11 * 12, -1] , 
-#                                                     plot_cmd=False) 
-#             cmd = np.array(cmd).reshape(12,12) 
-#             opd_est = opd_per_cmd * np.std( cmd )
-#             dm_shm_dict[beam_id].set_data( cmd )
+    # 3. measure telemetry 
+    scrn_scaling_grid = np.logspace(-1,0.2,5)
+    for it in range(len(scrn_list)):
+        print( f"input aberation {it}/{len(scrn_list)}" )
+        # roll screen
+        #scrn.add_row()     
+        for ph_scale in scrn_scaling_grid: 
+            #scaling_factor=0.05, drop_indicies = [0, 11, 11 * 12, -1] , plot_cmd=False
+            cmd =  util.create_phase_screen_cmd_for_DM(scrn_list[it],  
+                                                    scaling_factor=ph_scale , 
+                                                    drop_indicies = None, #[0, 11, 11 * 12, -1] , 
+                                                    plot_cmd=False) 
+            cmd = np.array(cmd).reshape(12,12) 
+            opd_est = opd_per_cmd * np.std( cmd )
+            dm_shm_dict[beam_id].set_data( cmd )
             
-#             time.sleep(0.01)
+            time.sleep(0.01)
 
-#             i = cam_shm[beam_id].get_data() - dark
+            i = cam_shm[beam_id].get_data() - dark
 
-#             s = i / N0_norm  # we do like this because its strehl model! 
+            s = i / N0_norm  # we do like this because its strehl model! 
 
-#             #opd_true = np.std( opd_current_dm[zwfs_ns.grid.pupil_mask.astype(bool)] ) # *  2*np.pi / zwfs_ns.optics.wvl0 * (  opd_current_dm  )
-#             opd_est =  np.std( opd_per_cmd * cmd )
-#             #plt.figure(); plt.imshow( util.get_DM_command_in_2D( zwfs_ns.dm.opd_per_cmd * np.array( zwfs_ns.dm.current_cmd)));plt.colorbar();plt.show()
+            #opd_true = np.std( opd_current_dm[zwfs_ns.grid.pupil_mask.astype(bool)] ) # *  2*np.pi / zwfs_ns.optics.wvl0 * (  opd_current_dm  )
+            opd_est =  np.std( opd_per_cmd * cmd )
+            #plt.figure(); plt.imshow( util.get_DM_command_in_2D( zwfs_ns.dm.opd_per_cmd * np.array( zwfs_ns.dm.current_cmd)));plt.colorbar();plt.show()
 
-#             telem['i'].append( i )
-#             telem['s'].append( s )
-#             #telem['opd_rms_true'].append( opd_true )
-#             telem['opd_rms_est'].append( opd_est )
+            telem['i'].append( i )
+            telem['s'].append( s )
+            #telem['opd_rms_true'].append( opd_true )
+            telem['opd_rms_est'].append( opd_est )
 
-#     # zero dm 
-#     dm_shm_dict[beam_id].set_data( 0 * np.array(cmd).reshape(12,12) )
+    # zero dm 
+    dm_shm_dict[beam_id].set_data( 0 * np.array(cmd).reshape(12,12) )
 
-#     correlation_map = util.compute_correlation_map(np.array( telem['s'] ), np.array( telem['opd_rms_est'] ) )
-
-
-#     yy, xx = np.ogrid[:telem['s'][0].shape[0], :telem['s'][0].shape[0]]
-#     snr = (np.mean( np.array( telem['s'] ) , axis =0 ) / np.std(  np.array( telem['s'] ) , axis =0  )) 
-#     radial_constraint = ((xx - telem['s'][0].shape[0]//2)**2 + (yy - telem['s'][0].shape[0]//2)**2 <= 20**2) * ( (xx - telem['s'][0].shape[0]//2)**2 + (yy - telem['s'][0].shape[0]//2)**2 >= 6**2 )
-#     # some criteria to filter (this could be way more advanced if we wanted)
-#     strehl_filt = (correlation_map < -0.7) & (snr > 1.) & radial_constraint
-#     strehl_pixels = np.where( strehl_filt )
+    correlation_map = util.compute_correlation_map(np.array( telem['s'] ), np.array( telem['opd_rms_est'] ) )
 
 
-#     util.nice_heatmap_subplots( im_list = [ correlation_map, strehl_filt ] , cbar_label_list = ['Pearson R','filt'] )
-#     #savefig = save_results_path + 'strehl_vs_intensity_pearson_R.png' ) #fig_path + 'strehl_vs_intensity_pearson_R.png' )
-
-#     plt.figure()
-#     plt.plot( [np.mean( ss[strehl_filt] ) for ss in telem['s']] , np.array( telem['opd_rms_est'] )  ,'.', label='est')
-#     #plt.plot( [np.mean( ss[strehl_filt] ) for ss in telem['s']] , np.array( telem['opd_rms_true'] )  ,'.', label='true')
-#     plt.xlabel('<s>')
-#     plt.ylabel('OPD RMS [nm RMS]')
-#     plt.legend()
-#     plt.show()
+    yy, xx = np.ogrid[:telem['s'][0].shape[0], :telem['s'][0].shape[0]]
+    snr = (np.mean( np.array( telem['s'] ) , axis =0 ) / np.std(  np.array( telem['s'] ) , axis =0  )) 
+    radial_constraint = ((xx - telem['s'][0].shape[0]//2)**2 + (yy - telem['s'][0].shape[0]//2)**2 <= 20**2) * ( (xx - telem['s'][0].shape[0]//2)**2 + (yy - telem['s'][0].shape[0]//2)**2 >= 6**2 )
+    # some criteria to filter (this could be way more advanced if we wanted)
+    strehl_filt = (correlation_map < -0.7) & (snr > 1.) & radial_constraint
+    strehl_pixels = np.where( strehl_filt )
 
 
-#     filtered_sigs = np.array( [np.mean( ss[strehl_filt] ) for ss in telem['s']] )
-#     opd_nm_est =   np.array( telem['opd_rms_est'] ) 
+    util.nice_heatmap_subplots( im_list = [ correlation_map, strehl_filt ] , cbar_label_list = ['Pearson R','filt'] )
+    #savefig = save_results_path + 'strehl_vs_intensity_pearson_R.png' ) #fig_path + 'strehl_vs_intensity_pearson_R.png' )
 
-#     opd_model_params = util.fit_piecewise_continuous(x=filtered_sigs, y=opd_nm_est, n_grid=80, trim=0.15)
-
-#     print(f"using util.fit_piecewise_continuous, opd_model_params = {opd_model_params} \ninput these to util.fit_piecewise_continuous")
-
-
-#     y = opd_nm_est
-#     x = np.array( [np.mean( ss[strehl_filt] ) for ss in telem['s']] )
-
-#     opd_pred = util.piecewise_continuous(x ,
-#                                             interc=opd_model_params['interc'],
-#                                             slope_1=opd_model_params['slope_1'],
-#                                             slope_2 = opd_model_params['slope_2'],
-#                                                 x_knee = opd_model_params['x_knee'] )
-
-#     plt.figure()
-#     plt.scatter( x, y ,label='meas')
-#     plt.scatter( x, opd_pred,label = 'pred' )
-#     plt.xlabel('signal (i_ext / <N0>)')
-#     plt.ylabel('OPD [nm RMS]')
-#     plt.legend()
-#     plt.show()
+    plt.figure()
+    plt.plot( [np.mean( ss[strehl_filt] ) for ss in telem['s']] , np.array( telem['opd_rms_est'] )  ,'.', label='est')
+    #plt.plot( [np.mean( ss[strehl_filt] ) for ss in telem['s']] , np.array( telem['opd_rms_true'] )  ,'.', label='true')
+    plt.xlabel('<s>')
+    plt.ylabel('OPD RMS [nm RMS]')
+    plt.legend()
+    plt.show()
 
 
-#     # write to toml..
+    filtered_sigs = np.array( [np.mean( ss[strehl_filt] ) for ss in telem['s']] )
+    opd_nm_est =   np.array( telem['opd_rms_est'] ) 
 
-#     # TO DO : FIX M2C PROJECTION ====================
-#     dict2write = {f"beam{args.beam_id}":{f"{args.phasemask}":{"ctrl_model": {
-#                                                 "strehl_filter":np.array(strehl_filt).astype(int).reshape(-1).tolist(),
-#                                                     }
-#                                                 }
-#                                             }
-#                                         }
+    # could put some mroe safety here 
+    opd_model_params = util.fit_piecewise_continuous(x=filtered_sigs, y=opd_nm_est, n_grid=80, trim=0.15)
+
+    print(f"using util.fit_piecewise_continuous, opd_model_params = {opd_model_params} \ninput these to util.fit_piecewise_continuous")
 
 
+    y = opd_nm_est
+    x = np.array( [np.mean( ss[strehl_filt] ) for ss in telem['s']] )
 
-#     # Check if file exists; if so, load and update.
-#     if os.path.exists(args.toml_file.replace('#',f'{args.beam_id}')):
-#         try:
-#             current_data = toml.load(args.toml_file.replace('#',f'{args.beam_id}'))
-#         except Exception as e:
-#             print(f"Error loading TOML file: {e}")
-#             current_data = {}
-#     else:
-#         current_data = {}
+    opd_pred = util.piecewise_continuous( x ,
+                                            interc=opd_model_params['interc'],
+                                            slope_1=opd_model_params['slope_1'],
+                                            slope_2 = opd_model_params['slope_2'],
+                                                x_knee = opd_model_params['x_knee'] )
+
+    plt.figure()
+    plt.scatter( x, y ,label='meas')
+    plt.scatter( x, opd_pred,label = 'pred' )
+    plt.xlabel('signal (i_ext / <N0>)')
+    plt.ylabel('OPD [nm RMS]')
+    plt.legend()
+    plt.show()
 
 
-#     current_data = util.recursive_update(current_data, dict2write)
+    # write to toml..
 
-#     with open(args.toml_file.replace('#',f'{args.beam_id}'), "w") as f:
-#         toml.dump(current_data, f)
+    dict2write = {f"beam{args.beam_id}":{f"{args.phasemask}":{"ctrl_model": {
+                                                    "strehl_filter":np.array(strehl_filt).astype(int).reshape(-1).tolist(),
+                                                    "opd_m_interc":opd_model_params['interc'],
+                                                    "opd_m_slope_1":opd_model_params['slope_1'],
+                                                    "opd_m_slope_2":opd_model_params['slope_2'],
+                                                    "opd_m_x_knee":opd_model_params['x_knee'],
+                                                    }
+                                                }
+                                            }
+                                        }
 
-#     print( f"updated configuration file {args.toml_file.replace('#',f'{args.beam_id}')}")
 
+
+    # Check if file exists; if so, load and update.
+    if os.path.exists(args.toml_file.replace('#',f'{args.beam_id}')):
+        try:
+            current_data = toml.load(args.toml_file.replace('#',f'{args.beam_id}'))
+        except Exception as e:
+            print(f"Error loading TOML file: {e}")
+            current_data = {}
+    else:
+        current_data = {}
+
+
+    current_data = util.recursive_update(current_data, dict2write)
+
+    with open(args.toml_file.replace('#',f'{args.beam_id}'), "w") as f:
+        toml.dump(current_data, f)
+
+    print( f"updated configuration file {args.toml_file.replace('#',f'{args.beam_id}')}")
 
 
 
@@ -1313,12 +1272,23 @@ send_and_get_response("off SBB")
 time.sleep(10)
 
 dark_dict = {}
+Cn_dict = {} #  covariance of dark 
 for beam_id in args.beam_id:
     dark_tmp = []
-    for _ in range( 1000 ):
+    for _ in range( 2000 ):
         dark_tmp.append( cam_shm[beam_id].get_data() )
         time.sleep(0.01) #
     dark_dict[beam_id] = np.mean( dark_tmp , axis=0)
+
+    # get covariance of dark (for MAP recon)
+    # D: (N, P) flattened dark frames
+    Dtmp = np.asarray(dark_dict[beam_id] , dtype=float)
+
+    mu = Dtmp.mean(axis=0, keepdims=True)      # (1, P)
+    Xtmp  = Dtmp.reshape(-1) - Dtmp.mean(axis=0, keepdims=True).reshape(-1)                              # zero-mean fluctuations (N, P)
+
+    Cn_dict[beam_id] = (Xtmp.T @ Xtmp) / (Xtmp.shape[0] - 1)        # (P, P) unbiased sample covariance
+    print(f'beam {beam_id} dark covariance shape = {Cn_dict[beam_id].shape}')
 
 send_and_get_response("on SBB")
 time.sleep(3)
@@ -1326,6 +1296,9 @@ print("turning back on internal SBB source, check plot that darks are ok")
 
 # check 
 util.nice_heatmap_subplots( im_list=[dark_dict[beam_id] for beam_id in args.beam_id], title_list=[f"beam{beam_id} dark" for beam_id in args.beam_id] )
+plt.show() 
+
+util.nice_heatmap_subplots( im_list=[Cn_dict[beam_id] for beam_id in args.beam_id], title_list=[f"beam{beam_id} dark covariance" for beam_id in args.beam_id] )
 plt.show() 
 
 
@@ -1431,9 +1404,9 @@ modal_basis = np.array( LO_basis.tolist() +  zonal_basis.tolist() )
 # this is why we do transpose 
 M2C = modal_basis.copy().reshape(modal_basis.shape[0],-1).T # mode 2 command matrix 
 
-
-if args.signal_space.lower() not in ["dm", "pix"] :
-    raise UserWarning("signal space must either be 'dm' or 'pixel'")
+# we now always build IM in measurement space, and consider signal space when building reconstructor in 'build_baldr_control_matrix.py'
+# if args.signal_space.lower() not in ["dm", "pix"] :
+#     raise UserWarning("signal space must either be 'dm' or 'pixel'")
 
 
 
@@ -1456,7 +1429,10 @@ ny, nx = frame0.shape
 # Preallocate storage
 Iplus_stack  = {b: np.zeros((n_modes, n_plus,  ny, nx), dtype=np.float32) for b in args.beam_id}
 Iminus_stack = {b: np.zeros((n_modes, n_minus, ny, nx), dtype=np.float32) for b in args.beam_id}
-IM_mat       = {b: np.zeros((n_modes, 140 if args.signal_space=='dm' else ny*nx), dtype=np.float32) for b in args.beam_id}
+
+# we now always build IM in measurement space, and consider signal space when building reconstructor in 'build_baldr_control_matrix.py'
+IM_mat       = {b: np.zeros((n_modes, ny*nx), dtype=np.float32) for b in args.beam_id}
+# IM_mat       = {b: np.zeros((n_modes, 140 if args.signal_space=='dm' else ny*nx), dtype=np.float32) for b in args.beam_id}
 
 for i, m in enumerate(modal_basis):
     print(f"executing cmd {i}/{n_modes-1}")
@@ -1496,10 +1472,13 @@ for i, m in enumerate(modal_basis):
         I_plus  = np.mean(Iplus_stack[b][i],  axis=0).reshape(-1) / norm_factor
         I_minus = np.mean(Iminus_stack[b][i], axis=0).reshape(-1) / norm_factor
 
-        if args.signal_space.lower() == "dm":
-            errsig = (I2A_dict[b] @ (I_plus - I_minus)) / args.poke_amp
-        else:
-            errsig = (I_plus - I_minus) / args.poke_amp
+        # if args.signal_space.lower() == "dm":
+        #     errsig = (I2A_dict[b] @ (I_plus - I_minus)) / args.poke_amp
+        # else:
+        #     errsig = (I_plus - I_minus) / args.poke_amp
+
+        # we now always build IM in measurement space, and consider signal space when building reconstructor in 'build_baldr_control_matrix.py'
+        errsig = (I_plus - I_minus) / args.poke_amp
 
         IM_mat[b][i] = errsig.astype(np.float32).reshape(-1) 
 
@@ -1524,7 +1503,7 @@ phdr["DATE"]   = datetime.datetime.utcnow().isoformat()
 phdr["PHMASK"] = args.phasemask
 phdr["POKEAMP"]= float(args.poke_amp)
 phdr["LO"]     = int(args.LO)
-phdr["SIGSPC"] = args.signal_space.lower()
+#phdr["SIGSPC"] = args.signal_space.lower()
 phdr["NOIMGS"] = int(no_imgs)
 phdr["NSIGN"]  = number_of_pokes_per_cmd 
 phdr["BEAMS"]  = ",".join(map(str, args.beam_id))
@@ -1571,7 +1550,7 @@ for beam_id in args.beam_id:
     dict2write = {f"beam{beam_id}":{f"{args.phasemask}":{"ctrl_model": {
                                                     "build_method":"double-sided-poke",
                                                     "DM_flat":args.DM_flat.lower(),
-                                                    "signal_space":args.signal_space.lower(),
+                                                    #"signal_space":args.signal_space.lower(),
                                                     "crop_pixels": np.array( baldr_pupils[f"{beam_id}"] ).tolist(), # global corners (r1,r2,c1,c2) of sub pupil cropping region  (local frame)
                                                     "pupil_pixels" : np.where(  np.array( pupil_mask[beam_id] ).reshape(-1) )[0].tolist(),  # pupil pixels in local frame 
                                                     "interior_pixels" : np.where( np.array( inner_pupil_filt[beam_id].reshape(-1) )   )[0].tolist(), # strictly interior pupil pixels in local frame
@@ -1597,6 +1576,7 @@ for beam_id in args.beam_id:
                                                     # !!!! Set these calibration things to zero since they should be dealt with by cred 1 server! 
                                                     "bias" : np.zeros([32,32]).reshape(-1).astype(int).tolist(),
                                                     "dark" : np.array(dark_dict[beam_id]).astype(int).reshape(-1).tolist(), #np.zeros([32,32]).reshape(-1).astype(int).tolist(), # just update to a default 1000 adu offset. In rtc this can be updated with dark_update function!
+                                                    "dark_cov" : np.array(Cn_dict[beam_id]).astype(int).reshape(-1).tolist(),
                                                     "bad_pixel_mask" : np.ones([32,32]).reshape(-1).astype(int).tolist(),
                                                     "bad_pixels" : [], 
                                                 }
