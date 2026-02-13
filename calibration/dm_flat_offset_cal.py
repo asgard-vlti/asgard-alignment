@@ -86,7 +86,7 @@ parser.add_argument(
 parser.add_argument(
     "--beam_id",
     type=lambda s: [int(item) for item in s.split(",")],
-    default=[3],
+    default=[2],
     help="Comma-separated beam IDs to apply. Default: 1,2,3,4"
 )
 
@@ -259,34 +259,34 @@ def apply_flat( beam_list, DM_flat ):
     for beam in beam_list:
         dm_shm_dict[beam] = dmclass( beam_id=beam) 
         # zero all channels
-        dm_shm_dict[beam].zero_all()
+        # dm_shm_dict[beam].zero_all()
         
-        if DM_flat.lower() == 'factory':
-            # activate flat (does this on channel 1)
-            dm_shm_dict[beam].activate_flat()
-        elif DM_flat.lower() == 'baldr':
-            # apply dm flat + calibrated offset (does this on channel 1)
-            dm_shm_dict[beam].activate_calibrated_flat()
+        # if DM_flat.lower() == 'factory':
+        #     # activate flat (does this on channel 1)
+        #     dm_shm_dict[beam].activate_flat()
+        # elif DM_flat.lower() == 'baldr':
+        #     # apply dm flat + calibrated offset (does this on channel 1)
+        #     dm_shm_dict[beam].activate_calibrated_flat()
 
-        elif DM_flat.lower() == 'heim':
-            # not implemented in dmclass .. to do, so do it manually
-            # heim flat is relative to factory flat so they are added 
-            wdirtmp = "/home/asg/Progs/repos/asgard-alignment/DMShapes/"  # os.path.dirname(__file__)
-            flat_cmd = dm_shm_dict[beam].cmd_2_map2D(
-                np.loadtxt(
-                    dm_shm_dict[beam].select_flat_cmd(
-                        wdirtmp
-                    )
-                )
-            )
-            flat_cmd_offset = np.loadtxt(
-                wdirtmp + f"heim_flat_beam_{beam}.txt"
-            )
-            dm_shm_dict[beam].shms[0].set_data(
-                flat_cmd + flat_cmd_offset
-            )
+        # elif DM_flat.lower() == 'heim':
+        #     # not implemented in dmclass .. to do, so do it manually
+        #     # heim flat is relative to factory flat so they are added 
+        #     wdirtmp = "/home/asg/Progs/repos/asgard-alignment/DMShapes/"  # os.path.dirname(__file__)
+        #     flat_cmd = dm_shm_dict[beam].cmd_2_map2D(
+        #         np.loadtxt(
+        #             dm_shm_dict[beam].select_flat_cmd(
+        #                 wdirtmp
+        #             )
+        #         )
+        #     )
+        #     flat_cmd_offset = np.loadtxt(
+        #         wdirtmp + f"heim_flat_beam_{beam}.txt"
+        #     )
+        #     dm_shm_dict[beam].shms[0].set_data(
+        #         flat_cmd + flat_cmd_offset
+        #     )
             
-            dm_shm_dict[beam].shm0.post_sems(1)
+        #     dm_shm_dict[beam].shm0.post_sems(1)
 
 
 #---------- DMs
@@ -527,6 +527,12 @@ plt.savefig('delme.png')
 
 exterior_mask = np.roll( np.roll( exterior_mask_rough, -1, axis=0), -1, axis=1)
 
+plt.show()
+
+usr_input = input("ready to continue the DM scan? press enter, to exit enter 0")
+if usr_input == '0':
+    import sys
+    sys.exit()
 # exterior_mask = (abs(I0_m - N0_m/np.mean( N0_m[pupil_masks[beam_id]] ) ) > 0.1 ) * (~np.array(pupil_masks[beam_id]))
 # plt.figure(); plt.imshow( exterior_mask)  ;plt.colorbar() ;plt.savefig('delme.png')
 
@@ -577,11 +583,11 @@ for aa in amps:
     rmse.append( np.sqrt( np.sum( (delta_cmd)**2) ) )
 
     
-    util.nice_heatmap_subplots(im_list = [I0_t, I0_m], title_list=["I0 theory", "I0 measured"], cbar_label_list=["Normalize","Normalize"] )
-    plt.savefig(fig_path + f'flatcal_beam{beam_id}_I0s_amp-{aa}.png')
+    #util.nice_heatmap_subplots(im_list = [I0_t, I0_m], title_list=["I0 theory", "I0 measured"], cbar_label_list=["Normalize","Normalize"] )
+    #plt.savefig(fig_path + f'flatcal_beam{beam_id}_I0s_amp-{aa}.png')
 
-    util.nice_heatmap_subplots(im_list = [util.get_DM_command_in_2D(iii) for iii in [I0_t_dm, I0_m_dm]], title_list=["I0 theory\nprojected on DM", "I0 measured\nprojected on"], cbar_label_list=["Normalize","Normalize"] )
-    plt.savefig(fig_path + f'flatcal_beam{beam_id}_I0s_on_DM_amp-{aa}.png')
+    #util.nice_heatmap_subplots(im_list = [util.get_DM_command_in_2D(iii) for iii in [I0_t_dm, I0_m_dm]], title_list=["I0 theory\nprojected on DM", "I0 measured\nprojected on"], cbar_label_list=["Normalize","Normalize"] )
+    #plt.savefig(fig_path + f'flatcal_beam{beam_id}_I0s_on_DM_amp-{aa}.png')
 
 
 plt.figure()
@@ -603,80 +609,88 @@ ib = np.argmax( exterior_sig ) #np.argmin( rmse )
 
 dm_shm_dict[beam_id].set_data( amps[ib] * cc  )
 
+
+plt.show()
+
+usr_input = input("Analyse plots and look at ZWFS pupil (did it improve?).. press enter 1 to continue saving the new flat, enter to not save, or  to exit enter 0")
+if usr_input == '0':
+    import sys
+    sys.exit()
+
 #dm_shm_dict[beam_id].shms[1].set_data( amps[ib] * cc )
+if usr_input == '1':
+    if not args.start_with_current_baldr_flat:
+        best_baldr_flat_offset_2D = amps[ib] * cc 
+        best_baldr_flat_offset = amps[ib] * cc140
+    else : # we must also add in the previous DM flat
+        # add previous flat we used here 
 
-if not args.start_with_current_baldr_flat:
-    best_baldr_flat_offset_2D = amps[ib] * cc 
-    best_baldr_flat_offset = amps[ib] * cc140
-else : # we must also add in the previous DM flat
-    # add previous flat we used here 
+        ############## IF STARTING WITH HEIMDALLR FLAT 
+        ### if starting with heim flat (exception for first light )
+        
+        ##if heim #start with heim flat  
+        #wdirtmp = "/home/asg/Progs/repos/asgard-alignment/DMShapes/"  
+        #heim_flat_cmd_offset = np.loadtxt(
+        #    wdirtmp + f"heim_flat_beam_{beam_id}.txt"
+        #)
+        #begin_flat_offset =heim_flat_cmd_offset  ### this -> doesn work cause include factory flat dm_shm_dict[beam_id].shms[0].get_data()
+        
+        
+        #best_baldr_flat_offset_2D =  amps[ib] * cc + begin_flat_offset #dm_shm_dict[beam_id].cmd_2_map2D( dm_shm_dict[beam_id].get_baldr_flat_offset()  )
+        #best_baldr_flat_offset = amps[ib] * cc140 + util.convert_12x12_to_140(begin_flat_offset)#dm_shm_dict[beam_id].get_baldr_flat_offset() 
 
-    ############## IF STARTING WITH HEIMDALLR FLAT 
-    ### if starting with heim flat (exception for first light )
-    
-    #if heim #start with heim flat  
-    wdirtmp = "/home/asg/Progs/repos/asgard-alignment/DMShapes/"  
-    heim_flat_cmd_offset = np.loadtxt(
-        wdirtmp + f"heim_flat_beam_{beam_id}.txt"
-    )
-    begin_flat_offset =heim_flat_cmd_offset  ### this -> doesn work cause include factory flat dm_shm_dict[beam_id].shms[0].get_data()
-    
-    
-    best_baldr_flat_offset_2D =  amps[ib] * cc + begin_flat_offset #dm_shm_dict[beam_id].cmd_2_map2D( dm_shm_dict[beam_id].get_baldr_flat_offset()  )
-    best_baldr_flat_offset = amps[ib] * cc140 + util.convert_12x12_to_140(begin_flat_offset)#dm_shm_dict[beam_id].get_baldr_flat_offset() 
+        # else: #with baldr  
+        best_baldr_flat_offset_2D =  amps[ib] * cc + dm_shm_dict[beam_id].cmd_2_map2D( dm_shm_dict[beam_id].get_baldr_flat_offset()  )
+        best_baldr_flat_offset = amps[ib] * cc140 + dm_shm_dict[beam_id].get_baldr_flat_offset() 
 
-    # else: #with baldr  
-    # best_baldr_flat_offset_2D =  amps[ib] * cc + dm_shm_dict[beam_id].cmd_2_map2D( dm_shm_dict[beam_id].get_baldr_flat_offset()  )
-    # best_baldr_flat_offset = amps[ib] * cc140 + dm_shm_dict[beam_id].get_baldr_flat_offset() 
+    # savefits 
+    # Convert to a dictionary
 
-# savefits 
-# Convert to a dictionary
+    data_dict = {
+        "best_DM_flat": best_baldr_flat_offset,
+        "flat_used":dm_shm_dict[beam_id].shms[0].get_data(),
+        "basis_aberration": np.array(cc),
+        "amps":np.array(cc),
+        "DM_cmds":np.array( [ a*cc for a in amps] ),
+        "I0_theory": np.array( I0_t ),
+        "I0_theory_dm": np.array( I0_t_dm ),
+        "I2A": np.array( I2A_dict[beam_id] ),
+        "I0_list": np.array(I0_list),
+        "I0_dm_list": np.array(I0_dm_list),
+        "delta_list": np.array(delta_list),
+        "rmse": np.array(rmse),
+        "exterior_sig": np.array(exterior_sig),
+        "pupil_pixels": np.array( pupil_masks[beam_id] ).astype(int),
+        "exterior_pixels": np.array( exterior_mask ).astype(int),
+    }
 
-data_dict = {
-    "best_DM_flat": best_baldr_flat_offset,
-    "flat_used":dm_shm_dict[beam_id].shms[0].get_data(),
-    "basis_aberration": np.array(cc),
-    "amps":np.array(cc),
-    "DM_cmds":np.array( [ a*cc for a in amps] ),
-    "I0_theory": np.array( I0_t ),
-    "I0_theory_dm": np.array( I0_t_dm ),
-    "I2A": np.array( I2A_dict[beam_id] ),
-    "I0_list": np.array(I0_list),
-    "I0_dm_list": np.array(I0_dm_list),
-    "delta_list": np.array(delta_list),
-    "rmse": np.array(rmse),
-    "exterior_sig": np.array(exterior_sig),
-    "pupil_pixels": np.array( pupil_masks[beam_id] ).astype(int),
-    "exterior_pixels": np.array( exterior_mask ).astype(int),
-}
+    # Create a FITS HDUList
+    hdul = fits.HDUList()
 
-# Create a FITS HDUList
-hdul = fits.HDUList()
+    # Iterate through the dictionary and add each array as an ImageHDU
+    for key, value in data_dict.items():
+        hdu = fits.ImageHDU(value)
+        hdu.header['EXTNAME'] = key  # Set the EXTNAME header
+        hdu.header['FACTORY_FLAT_START'] = int( args.start_with_current_baldr_flat )
+        hdul.append(hdu)
 
-# Iterate through the dictionary and add each array as an ImageHDU
-for key, value in data_dict.items():
-    hdu = fits.ImageHDU(value)
-    hdu.header['EXTNAME'] = key  # Set the EXTNAME header
-    hdu.header['FACTORY_FLAT_START'] = int( args.start_with_current_baldr_flat )
-    hdul.append(hdu)
+    # Define the output FITS filename
+    #mask_id = 'H3'
+    fits_filename = fig_path + f"flat_dm_beam{beam_id}_mask{args.phasemask}_{tstamp}.fits"
 
-# Define the output FITS filename
-#mask_id = 'H3'
-fits_filename = fig_path + f"flat_dm_beam{beam_id}_mask{args.phasemask}_{tstamp}.fits"
+    # Write to FITS file
+    hdul.writeto(fits_filename, overwrite=True)
 
-# Write to FITS file
-hdul.writeto(fits_filename, overwrite=True)
-
-print(f"Saved FITS file as {fits_filename}")
-
-
+    print(f"Saved FITS file as {fits_filename}")
 
 
-### Save as txt file the flat 
-dmshape_save_path = f"/home/asg/Progs/repos/asgard-alignment/DMShapes/"
-flat_fname = dmshape_save_path + f"BEAM{beam_id}_FLAT_MAP_OFFSETS_{tstamp}.txt"
-np.savetxt(flat_fname, best_baldr_flat_offset, fmt="%.7f")
-print(f"saved the new flat {flat_fname}")
+
+
+    ### Save as txt file the flat 
+    dmshape_save_path = f"/home/asg/Progs/repos/asgard-alignment/DMShapes/"
+    flat_fname = dmshape_save_path + f"BEAM{beam_id}_FLAT_MAP_OFFSETS_{tstamp}.txt"
+    np.savetxt(flat_fname, best_baldr_flat_offset, fmt="%.7f")
+    print(f"saved the new flat {flat_fname}")
 
 
 
