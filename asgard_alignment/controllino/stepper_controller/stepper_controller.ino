@@ -8,6 +8,7 @@
 //  "h[MOTOR]" Home a motor, but moving backwards until the home sensor is found.
 //  "w[MOTOR]" Find the position of a motor.
 //  "z[MOTOR]" Find if the motor is homed.
+//  "p[MOTOR]"  Read out the zero Pin directy.
 //  "s[MOTOR] [STEPS]" Move to a fixed number of steps from zero. 
 // This only works with one motor, so only one motor should be enabled at a time.
 //  "?" Ping
@@ -18,7 +19,7 @@
 //    For all moves other than a relative move, we move 1 motor at a time.
 
 #include <SPI.h>
-#include <NativeEthernet.h>h
+#include <NativeEthernet.h>
 #define BAD_INT 32767
 
 // Enter a MAC address and IP address for your controller below.
@@ -37,7 +38,7 @@ int next_str_ix;  // The next index in the string we're passing (saves passing b
 #define MS3 32
 int current_pos[MAX_MOTORS] = {0,0,0,0,0,0,0,0,0,0,0,0};
 int target_pos[MAX_MOTORS] = {0,0,0,0,0,0,0,0,0,0,0,0};
-int zero_pins[MAX_MOTORS] = {21,20,23,22,17,16,19,18,2,3,0,1};
+int zero_pins[MAX_MOTORS]   = {21,20,23,22,17,16,19,18,2,3,0,1};
 int last_zero[MAX_MOTORS];
 int enable_pins[MAX_MOTORS] = {33,34,35,36,37,38,39,40,41,13,14,15};
 bool looking_for_home[MAX_MOTORS]={false,false,false,false,false,false,false,false,false,false,false,false};
@@ -49,12 +50,17 @@ int stepit=0, rdir=0, rsteps=0;
 void setup() {
   // Ethernet initialization
   Serial.begin(9600);
-  Ethernet.begin(mac, ip);
+  
   for (int i=0;i<MAX_MOTORS;i++){
     pinMode(zero_pins[i],INPUT);
     pinMode(enable_pins[i],OUTPUT);
     digitalWrite(enable_pins[i],HIGH);
+    int pin = digitalRead(zero_pins[i]);
+    Serial.println(pin);
   }
+  
+  Ethernet.begin(mac, ip);
+    
   pinMode(STEP_PIN,OUTPUT);
   pinMode(DIR_PIN,OUTPUT);
   pinMode(MS1,OUTPUT);
@@ -202,6 +208,9 @@ void loop() {
       } else if (c=='z'){ //Has zero been found?
         if ((pin >= MAX_MOTORS) || (pin < 0)) return failure(clients[i]); 
         else clients[i].println(String(int(found_home[pin])));
+      } else if (c=='p'){ //Read out zero pin directly
+        if ((pin >= MAX_MOTORS) || (pin < 0)) return failure(clients[i]); 
+        else clients[i].println(String(digitalRead(zero_pins[i]) ));
       } else {
         Serial.println("Invalid command character.");
         return failure(clients[i]);
@@ -221,20 +230,17 @@ void loop() {
   // Now lets move the motors!!!
   for (int i=0;i<MAX_MOTORS;i++){
     if (looking_for_home[i]){
-      if (digitalRead(zero_pins[i]) != last_zero[i]){
-        delay(1);
-        if (digitalRead(zero_pins[i] != last_zero[i])){
-          delay(1);
-          if (digitalRead(zero_pins[i] != last_zero[i])){
-            delay(1);
-            if (digitalRead(zero_pins[i]) != last_zero[i]){
-              last_zero[i] = (last_zero[i] + 1) % 2;
-              if (last_zero[i]==1){
+      if (digitalRead(zero_pins[i]) == 1){
+        delay(2);
+        if (digitalRead(zero_pins[i] == 1)){
+          delay(2);
+          if (digitalRead(zero_pins[i] == 1)){
+            delay(2);
+            if (digitalRead(zero_pins[i]) == 1){
                 target_pos[i]=0;
                 current_pos[i]=0;
                 looking_for_home[i]=false;
                 found_home[i]=true;
-              }
             }
           }
         }
