@@ -651,6 +651,17 @@ for beam_id in args.beam_id:
     plt.close()
 
 
+    ################################
+    # the interaction signal 
+    modes2look = [0,1,20,50]
+    im_list = [IM_mat[beam_id][m].reshape(32,32) for m in modes2look]
+
+    title_list = [f'mode {m}' for m in modes2look]
+    cbar_list = ["UNITLESS"] * len(im_list)
+    util.nice_heatmap_subplots( im_list , cbar_label_list=cbar_list, savefig=f'{args.fig_path}' + f'IM_mode_check_beam{beam_id}.png') 
+    plt.savefig(f'{args.fig_path}' + f'IM_some_modes_beam{beam_id}.jpeg', bbox_inches='tight', dpi=200)
+    #plt.show()
+
 # n_row = round( np.sqrt( M2C.shape[0]) ) - 1
 
 # fig,ax = plt.subplots(n_row, n_row, figsize=(15,15))

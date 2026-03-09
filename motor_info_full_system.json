@@ -519,8 +519,8 @@
         "motor_type": "MFF101M",
         "serial_number": "",
         "named_pos" : {
-            "FAINT" : 1.0,
-            "STANDARD" : 0.0 
+            "STANDARD" : 1.0,
+            "FAINT" : 0.0 
         },
         "semaphore_id": 39
     },

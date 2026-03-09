@@ -8,6 +8,7 @@ from scipy.optimize import leastsq
 import toml  # Make sure to install via `pip install toml` if needed
 import argparse
 import os
+import sys
 import json
 import time
 import zmq 
@@ -420,13 +421,69 @@ no_imgs = 10 # number of images to average (on internal source 10 is fine for de
 # BMX, BMY phasemask relative offsets for going between ZWFS and clear pupil
 rel_offset = -200.0 #um phasemask offset for clear pupil
 
+
+
+
+
+
+
+
+
+usr_input = print(f"\n======================\npress enter when ready to get a dark frame (will turn BB source off), enter 0 to exit")
+
+if usr_input == '0':
+    sys.exit() 
+
+
+print("turning off internal SBB source for bias")
+send_and_get_response("off SBB")
+
+time.sleep(10)
+
+dark_dict = {}
+Cn_dict = {} #  covariance of dark 
+for beam_id in args.beam_id:
+    dark_tmp = []
+    for _ in range( 2000 ):
+        dark_tmp.append( cam_shm[beam_id].get_data() )
+        time.sleep(0.01) #
+    dark_dict[beam_id] = np.mean( dark_tmp , axis=0)
+
+    # get covariance of dark (for MAP recon)
+    # D: (N, P) flattened dark frames
+    Dtmp = np.asarray(dark_tmp , dtype=float).reshape(len(dark_tmp), -1 )
+
+    #mu = Dtmp.mean(axis=0, keepdims=True)      # (1, P)
+    #Xtmp  = Dtmp - Dtmp.mean(axis=0, keepdims=True)                            # zero-mean fluctuations (N, P)
+
+    Cn_dict[beam_id] = np.cov(Dtmp.T ) #(Xtmp.T @ Xtmp) / (Xtmp.shape[0] - 1)        # (P, P) unbiased sample covariance
+    print(f'beam {beam_id} dark covariance shape = {Cn_dict[beam_id].shape}')
+
+send_and_get_response("on SBB")
+time.sleep(3)
+print("turning back on internal SBB source, check plot that darks are ok")
+
+# check 
+util.nice_heatmap_subplots( im_list=[dark_dict[beam_id] for beam_id in args.beam_id], title_list=[f"beam{beam_id} dark" for beam_id in args.beam_id] )
+plt.show() 
+
+util.nice_heatmap_subplots( im_list=[Cn_dict[beam_id] for beam_id in args.beam_id], title_list=[f"beam{beam_id} dark covariance" for beam_id in args.beam_id] )
+plt.show() 
+
+
+
+
 ############################################
 ########## 1. register baldr pupil 
 
 
 
 
-print(f"\n======================\nmoving to phasemask {args.phasemask} reference position")
+usr_input = print(f"\n======================\nmoving to phasemask {args.phasemask} reference position, enter 0 to exit")
+
+if usr_input == '0':
+    sys.exit() 
+
 # Move to phase mask
 for beam_id in args.beam_id:
     message = f"fpm_movetomask phasemask{beam_id} {args.phasemask}"
@@ -486,7 +543,9 @@ for beam_id in args.beam_id:
     secondary_list = secondary.tolist()
     
     ### NOTE : exterior and secondary filters should be updated more precisely in asgard-alignment/calibration/strehl_filter_registration.py
+    # need to add in[io] mode = "shm"
     new_data = {
+        "io":{"mode":"shm"},
         f"beam{beam_id}": {
             "pupil_ellipse_fit": {
                 "center_x": float(cx),
@@ -530,10 +589,15 @@ for beam_id in args.beam_id:
 
 
 
+print(f"\n======================\nmoving back to phasemask {args.phasemask} reference position")
+# Move to phase mask
+for beam_id in args.beam_id:
+    message = f"fpm_movetomask phasemask{beam_id} {args.phasemask}"
+    res = send_and_get_response(message)
+    print(f"moved to phasemask {args.phasemask} with response: {res}")
 
 ############################################
 ########## 2. register DM 
-
 
 print(f"\n======================\nmoving to phasemask {args.phasemask} reference position")
 # Move to phase mask
@@ -544,7 +608,12 @@ for beam_id in args.beam_id:
 
 time.sleep(1)
 
-input("\n======================\npress enter when ready to register DM (ensure phasemask is aligned!)")
+usr_input = input("\n======================\npress enter when ready to register DM (ensure phasemask is aligned!). enter 0 to exit")
+
+if usr_input == '0':
+    sys.exit() 
+
+
 
 
 
@@ -577,7 +646,7 @@ assert hasattr(args.beam_id , "__len__")
 assert len(args.beam_id) <= 4
 assert max(args.beam_id) <= 4
 assert min(args.beam_id) >= 1 
-
+# we can only do this one beam at a time 
 pupil_mask = {}
 for beam_id in args.beam_id:
     with open(args.toml_file.replace('#',f'{beam_id}') ) as file:
@@ -722,8 +791,10 @@ for ii, beam_id in enumerate( args.beam_id ):
 
 ############################################
 ########## 3. register Strehl pixels 
-input("\n======================\npress enter when ready to register Strehl pixels")
+usr_input = input("\n======================\npress enter when ready to register Strehl pixels, enter 0 to exit")
 
+if usr_input == '0':
+    sys.exit() 
 
 
 
@@ -1001,9 +1072,10 @@ except Exception as e:
 
 # ############################################
 # ########## 4. Build OPD estimation model from exterior ZWFS pizxels 
-# input("\n======================\npress enter when ready to start calibrating the OPD model for Baldr")
+usr_input = input("\n======================\npress enter when ready to start calibrating the OPD model for Baldr, enter 0 to exit")
 
-
+if usr_input == '0':
+    sys.exit()
 # ############ setup
 
 
@@ -1047,25 +1119,6 @@ for beam_id in args.beam_id:
         N0_norm = np.mean( N0[inner_pupil_filt.astype(bool)] ) # defined in build_IM_in_subframe (interaction matrix standard)
 
 
-    print("turning off internal SBB source for bias")
-    send_and_get_response("off SBB")
-
-    time.sleep(5)
-
-
-    dark_tmp = []
-    for _ in range( 1000 ):
-        dark_tmp.append( cam_shm[beam_id].get_data() )
-        time.sleep(0.01) #
-    dark = np.mean( dark_tmp , axis=0)
-
-    send_and_get_response("on SBB")
-    time.sleep(3)
-    print("turning back on internal SBB source, check plot that darks are ok")
-
-    # check 
-    util.nice_heatmap_subplots( im_list=[dark] )
-    plt.show() 
 
 
     # 2. init telemetry to build model ()
@@ -1095,7 +1148,7 @@ for beam_id in args.beam_id:
             
             time.sleep(0.01)
 
-            i = cam_shm[beam_id].get_data() - dark
+            i = cam_shm[beam_id].get_data() - dark_dict[beam_id]
 
             s = i / N0_norm  # we do like this because its strehl model! 
 
@@ -1201,8 +1254,10 @@ for beam_id in args.beam_id:
 
 ############################################
 ########## 4. Build IM 
-input("\n======================\npress enter when ready to start calibrating the Interaction Matrix for Baldr")
+usr_input = input("\n======================\npress enter when ready to start calibrating the Interaction Matrix for Baldr, enter 0 to exit")
 
+if usr_input == '0':
+    sys.exit()
 
 # By default HO in this construction of the IM will always contain zonal actuation of each DM actuator.
 # Using LO we can also define our Lower order modes on a Zernike basis where LO 
@@ -1257,42 +1312,6 @@ for beam_id in args.beam_id:
 #     #     args.DM_flat == 'baldr'
 #     #     dm_shm_dict[beam_id].activate_calibrated_flat()
 
-
-
-print("turning off internal SBB source for bias")
-send_and_get_response("off SBB")
-
-time.sleep(10)
-
-dark_dict = {}
-Cn_dict = {} #  covariance of dark 
-for beam_id in args.beam_id:
-    dark_tmp = []
-    for _ in range( 2000 ):
-        dark_tmp.append( cam_shm[beam_id].get_data() )
-        time.sleep(0.01) #
-    dark_dict[beam_id] = np.mean( dark_tmp , axis=0)
-
-    # get covariance of dark (for MAP recon)
-    # D: (N, P) flattened dark frames
-    Dtmp = np.asarray(dark_tmp , dtype=float)
-
-    mu = Dtmp.mean(axis=0, keepdims=True)      # (1, P)
-    Xtmp  = Dtmp.reshape(-1) - Dtmp.mean(axis=0, keepdims=True).reshape(-1)                              # zero-mean fluctuations (N, P)
-
-    Cn_dict[beam_id] = (Xtmp.T @ Xtmp) / (Xtmp.shape[0] - 1)        # (P, P) unbiased sample covariance
-    print(f'beam {beam_id} dark covariance shape = {Cn_dict[beam_id].shape}')
-
-send_and_get_response("on SBB")
-time.sleep(3)
-print("turning back on internal SBB source, check plot that darks are ok")
-
-# check 
-util.nice_heatmap_subplots( im_list=[dark_dict[beam_id] for beam_id in args.beam_id], title_list=[f"beam{beam_id} dark" for beam_id in args.beam_id] )
-plt.show() 
-
-util.nice_heatmap_subplots( im_list=[Cn_dict[beam_id] for beam_id in args.beam_id], title_list=[f"beam{beam_id} dark covariance" for beam_id in args.beam_id] )
-plt.show() 
 
 
 print(f"moving to phasemask {args.phasemask} reference position")

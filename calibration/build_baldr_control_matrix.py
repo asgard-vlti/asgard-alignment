@@ -125,6 +125,8 @@ parser.add_argument("--fig_path",
 
 args=parser.parse_args()
 
+os.makedirs(args.fig_path, exist_ok=True)
+
 # question still what to do with focus with secondary! 
 print( "filter_edge_actuators = ",args.filter_edge_actuators)
 
@@ -208,16 +210,31 @@ IM_HO = IM[LO:]
 M2C_LO = M2C[:,:LO]
 M2C_HO = M2C[:,LO:]
 
+
+print(f"IM_LO.shape = {IM_LO.shape}") 
+print(f"IM_HO.shape = {IM_HO.shape}") 
+
 # define effective pupil mask on IM measurement space
 pup_im_std = np.std( IM_HO, axis=0 )
 pup_mask = (pup_im_std - np.min(pup_im_std)) / (np.max( pup_im_std ) - np.min( pup_im_std ))
 pup_mask[pup_mask < 0.2] = 0 # normalize 0-1, anything below 0.2 force to 0
 
+print(pup_mask.shape)
 # IM is now always in measurement (pixel) space, so we define dm_mask via I2A consistently 
-dm_mask = I2A @ pup_mask.reshape(-1)
+if args.signal_space.lower() == "dm":
+    dm_mask = pup_mask.reshape(-1) # since pupil (pixel) space is projected to dm actuators
 
-util.nice_heatmap_subplots( im_list = [pup_mask, util.get_DM_command_in_2D(dm_mask)], title_list=['pupil mask\nmeas space','pupil mask\nproj to dm space'])
-plt.show()
+    util.nice_heatmap_subplots( im_list = [util.get_DM_command_in_2D(pup_mask), util.get_DM_command_in_2D(dm_mask)], title_list=['pupil mask\nmeas space','pupil mask\nproj to dm space'])
+    plt.show()
+
+elif args.signal_space.lower() == "pix":
+    dm_mask = I2A @ pup_mask.reshape(-1)
+    util.nice_heatmap_subplots( im_list = [pup_mask.reshape(32,32), util.get_DM_command_in_2D(dm_mask)], title_list=['pupil mask\nmeas space','pupil mask\nproj to dm space'])
+    plt.show()
+
+else:
+    raise UserWarning('invlaid signal space! --signal_space must be dm | pix')
+
 
 ########################################
 ## LO MODES 
@@ -325,7 +342,7 @@ elif args.inverse_method_HO.lower() == 'zonal':
     #     dm_mask = I2A @ np.array( pupil_mask ).reshape(-1)
 
     # util.nice_heatmap_subplots(  im_list = [util.get_DM_command_in_2D(dm_mask)], savefig='delme.png' )
-    I2M_HO = np.diag(  np.array( [dm_mask[i]/IM_HO[i][i] if np.isfinite(1/IM_HO[i][i]) else 0 for i in range(len(IM_HO))]) )
+    I2M_HO = np.diag(  np.array( [dm_mask.astype(bool)[i]/IM_HO[i][i] if np.isfinite(1/IM_HO[i][i]) else 0 for i in range(len(IM_HO))]) )
     #I2M_HO = np.diag(  np.array( [dm_mask[i]/IM_HO[i][i] if 1/IM_HO[i][i] < 1e3 else 0 for i in range(len(IM_HO))]) )
 
 
@@ -350,63 +367,72 @@ elif "eigen" in args.inverse_method_HO.lower(): # only for HO modes
 
 
 
-    # Keep my convention: IM_HO is (modes, measurement)
-    eps = 1e-12 # avoid 1/0
-    U, S, Vt = np.linalg.svd(IM_HO, full_matrices=False)
+    # # Keep my convention: IM_HO is (modes, measurement)
+    # eps = 1e-12 # avoid 1/0
+    # U, S, Vt = np.linalg.svd(IM_HO, full_matrices=False)
+
+    # k_eff = min(k_eff_req, S.shape[0])
+
+    # U_k  = U[:, :k_eff]        # (Nho, k)
+    # S_k  = S[:k_eff]           # (k,)
+    # Vt_k = Vt[:k_eff, :]       # (k, Nmeas)
+    # V_k  = Vt_k.T              # (Nmeas, k)
+
+    # # measurement y (Nmeas,) -> eigen coeffs a (k,)
+    # I2M_HO = V_k.T             # (k, Nmeas)
+
+    # # eigen coeffs a (k,) -> DM command u (144,)
+    # # IMPORTANT: use the original HO command basis mapping 
+    # M2C_HO_raw = M2C_HO        # (144, Nho) from earlier slice
+    # M2C_HO = M2C_HO_raw @ U_k @ np.diag(1.0 / (S_k + eps))   # (144, k)
+    
+    
+    # old from simulation 
+    eps = 1e-12  # or reuse your eps variable if you have one
+
+    # IM_HO is (Nho, Nmeas) in your convention, so use H_HO = (Nmeas, Nho)
+    H_HO = IM_HO.T   # (Nmeas, Nho)
+
+    U, S, Vt = np.linalg.svd(H_HO, full_matrices=False)
 
     k_eff = min(k_eff_req, S.shape[0])
 
-    U_k  = U[:, :k_eff]        # (Nho, k)
-    S_k  = S[:k_eff]           # (k,)
-    Vt_k = Vt[:k_eff, :]       # (k, Nmeas)
-    V_k  = Vt_k.T              # (Nmeas, k)
+    U_k  = U[:, :k_eff]        # (Nmeas, k_eff)
+    S_k  = S[:k_eff]           # (k_eff,)
+    Vt_k = Vt[:k_eff, :]       # (k_eff, Nho)
+    V_k  = Vt_k.T              # (Nho, k_eff)
 
-    # measurement y (Nmeas,) -> eigen coeffs a (k,)
-    I2M_HO = V_k.T             # (k, Nmeas)
+    # Measurement -> eigen coefficients (controller runs on these)
+    # This maps y (Nmeas,) -> a (k_eff,)
+    I2M_HO = U_k.T              # (k_eff, Nmeas)
 
-    # eigen coeffs a (k,) -> DM command u (144,)
-    # IMPORTANT: use the original HO command basis mapping 
-    M2C_HO_raw = M2C_HO        # (144, Nho) from earlier slice
-    M2C_HO = M2C_HO_raw @ U_k @ np.diag(1.0 / (S_k + eps))   # (144, k)
+    # since we tranpose in write toml , we do it here to keep consistent with rest 
+    # (because we started here with H_HO = IM_HO.T )
+    I2M_HO = I2M_HO.T              # (k_eff, Nmeas)
+
+    # Eigen coeffs -> HO command basis (whatever basis IM_HO rows represent)
+    # This maps a (k_eff,) -> x_HO (Nho,)
+
+    # REDEFINE M2C_HO
+    M2C_HO = V_k @ np.diag(1.0 / (S_k + eps))   # (Nho, k_eff)
+    
 
 
     # check 
     modes2plot = 5
     if args.signal_space.strip().lower() == 'dm':
         try:
-            util.nice_heatmap_subplots(im_list = [util.get_DM_command_in_2D( I2M_HO[:,ii] ) for ii in range(modes2plot)], title_list=[f"eigenmode {ii}" for ii in range(modes2plot)])
+            util.nice_heatmap_subplots(im_list = [util.get_DM_command_in_2D( I2M_HO[ii] ) for ii in range(modes2plot)], title_list=[f"eigenmode {ii}" for ii in range(modes2plot)])
+            plt.show()
         except:
             print("SOMETHING WENT WRONG WITH PLOTTING EIGEN MODES ")
     else:
         try:
-            util.nice_heatmap_subplots(im_list = [I2M_HO[:,ii].reshape(32,32) for ii in range(modes2plot)], title_list=[f"eigenmode {ii}" for ii in range(modes2plot)])
+            util.nice_heatmap_subplots(im_list = [I2M_HO[ii].reshape(32,32) for ii in range(modes2plot)], title_list=[f"eigenmode {ii}" for ii in range(modes2plot)])
+            plt.show()
         except:
             print("SOMETHING WENT WRONG WITH PLOTTING EIGEN MODES ")
-    # # old from simulation 
-    # eps = 1e-12  # or reuse your eps variable if you have one
 
-    # # IM_HO is (Nho, Nmeas) in your convention, so use H_HO = (Nmeas, Nho)
-    # H_HO = IM_HO.T   # (Nmeas, Nho)
-
-    # U, S, Vt = np.linalg.svd(H_HO, full_matrices=False)
-
-    # k_eff = min(k_eff_req, S.shape[0])
-
-    # U_k  = U[:, :k_eff]        # (Nmeas, k_eff)
-    # S_k  = S[:k_eff]           # (k_eff,)
-    # Vt_k = Vt[:k_eff, :]       # (k_eff, Nho)
-    # V_k  = Vt_k.T              # (Nho, k_eff)
-
-    # # Measurement -> eigen coefficients (controller runs on these)
-    # # This maps y (Nmeas,) -> a (k_eff,)
-    # I2M_HO = U_k.T              # (k_eff, Nmeas)
-
-    # # Eigen coeffs -> HO command basis (whatever basis IM_HO rows represent)
-    # # This maps a (k_eff,) -> x_HO (Nho,)
-
-    # # REDEFINE M2C_HO
-    # M2C_HO = V_k @ np.diag(1.0 / (S_k + eps))   # (Nho, k_eff)
-    # end old
 
 
     # for plotting later if you want
@@ -453,23 +479,26 @@ if args.project_TT_out_HO and LO > 0:
     r_lo = int(np.sum(Smeas > 1e-12))
     Qlo = Umeas[:, :r_lo]                      # (Nmeas, r_lo)
     P_LO = Qlo @ Qlo.T                         # (Nmeas, Nmeas)
-
+    print( "P_LO.shape", P_LO.shape)
     # sanity checj
-    assert P_LO.shape == (IM.shape[1],IM.shape[1])
-    assert I2M_HO.shape[1] == IM.shape[1], f"I2M_HO must have Nmeas columns, got {I2M_HO.shape}"
-    assert IM_LO.shape[1] == IM.shape[1]
+    #assert P_LO.shape == (IM.shape[1],IM.shape[1])
+    # assert I2M_HO.shape[1] == IM.shape[1], f"I2M_HO must have Nmeas columns, got {I2M_HO.shape}"
+    # assert IM_LO.shape[1] == IM.shape[1]
 
-    Btmp = IM_LO.T                      # (Nmeas, LO)
-    leak_mat = I2M_HO @ Btmp            # (Nho, LO)
+    Btmp = IM_LO[1]                      # (Nmeas, LO)
+    #remember we write I2M_HO.T to toml 
+    leak_mat = I2M_HO.T @ Btmp            # (Nho, LO)
 
+    #util.nice_heatmap_subplots( im_list=[P_LO.reshape(32,32), util.get_DM_command_in_2D( M2C_HO @ leak_mat) ] )
+    #plt.show()
     rel_leak = np.linalg.norm(leak_mat) / (np.linalg.norm(I2M_HO)*np.linalg.norm(Btmp) + 1e-30)
     print("--\nsantiy check project TT out of HO:\nrelative HO response to LO subspace:", rel_leak,'\nif rel_leak ~ 1e-2 or larger => projection not applied in the right space')
 
 
     # Make HO reconstructor blind to LO measurement subspace
     # I2M_HO must be (Nho, Nmeas) for this to be valid.
-    I2M_HO = I2M_HO @ (np.eye(P_LO.shape[0]) - P_LO)
-
+    I2M_HO = (I2M_HO.T @ (np.eye(P_LO.shape[0]) - P_LO) ).T
+    print("I2M_HO.shape",I2M_HO.shape)
 
 
 
@@ -788,6 +817,7 @@ if test_reco != '0':
 
     # Plot TIP response
     plt.figure(figsize=(6, 4))
+    print('tip_true.shape, tip_rec.shape',tip_true.shape, tip_rec.shape )
     plt.plot(tip_true, tip_rec, marker="o", linestyle="-", label="reconstructed")
     plt.plot(tip_true, tip_true, "--", label="ideal")
     p = np.polyfit(tip_true, tip_rec, 1)
@@ -968,198 +998,240 @@ if test_reco != '0':
 # ============================================================
 
 
-# ---- Load HO pieces from the written TOML (same style as TT) ----
-I2M_HO = np.array(ctrl["I2M_HO"], dtype=float)
-M2C_HO = np.array(ctrl["M2C_HO"], dtype=float)
-
-# Determine measurement length in chosen signal space (same as TT section)
-# s is either I2A @ s_pix -> length 140 OR s_pix -> length 1024
-n_meas = 140 if sigspace == "dm" else int(I0_flat.size)
-
-# I2M_HO = _ensure_I2M_rows_are_modes(I2M_HO, n_meas=n_meas)
-# M2C_HO = _ensure_M2C_is_act_by_modes(M2C_HO)
-
-N_HO_CTRL = int(I2M_HO.shape[0])     # number of HO control modes (could be Nho or k_eff if eigen)
-N_HO_CMD  = int(M2C_HO.shape[1])     # number of HO command basis modes
-
-print(f"\nHO sanity: I2M_HO shape = {I2M_HO.shape} (Nmodes_ctrl x Nmeas)")
-print(f"HO sanity: M2C_HO shape = {M2C_HO.shape} (Nact x Nmodes_cmd)")
-
 # ---- Ask which HO control-mode index to test ----
-ho_in = input(f"\nEnter HO mode index to test [0..{N_HO_CTRL-1}] (or '0' to skip): ").strip()
-if ho_in and ho_in != "0":
-    ho_idx = int(ho_in)
-    if ho_idx < 0 or ho_idx >= N_HO_CTRL:
-        raise ValueError(f"HO index {ho_idx} out of range [0..{N_HO_CTRL-1}]")
+ho_in = input(f"\nEnter HO mode index to test  (or '0' to skip): ").strip()
 
-    # if your HO control modes correspond 1:1 with HO command basis, ho_idx can be used for both
-    # if not (e.g. eigen control modes k_eff), command basis index is ambiguous, so we:
-    #   - command ONE HO basis mode (ask separately) if sizes differ
-    if N_HO_CMD != N_HO_CTRL:
-        cmd_in = input(f"HO control Nmodes={N_HO_CTRL} but HO command Nmodes={N_HO_CMD}.\n"
-                       f"Enter HO *command-basis* index to excite [0..{N_HO_CMD-1}] (default={ho_idx}): ").strip()
-        if cmd_in == "":
-            ho_cmd_idx = ho_idx
-        else:
-            ho_cmd_idx = int(cmd_in)
-        if ho_cmd_idx < 0 or ho_cmd_idx >= N_HO_CMD:
-            raise ValueError(f"HO command index {ho_cmd_idx} out of range [0..{N_HO_CMD-1}]")
-    else:
+if ho_in != '0':
+
+    import numpy as np
+    import os, time, toml, matplotlib.pyplot as plt
+    from asgard_alignment.DM_shm_ctrl import dmclass
+    #from asgard_alignment import FLI_Cameras as FLI
+    from xaosim.shmlib import shm 
+    # ---------- configurable test knobs ----------
+    TEST_BEAM   = int(args.beam_id)             # use the beam we just wrote
+    #N_TRIALS    = 40                            # number of random TT trials
+    #AMP_STD     = 0.05                          # DM units (per-mode stdev)
+    CAM_SHM     = f"/dev/shm/baldr{args.beam_id}.im.shm"       # subframe camera SHM
+    FIG_DIR     = os.path.expanduser(args.fig_path or "~/Downloads/")
+    # --------------------------------------------
+
+    # Load what we just wrote, so the test also works if you re-run later
+    with open(args.toml_file.replace('#', f'{TEST_BEAM}'), "r") as f:
+        cfg = toml.load(f)
+
+    top      = cfg[f"beam{TEST_BEAM}"]
+    ctrl     = top[args.phasemask]["ctrl_model"]
+    I2A      = np.array(top["I2A"], dtype=float)                        # (140 x 1024)
+    I2M_LO   = np.array(ctrl["I2M_LO"], dtype=float)                    # (LO x P)  (stored transposed)
+    M2C_LO   = np.array(ctrl["M2C_LO"], dtype=float)                    # (144 x LO)
+    LO_count = int(ctrl.get("LO", 2))                                   # how many LO modes were built
+    sigspace = str(ctrl.get("signal_space", "dm")).lower()              # 'dm' or 'piix'
+    inner_pupil_filt = np.array(ctrl["inner_pupil_filt"]).astype(bool)
+    # Pixel-space references saved by build_IM.py (already normalized)
+    I0_flat      = np.array(ctrl["I0"], dtype=float)                     # (1024,)
+    N0_flat      = np.array(ctrl["N0"], dtype=float) #np.array(ctrl["norm_pupil"], dtype=float)             # (1024,)
+    dark      = np.array(ctrl["dark"], dtype=float)  
+
+    # ---- Load HO pieces from the written TOML (same style as TT) ----
+    I2M_HO = np.array(ctrl["I2M_HO"], dtype=float) # note transpose as we write this way to
+    M2C_HO = np.array(ctrl["M2C_HO"], dtype=float)
+
+
+    # Connect camera (global SHM) and determine buffer length (# reads per burst)
+    cam = shm(f"/dev/shm/baldr{args.beam_id}.im.shm") #FLI.fli(CAM_SHM, roi=[None, None, None, None])
+
+    dm  = dmclass(beam_id=TEST_BEAM, main_chn=3)
+
+
+
+    # Determine measurement length in chosen signal space (same as TT section)
+    # s is either I2A @ s_pix -> length 140 OR s_pix -> length 1024
+    n_meas = 140 if sigspace == "dm" else int(I0_flat.size)
+
+    # I2M_HO = _ensure_I2M_rows_are_modes(I2M_HO, n_meas=n_meas)
+    # M2C_HO = _ensure_M2C_is_act_by_modes(M2C_HO)
+
+    N_HO_CTRL = int(I2M_HO.shape[0])     # number of HO control modes (could be Nho or k_eff if eigen)
+    N_HO_CMD  = int(M2C_HO.shape[1])     # number of HO command basis modes
+
+    print(f"\nHO sanity: I2M_HO shape = {I2M_HO.shape} (Nmodes_ctrl x Nmeas)")
+    print(f"HO sanity: M2C_HO shape = {M2C_HO.shape} (Nact x Nmodes_cmd)")
+
+
+    if ho_in and ho_in != "0":
+        ho_idx = int(ho_in)
+        if ho_idx < 0 or ho_idx >= N_HO_CTRL:
+            raise ValueError(f"HO index {ho_idx} out of range [0..{N_HO_CTRL-1}]")
+
+        # if your HO control modes correspond 1:1 with HO command basis, ho_idx can be used for both
+        # if not (e.g. eigen control modes k_eff), command basis index is ambiguous, so we:
+        #   - command ONE HO basis mode (ask separately) if sizes differ
+        # if N_HO_CMD != N_HO_CTRL:
+        #     cmd_in = input(f"HO control Nmodes={N_HO_CTRL} but HO command Nmodes={N_HO_CMD}.\n"
+        #                 f"Enter HO *command-basis* index to excite [0..{N_HO_CMD-1}] (default={ho_idx}): ").strip()
+        #     if cmd_in == "":
+        #         ho_cmd_idx = ho_idx
+        #     else:
+        #         ho_cmd_idx = int(cmd_in)
+        #     if ho_cmd_idx < 0 or ho_cmd_idx >= N_HO_CMD:
+        #         raise ValueError(f"HO command index {ho_cmd_idx} out of range [0..{N_HO_CMD-1}]")
+        # else:
         ho_cmd_idx = ho_idx
 
-    # ------------ (A) RAMP test on a single HO mode ------------
-    amps_ho = np.linspace(-0.2, 0.2, 21)
+        # ------------ (A) RAMP test on a single HO mode ------------
+        amps_ho = np.linspace(-0.2, 0.2, 21)
 
-    ho_true = []
-    ho_rec  = []
-    lo_leak = []   # track LO leakage magnitude when exciting HO only
+        ho_true = []
+        ho_rec  = []
+        lo_leak = []   # track LO leakage magnitude when exciting HO only
 
-    zero144 = np.zeros(144, dtype=float)
+        zero144 = np.zeros(144, dtype=float)
 
-    try:
-        for a in amps_ho:
-            # command a single HO *basis* mode
-            a_ho = np.zeros(N_HO_CMD, dtype=float)
-            a_ho[ho_cmd_idx] = a
-            u_cmd = M2C_HO @ a_ho   # (144,)
-            dm.set_data(u_cmd)
-            time.sleep(0.12)
+        try:
+            for a in amps_ho:
+                # command a single HO *basis* mode
+                a_ho = np.zeros(N_HO_CMD, dtype=float)
+                a_ho[ho_cmd_idx] = a
+                u_cmd = M2C_HO @ a_ho   # (144,)
+                dm.set_data(u_cmd)
+                time.sleep(0.12)
 
-            img_tmp = []
-            for _ in range(10):
-                img_tmp.append(cam.get_data().reshape(-1) - dark)
-                time.sleep(0.01)
-            I_flat = np.mean(img_tmp, axis=0)
+                img_tmp = []
+                for _ in range(10):
+                    img_tmp.append(cam.get_data().reshape(-1) - dark)
+                    time.sleep(0.01)
+                I_flat = np.mean(img_tmp, axis=0)
 
-            s_pix = (
-                I_flat / np.mean(N0_flat[inner_pupil_filt])
-                - I0_flat / np.mean(N0_flat[inner_pupil_filt])
-            )
+                s_pix = (
+                    I_flat / np.mean(N0_flat[inner_pupil_filt])
+                    - I0_flat / np.mean(N0_flat[inner_pupil_filt])
+                )
 
-            s = (I2A @ s_pix) if (sigspace == "dm") else s_pix
+                s = (I2A @ s_pix) if (sigspace == "dm") else s_pix
 
-            # HO reconstruct in your chosen HO control basis
-            a_hat_ho = I2M_HO @ s   # (N_HO_CTRL,)
+                # HO reconstruct in your chosen HO control basis
+                a_hat_ho = I2M_HO @ s   # (N_HO_CTRL,)
 
-            # also check LO leakage if LO exists
-            if LO_count > 0:
-                a_hat_lo = I2M_LO @ s
-                lo_leak.append(np.linalg.norm(a_hat_lo[:min(2, LO_count)]))
-            else:
-                lo_leak.append(0.0)
+                # also check LO leakage if LO exists
+                if LO_count > 0:
+                    a_hat_lo = I2M_LO @ s
+                    lo_leak.append(np.linalg.norm(a_hat_lo[:min(2, LO_count)]))
+                else:
+                    lo_leak.append(0.0)
 
-            ho_true.append(a)
-            ho_rec.append(a_hat_ho[ho_idx])
+                ho_true.append(a)
+                ho_rec.append(a_hat_ho[ho_idx])
 
-        dm.set_data(zero144)
-    finally:
-        try: dm.set_data(zero144)
-        except Exception: pass
+            dm.set_data(zero144)
+        finally:
+            try: dm.set_data(zero144)
+            except Exception: pass
 
-    ho_true = np.array(ho_true, dtype=float)
-    ho_rec  = np.array(ho_rec, dtype=float)
-    ho_err  = ho_rec - ho_true
-    lo_leak = np.array(lo_leak, dtype=float)
+        ho_true = np.array(ho_true, dtype=float)
+        ho_rec  = np.array(ho_rec, dtype=float)
+        ho_err  = ho_rec - ho_true
+        lo_leak = np.array(lo_leak, dtype=float)
 
-    # plot ramp
-    plt.figure(figsize=(6, 4))
-    plt.plot(ho_true, ho_rec, marker="o", linestyle="-", label="reconstructed")
-    plt.plot(ho_true, ho_true, "--", label="ideal")
-    p = np.polyfit(ho_true, ho_rec, 1)
-    plt.title(
-        f"HO single-mode ramp (beam{TEST_BEAM}, {args.phasemask})\n"
-        f"ctrl_idx={ho_idx}, cmd_idx={ho_cmd_idx} | slope={p[0]:.3g} offset={p[1]:.3g} "
-        f"RMSE={np.sqrt(np.mean(ho_err**2)):.3g}\n"
-        f"median LO leakage={np.median(lo_leak):.3g}"
-    )
-    plt.xlabel("commanded HO amplitude [DM units]")
-    plt.ylabel("reconstructed HO coefficient [DM units]")
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    out_png_ho_ramp = os.path.join(args.fig_path, f"recon_HO_mode{ho_idx}_ramp_beam{TEST_BEAM}.png")
-    plt.tight_layout()
-    plt.savefig(out_png_ho_ramp, dpi=180)
-    plt.show()
-    plt.close()
+        # plot ramp
+        plt.figure(figsize=(6, 4))
+        plt.plot(ho_true, ho_rec, marker="o", linestyle="-", label="reconstructed")
+        plt.plot(ho_true, ho_true, "--", label="ideal")
+        p = np.polyfit(ho_true, ho_rec, 1)
+        plt.title(
+            f"HO single-mode ramp (beam{TEST_BEAM}, {args.phasemask})\n"
+            f"ctrl_idx={ho_idx}, cmd_idx={ho_cmd_idx} | slope={p[0]:.3g} offset={p[1]:.3g} "
+            f"RMSE={np.sqrt(np.mean(ho_err**2)):.3g}\n"
+            f"median LO leakage={np.median(lo_leak):.3g}"
+        )
+        plt.xlabel("commanded HO amplitude [DM units]")
+        plt.ylabel("reconstructed HO coefficient [DM units]")
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        out_png_ho_ramp = os.path.join(args.fig_path, f"recon_HO_mode{ho_idx}_ramp_beam{TEST_BEAM}.png")
+        plt.tight_layout()
+        plt.savefig(out_png_ho_ramp, dpi=180)
+        plt.show()
+        plt.close()
 
-    print(f"[OK] Saved HO ramp plot: {out_png_ho_ramp}")
+        print(f" Saved HO ramp plot: {out_png_ho_ramp}")
 
-    # ------------ (B) Random single-mode HO test ------------
-    N_TRIALS_HO = 40
-    AMP_STD_HO  = 0.05
+        # ------------ (B) Random single-mode HO test ------------
+        N_TRIALS_HO = 40
+        AMP_STD_HO  = 0.05
 
-    rng = np.random.default_rng(1)
-    true_ho = []
-    rec_ho  = []
-    leak_lo = []
+        rng = np.random.default_rng(1)
+        true_ho = []
+        rec_ho  = []
+        leak_lo = []
 
-    try:
-        for k in range(N_TRIALS_HO):
-            a = float(rng.normal(0.0, AMP_STD_HO))
-            a_ho = np.zeros(N_HO_CMD, dtype=float)
-            a_ho[ho_cmd_idx] = a
+        try:
+            for k in range(N_TRIALS_HO):
+                a = float(rng.normal(0.0, AMP_STD_HO))
+                a_ho = np.zeros(N_HO_CMD, dtype=float)
+                a_ho[ho_cmd_idx] = a
 
-            u_cmd = M2C_HO @ a_ho
-            dm.set_data(u_cmd)
-            time.sleep(0.12)
+                u_cmd = M2C_HO @ a_ho
+                dm.set_data(u_cmd)
+                time.sleep(0.12)
 
-            img_tmp = []
-            for _ in range(10):
-                img_tmp.append(cam.get_data().reshape(-1) - dark)
-                time.sleep(0.01)
-            I_flat = np.mean(img_tmp, axis=0)
+                img_tmp = []
+                for _ in range(10):
+                    img_tmp.append(cam.get_data().reshape(-1) - dark)
+                    time.sleep(0.01)
+                I_flat = np.mean(img_tmp, axis=0)
 
-            s_pix = (
-                I_flat / np.mean(N0_flat[inner_pupil_filt])
-                - I0_flat / np.mean(N0_flat[inner_pupil_filt])
-            )
-            s = (I2A @ s_pix) if (sigspace == "dm") else s_pix
+                s_pix = (
+                    I_flat / np.mean(N0_flat[inner_pupil_filt])
+                    - I0_flat / np.mean(N0_flat[inner_pupil_filt])
+                )
+                s = (I2A @ s_pix) if (sigspace == "dm") else s_pix
 
-            a_hat_ho = I2M_HO @ s
-            true_ho.append(a)
-            rec_ho.append(a_hat_ho[ho_idx])
+                a_hat_ho = I2M_HO @ s
+                true_ho.append(a)
+                rec_ho.append(a_hat_ho[ho_idx])
 
-            if LO_count > 0:
-                a_hat_lo = I2M_LO @ s
-                leak_lo.append(np.linalg.norm(a_hat_lo[:min(2, LO_count)]))
-            else:
-                leak_lo.append(0.0)
+                if LO_count > 0:
+                    a_hat_lo = I2M_LO @ s
+                    leak_lo.append(np.linalg.norm(a_hat_lo[:min(2, LO_count)]))
+                else:
+                    leak_lo.append(0.0)
 
-        dm.set_data(zero144)
-    finally:
-        try: dm.set_data(zero144)
-        except Exception: pass
+            dm.set_data(zero144)
+        finally:
+            try: dm.set_data(zero144)
+            except Exception: pass
 
-    true_ho = np.array(true_ho)
-    rec_ho  = np.array(rec_ho)
-    err_ho  = rec_ho - true_ho
-    rmse_ho = np.sqrt(np.mean(err_ho**2))
-    leak_lo = np.array(leak_lo)
+        true_ho = np.array(true_ho)
+        rec_ho  = np.array(rec_ho)
+        err_ho  = rec_ho - true_ho
+        rmse_ho = np.sqrt(np.mean(err_ho**2))
+        leak_lo = np.array(leak_lo)
 
-    plt.figure(figsize=(5, 4))
-    plt.scatter(true_ho, rec_ho, s=18)
-    m = max(np.max(np.abs(true_ho)), np.max(np.abs(rec_ho))) * 1.1 + 1e-6
-    plt.plot([-m, m], [-m, m], "--", lw=1)
-    plt.xlabel("True HO amplitude [DM units]")
-    plt.ylabel("Reconstructed HO coefficient [DM units]")
-    plt.title(
-        f"HO single-mode random (ctrl_idx={ho_idx}, cmd_idx={ho_cmd_idx})\n"
-        f"RMSE={rmse_ho:.3g} | median LO leakage={np.median(leak_lo):.3g}"
-    )
-    plt.axis("equal")
-    plt.grid(True, alpha=0.3)
-    out_png_ho_rand = os.path.join(args.fig_path, f"recon_HO_mode{ho_idx}_random_beam{TEST_BEAM}.png")
-    plt.tight_layout()
-    plt.savefig(out_png_ho_rand, dpi=180)
-    plt.show()
-    plt.close()
+        plt.figure(figsize=(5, 4))
+        plt.scatter(true_ho, rec_ho, s=18)
+        m = max(np.max(np.abs(true_ho)), np.max(np.abs(rec_ho))) * 1.1 + 1e-6
+        plt.plot([-m, m], [-m, m], "--", lw=1)
+        plt.xlabel("True HO amplitude [DM units]")
+        plt.ylabel("Reconstructed HO coefficient [DM units]")
+        plt.title(
+            f"HO single-mode random (ctrl_idx={ho_idx}, cmd_idx={ho_cmd_idx})\n"
+            f"RMSE={rmse_ho:.3g} | median LO leakage={np.median(leak_lo):.3g}"
+        )
+        plt.axis("equal")
+        plt.grid(True, alpha=0.3)
+        out_png_ho_rand = os.path.join(args.fig_path, f"recon_HO_mode{ho_idx}_random_beam{TEST_BEAM}.png")
+        plt.tight_layout()
+        plt.savefig(out_png_ho_rand, dpi=180)
+        plt.show()
+        plt.close()
 
-    print(f"\n=== HO single-mode reconstructor sanity test ===")
-    print(f"Beam: {TEST_BEAM} | Signal space: {sigspace}")
-    print(f"Control mode idx tested: {ho_idx} | Command-basis idx excited: {ho_cmd_idx}")
-    print(f"Trials: {N_TRIALS_HO} | Std commanded: {AMP_STD_HO}")
-    print(f"RMSE HO: {rmse_ho:.4g}")
-    print(f"Saved plot: {out_png_ho_rand}")
+        print(f"\n=== HO single-mode reconstructor sanity test ===")
+        print(f"Beam: {TEST_BEAM} | Signal space: {sigspace}")
+        print(f"Control mode idx tested: {ho_idx} | Command-basis idx excited: {ho_cmd_idx}")
+        print(f"Trials: {N_TRIALS_HO} | Std commanded: {AMP_STD_HO}")
+        print(f"RMSE HO: {rmse_ho:.4g}")
+        print(f"Saved plot: {out_png_ho_rand}")
 
 
 
