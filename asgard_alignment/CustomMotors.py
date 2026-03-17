@@ -158,54 +158,72 @@ class Flip8893KM(asgard_alignment.ESOdevice.Motor):
         pass
 
 
-class GD40Z(asgard_alignment.ESOdevice.Motor):
+class RotationController:
     """
-    https://www.pdvcn.com/motorized-rotation-stage/electric-rotary-table-indexing-disc-pc-gd40z.html
-    Controlled through controllino
+    Overall controller wrapper. Keeps internal variables on which lines are
+    enabled and disabled, and keeps a seperate variable for if the controller is enabled
+
+    Each rotation stage knows this controller
+    """
+
+    def __init__(self, con: asgard_alignment.controllino.Controllino) -> None:
+        self.con = con
+
+
+class RotationStage(asgard_alignment.ESOdevice.Motor):
+    """
+    TODO implement the following plan:
+
+    - named position includes a zero point
+    - enable/disable/online/standby: these should probably operate on the controller...
+    - controller wrapper above should be able to manage the enable/disable states individually
+        inc working with custom command set that includes a method to tick ADCs all at once
+    - where does the smart homing go?
     """
 
     def __init__(
         self,
         name,
         semaphore_id,
-        controllino_controller: asgard_alignment.controllino.Controllino,
+        rotm_controller: RotationController,
+        named_positions,
     ):
-        named_positions = {}
         super().__init__(
             name,
             semaphore_id,
             named_positions,
         )
-        self._controller = controllino_controller
+
+        self._controller = rotm_controller
+
         self._controllino_motor_number = (
             asgard_alignment.controllino.STEPPER_NAME_TO_NUM[name]
         )
-        print(f"GD40Z created with number {self._controllino_motor_number}")
 
     def move_abs(self, position: int):
-        self._controller.amove(self._controllino_motor_number, int(position))
+        self._controller.con.amove(self._controllino_motor_number, int(position))
 
     def move_relative(self, position: int):
-        self._controller.rmove(self._controllino_motor_number, int(position))
+        self._controller.con.rmove(self._controllino_motor_number, int(position))
 
     def read_state(self):
         return f"READY ({self.read_position()})"
 
     def home(self):
-        self._controller.home(self._controllino_motor_number)
+        self._controller.con.home(self._controllino_motor_number)
 
     def is_homed(self):
-        return self._controller.is_homed(self._controllino_motor_number)
+        return self._controller.con.is_homed(self._controllino_motor_number)
 
     def read_position(self):
-        print(f"Asking stepper controllino about {self._controllino_motor_number}")
-        return self._controller.where(self._controllino_motor_number)
+        print(f"Asking stepper teensy about {self._controllino_motor_number}")
+        return self._controller.con.where(self._controllino_motor_number)
 
     def stop(self):
-        self._controller.stop(self._controllino_motor_number)
+        self._controller.con.stop(self._controllino_motor_number)
 
     def ping(self):
-        return self._controller.ping()
+        return self._controller.con.ping()
 
     def ESO_read_position(self):
         return int(self.read_position())
@@ -236,3 +254,38 @@ class GD40Z(asgard_alignment.ESOdevice.Motor):
 
     def standby(self):
         self.home()
+
+
+class NewportRotationStage(RotationStage):
+    """TODO find the proper name of the stage..."""
+
+    def __init__(
+        self,
+        name,
+        semaphore_id,
+        rotm_controller: RotationController,
+        named_positions,
+    ):
+        super().__init__(name, semaphore_id, rotm_controller, named_positions)
+
+        print(
+            f"NewportRotationStage created with number {self._controllino_motor_number}"
+        )
+
+
+class GD40Z(RotationStage):
+    """
+    https://www.pdvcn.com/motorized-rotation-stage/electric-rotary-table-indexing-disc-pc-gd40z.html
+    Controlled through teensy and custom elec board
+    """
+
+    def __init__(
+        self,
+        name,
+        semaphore_id,
+        rotm_controller: RotationController,
+        named_positions,
+    ):
+        super().__init__(name, semaphore_id, rotm_controller, named_positions)
+
+        print(f"GD40Z created with number {self._controllino_motor_number}")

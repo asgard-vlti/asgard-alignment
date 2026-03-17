@@ -120,11 +120,11 @@ class MultiDeviceServer:
                     running = False
                 elif data != 0:
                     data_disp = data
-                    if data_disp[0] == '{':
+                    if data_disp[0] == "{":
                         data_disp = data[:-1]
 
                     logging.info(f"Received message: {data_disp}")
-                    
+
                     is_custom_msg, response = self.handle_message(data)
                     if response == -1:
                         running = False
@@ -353,10 +353,14 @@ class MultiDeviceServer:
                         # Here the device can be either a lamp or a shutter
                         # Add here code to find out the type of s.device_name
 
-                        if isinstance(self.instr.devices[s.device_name], asgard_alignment.ESOdevice.Lamp):
+                        if isinstance(
+                            self.instr.devices[s.device_name],
+                            asgard_alignment.ESOdevice.Lamp,
+                        ):
                             value_map = {"T": "ON", "F": "OFF"}
                         elif isinstance(
-                            self.instr.devices[s.device_name], asgard_alignment.ESOdevice.Motor
+                            self.instr.devices[s.device_name],
+                            asgard_alignment.ESOdevice.Motor,
                         ):
                             value_map = {"T": "OPEN", "F": "CLOSED"}
                         else:
@@ -392,14 +396,16 @@ class MultiDeviceServer:
                         # Here (simulation), we simply use the target
                         # position (even if the motor is supposed to move)
                         pos_enc = self.instr.devices[s.device_name].read_position()
-                        attribute = "<alias>" + s.device_name +":DATA.posEnc"
-                        reply['reply']['parameters'].append({"attribute":attribute, "value":pos_enc})
+                        attribute = "<alias>" + s.device_name + ":DATA.posEnc"
+                        reply["reply"]["parameters"].append(
+                            {"attribute": attribute, "value": pos_enc}
+                        )
                         # Case of motor with relative encoder position
                         # not considered yet
                         # The simplest would be to read the encoder position
                         # and to update the database as for the previous case
 
-                    # Case of motor with 
+                    # Case of motor with
                     if s.motion_type == "ENCREL":
                         if is_batch_done:
                             reply["reply"]["parameters"].append(
@@ -416,8 +422,10 @@ class MultiDeviceServer:
                         # Here (simulation), we simply use the target
                         # position (even if the motor is supposed to move)
                         pos_enc = self.instr.devices[s.device_name].read_position()
-                        attribute = "<alias>" + s.device_name +":DATA.posEnc"
-                        reply['reply']['parameters'].append({"attribute":attribute, "value":pos_enc})
+                        attribute = "<alias>" + s.device_name + ":DATA.posEnc"
+                        reply["reply"]["parameters"].append(
+                            {"attribute": attribute, "value": pos_enc}
+                        )
 
             # Check if second batch remains to setup
             # (if no STOP command has been sent)
@@ -456,7 +464,7 @@ class MultiDeviceServer:
             )
 
             for t in temps:
-                reply["reply"]["parameters"].append({"value": round(t,2)})
+                reply["reply"]["parameters"].append({"value": round(t, 2)})
 
             reply["reply"]["content"] = "OK"
 
@@ -967,6 +975,25 @@ class MultiDeviceServer:
             self.instr.set_kaya(state)
             return "ACK"
 
+        def home_rotm(idxes: list = [-1]):
+            """
+            Home the baldr ADCs and/or the HPOLs
+
+            """
+            # TODO clever homing that knows which way to go and/or doesnt spin around the full way...
+
+        def relmove_multiple_rotm(idxes: list | str, n_steps: int):
+            """
+            Relative move of multiple rotation stages
+            """
+
+            if isinstance(idxes, str):
+                pass
+
+            # enable the relevant motors
+            self.instr._controllers["rotm_teensy"].send
+
+
         first_word_to_function = {
             "read": read_msg,
             "stop": stop_msg,
@@ -1008,6 +1035,7 @@ class MultiDeviceServer:
             "h_splay": h_splay_msg,
             "temp_status": temp_status_msg,
             "set_kaya": set_kaya_msg,
+            "rotm_home": home_rotm,
         }
 
         first_word_to_format = {
