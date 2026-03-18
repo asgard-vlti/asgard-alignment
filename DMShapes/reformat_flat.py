@@ -4,10 +4,14 @@ Forward direction (default):
 	Input:  12 rows of 12 space-separated numbers.
 	Output: 140 values, one per line, in row-major order with the four
 					corner values ((0,0), (0,11), (11,0), (11,11)) omitted.
+					The 12x12 grid is treated as centered on 0, so 0.5 is added
+					to each non-corner value in the flat-map output.
 
 Reverse direction (--reverse):
 	Input:  140 values, one per line.
 	Output: 12x12 space-separated grid; corner positions are filled with 0.
+					The 140-value flat map is treated as centered on 0.5, so 0.5
+					is subtracted from each input value when reconstructing the grid.
 
 Output format matches other ``*_FLAT_MAP_COMMANDS.txt`` files in this folder.
 """
@@ -20,6 +24,7 @@ from pathlib import Path
 
 GRID_SIZE = 12
 FLAT_SIZE = GRID_SIZE * GRID_SIZE - 4  # 140
+FORMAT_CENTER_OFFSET = 0.5
 
 CORNER_INDICES = {
 	(0, 0),
@@ -64,13 +69,17 @@ def parse_grid(path: Path) -> list[list[float]]:
 
 
 def flatten_without_corners(grid: list[list[float]]) -> list[float]:
-	"""Return row-major values excluding the four corners."""
+	"""Return row-major values excluding the four corners.
+
+	The 12x12 grid is centered on 0, while the 140-value flat map is
+	centered on 0.5, so the offset is applied during flattening.
+	"""
 	flattened: list[float] = []
 	for row_idx, row in enumerate(grid):
 		for col_idx, value in enumerate(row):
 			if (row_idx, col_idx) in CORNER_INDICES:
 				continue
-			flattened.append(value)
+			flattened.append(value + FORMAT_CENTER_OFFSET)
 
 	expected_count = GRID_SIZE * GRID_SIZE - len(CORNER_INDICES)
 	if len(flattened) != expected_count:
@@ -109,14 +118,18 @@ def parse_flat_map(path: Path) -> list[float]:
 
 
 def expand_to_grid(values: list[float]) -> list[list[float]]:
-	"""Reconstruct a 12x12 grid; corner positions are set to 0."""
+	"""Reconstruct a 12x12 grid; corner positions are set to 0.
+
+	The 140-value flat map is centered on 0.5, while the 12x12 grid is
+	centered on 0, so the offset is removed during expansion.
+	"""
 	grid: list[list[float]] = [[0.0] * GRID_SIZE for _ in range(GRID_SIZE)]
 	flat_iter = iter(values)
 	for linear in range(GRID_SIZE * GRID_SIZE):
 		if linear in _CORNER_LINEAR:
 			continue  # leave as 0.0
 		r, c = divmod(linear, GRID_SIZE)
-		grid[r][c] = next(flat_iter)
+		grid[r][c] = next(flat_iter) - FORMAT_CENTER_OFFSET
 	return grid
 
 
