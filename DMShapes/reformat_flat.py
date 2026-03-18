@@ -4,14 +4,18 @@ Forward direction (default):
 	Input:  12 rows of 12 space-separated numbers.
 	Output: 140 values, one per line, in row-major order with the four
 					corner values ((0,0), (0,11), (11,0), (11,11)) omitted.
-					The 12x12 grid is treated as centered on 0, so 0.5 is added
-					to each non-corner value in the flat-map output.
+					By default, the 12x12 grid is treated as centered on 0, so 0.5
+					is added to each non-corner value in the flat-map output.
+					With -c/--calibration, a 140-value per-index offset is used
+					instead (added during flattening).
 
 Reverse direction (--reverse):
 	Input:  140 values, one per line.
 	Output: 12x12 space-separated grid; corner positions are filled with 0.
-					The 140-value flat map is treated as centered on 0.5, so 0.5
-					is subtracted from each input value when reconstructing the grid.
+					By default, the 140-value flat map is treated as centered on 0.5,
+					so 0.5 is subtracted from each input value.
+					With -c/--calibration, the corresponding 140-value per-index
+					offset is subtracted instead.
 
 Output format matches other ``*_FLAT_MAP_COMMANDS.txt`` files in this folder.
 """
@@ -24,7 +28,7 @@ from pathlib import Path
 
 GRID_SIZE = 12
 FLAT_SIZE = GRID_SIZE * GRID_SIZE - 4  # 140
-FORMAT_CENTER_OFFSET = 0.5
+DEFAULT_CENTER_OFFSET = 0.5
 
 CORNER_INDICES = {
 	(0, 0),
@@ -68,18 +72,23 @@ def parse_grid(path: Path) -> list[list[float]]:
 	return rows
 
 
-def flatten_without_corners(grid: list[list[float]]) -> list[float]:
+def flatten_without_corners(
+	grid: list[list[float]], offsets: list[float] | None = None
+) -> list[float]:
 	"""Return row-major values excluding the four corners.
 
-	The 12x12 grid is centered on 0, while the 140-value flat map is
-	centered on 0.5, so the offset is applied during flattening.
+	By default, adds 0.5 to each value. If ``offsets`` is provided,
+	the per-index offsets are added instead.
 	"""
 	flattened: list[float] = []
+	offset_index = 0
 	for row_idx, row in enumerate(grid):
 		for col_idx, value in enumerate(row):
 			if (row_idx, col_idx) in CORNER_INDICES:
 				continue
-			flattened.append(value + FORMAT_CENTER_OFFSET)
+			offset = DEFAULT_CENTER_OFFSET if offsets is None else offsets[offset_index]
+			flattened.append(value + offset)
+			offset_index += 1
 
 	expected_count = GRID_SIZE * GRID_SIZE - len(CORNER_INDICES)
 	if len(flattened) != expected_count:
@@ -117,19 +126,49 @@ def parse_flat_map(path: Path) -> list[float]:
 	return values
 
 
-def expand_to_grid(values: list[float]) -> list[list[float]]:
+def parse_calibration_offsets(path: Path) -> list[float]:
+	"""Read 140 calibration offsets (one value per non-empty line)."""
+	offsets: list[float] = []
+	with path.open("r", encoding="utf-8") as handle:
+		for lineno, raw in enumerate(handle, start=1):
+			stripped = raw.strip()
+			if not stripped:
+				continue
+			parts = stripped.split()
+			if len(parts) != 1:
+				raise ValueError(
+					f"Calibration line {lineno}: expected exactly 1 value, found {len(parts)}."
+				)
+			try:
+				offsets.append(float(parts[0]))
+			except ValueError as exc:
+				raise ValueError(
+					f"Calibration line {lineno}: non-numeric value."
+				) from exc
+
+	if len(offsets) != FLAT_SIZE:
+		raise ValueError(
+			f"Calibration file must contain {FLAT_SIZE} values, found {len(offsets)}."
+		)
+	return offsets
+
+
+def expand_to_grid(values: list[float], offsets: list[float] | None = None) -> list[list[float]]:
 	"""Reconstruct a 12x12 grid; corner positions are set to 0.
 
-	The 140-value flat map is centered on 0.5, while the 12x12 grid is
-	centered on 0, so the offset is removed during expansion.
+	By default, subtracts 0.5 from each value. If ``offsets`` is provided,
+	the per-index offsets are subtracted instead.
 	"""
 	grid: list[list[float]] = [[0.0] * GRID_SIZE for _ in range(GRID_SIZE)]
 	flat_iter = iter(values)
+	offset_index = 0
 	for linear in range(GRID_SIZE * GRID_SIZE):
 		if linear in _CORNER_LINEAR:
 			continue  # leave as 0.0
 		r, c = divmod(linear, GRID_SIZE)
-		grid[r][c] = next(flat_iter) - FORMAT_CENTER_OFFSET
+		offset = DEFAULT_CENTER_OFFSET if offsets is None else offsets[offset_index]
+		grid[r][c] = next(flat_iter) - offset
+		offset_index += 1
 	return grid
 
 
@@ -166,6 +205,16 @@ def build_parser() -> argparse.ArgumentParser:
 		action="store_true",
 		help="Reverse: expand a 140-value flat map to a 12x12 grid.",
 	)
+	parser.add_argument(
+		"-c",
+		"--calibration",
+		type=Path,
+		default=None,
+		help=(
+			"Optional calibration offset file with 140 values (one per line). "
+			"When provided, these per-index offsets are used instead of the default 0.5."
+		),
+	)
 	return parser
 
 
@@ -182,13 +231,23 @@ def main() -> int:
 	args = build_parser().parse_args()
 	input_path: Path = args.input
 
+	try:
+		offsets = (
+			parse_calibration_offsets(args.calibration)
+			if args.calibration is not None
+			else None
+		)
+	except (OSError, ValueError) as exc:
+		print(f"Error: {exc}")
+		return 1
+
 	if args.reverse:
 		default_out = input_path.with_name(f"{input_path.stem}_12x12.txt")
 		output_path: Path = args.output if args.output is not None else default_out
 		_safe_output(input_path, output_path)
 		try:
 			values = parse_flat_map(input_path)
-			grid = expand_to_grid(values)
+			grid = expand_to_grid(values, offsets)
 			write_grid(grid, output_path)
 		except (OSError, ValueError) as exc:
 			print(f"Error: {exc}")
@@ -200,7 +259,7 @@ def main() -> int:
 		_safe_output(input_path, output_path)
 		try:
 			grid = parse_grid(input_path)
-			values = flatten_without_corners(grid)
+			values = flatten_without_corners(grid, offsets)
 			write_flat_map(values, output_path)
 		except (OSError, ValueError, RuntimeError) as exc:
 			print(f"Error: {exc}")
