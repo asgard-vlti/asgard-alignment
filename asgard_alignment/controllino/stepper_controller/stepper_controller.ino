@@ -227,25 +227,33 @@ void loop() {
     }
   }
 
+
+
+
   // Now lets move the motors!!!
   for (int i=0;i<MAX_MOTORS;i++){
     if (looking_for_home[i]){
       if (digitalRead(zero_pins[i]) == 1){
-        delay(2);
+        /*Serial.println("Found home the first time");
+        delay(10);
         if (digitalRead(zero_pins[i] == 1)){
-          delay(2);
+          Serial.println("Found home the second time");
+          delay(10);
           if (digitalRead(zero_pins[i] == 1)){
-            delay(2);
-            if (digitalRead(zero_pins[i]) == 1){
+            Serial.println("Found home the third time");
+            delay(10);
+            if (digitalRead(zero_pins[i]) == 1){*/
                 target_pos[i]=0;
                 current_pos[i]=0;
                 looking_for_home[i]=false;
                 found_home[i]=true;
-            }
+    /*        }
           }
-        }
+        }*/
       }
     }
+
+  
     if (!enable_motors[i]) continue;
     if ((target_pos[i] == current_pos[i]) && rdir==0) continue;
 

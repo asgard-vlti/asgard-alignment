@@ -1,7 +1,6 @@
 # Change the Baldr mode from STANDARD to FAINT or back.
 
 import zmq
-import dcs.ZMQutils
 import sys
 import json
 
