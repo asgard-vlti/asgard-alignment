@@ -1,4 +1,4 @@
-from Lab_Equipment.Config import config
+# from Lab_Equipment.Config import config
 
 # import tomography.standard as standard
 # import tomography.masks as masks
@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 import threading
 import ctypes
 import copy
-from IPython.display import display, clear_output
+# from IPython.display import display, clear_output
 # import cma
-import ipywidgets
+# import ipywidgets
 import multiprocessing
 import time
 import scipy.io

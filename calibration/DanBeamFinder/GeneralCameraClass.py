@@ -1,4 +1,5 @@
 import numpy as np
+# import math as cv2
 import cv2
 import matplotlib.pyplot as plt
 from xaosim.shmlib import shm 
@@ -6,10 +7,16 @@ from xaosim.shmlib import shm
 class GeneralCameraObject():
     def __init__(self):
         pass
+        self.SharedMemoryFullFrame()
+        self.SharedMemorybeam1()
+        self.SharedMemorybeam2()
+        self.SharedMemorybeam3()
+        self.SharedMemorybeam4()
+
+
     
     def SharedMemoryFullFrame(self):
-        self.shmFrame_beamFull=None# shm( f"/dev/shm/baldr{args.beam}.im.shm")
-        # return 0
+        self.shmFrame_beamFull=shm( f"/dev/shm/cred1.im.shm")
     def SharedMemorybeam1(self):
         self.shmFrame_beam1= shm( f"/dev/shm/baldr1.im.shm")
     def SharedMemorybeam2(self):
@@ -19,7 +26,7 @@ class GeneralCameraObject():
     def SharedMemorybeam4(self):
         self.shmFrame_beam4= shm( f"/dev/shm/baldr4.im.shm")
         
-    def GetFrame(self, ibeam,shmFrame):
+    def GetFrame(self, ibeam):
         if ibeam==1:
             shmFrame=self.shmFrame_beam1
         elif ibeam==2:

@@ -2,10 +2,10 @@ import numpy as np
 import os
 import time
 import matplotlib.pyplot as plt
-
+import matplotlib
 import GeneralCameraClass as CamForm
 import GeneralStageClass as StageForm
-import AlignmentRoutine as AlignForm
+# import AlignmentRoutine as AlignForm
 
 # if server is stuck 
 # sudo lsof -i :5555 then kill the PID 
@@ -31,7 +31,7 @@ import AlignmentRoutine as AlignForm
 
 
 
-CamObj = CamForm.GeneralCameraObject()
+# CamObj = CamForm.GeneralCameraObject()
 StageObj = StageForm.GeneralStageObject(host="192.168.100.2", port=5555)
 beamNum_arr= np.array([1,2,3,4]) # which beams to do the search on (1-4)
 
@@ -40,29 +40,36 @@ for ibeam in beamNum_arr:
     intial_Ypos=StageObj.Get_pos(stage='BMY', beam=ibeam) # just to check connection and print initial position
     
     print(f"initial position for beam {ibeam} is x,y = {initial_Xpos}, {intial_Ypos}")
-    
-
-frame1=CamObj.GetFrame(1)
-frame2=CamObj.GetFrame(2)
-frame3=CamObj.GetFrame(3)
-frame4=CamObj.GetFrame(4)
-plt.figure(figsize=(8, 8))
-plt.subplot(2,2,1)
-plt.imshow(frame1, cmap='gray')
-plt.title('Frame from Beam 1')
-plt.subplot(2,2,2)
-plt.imshow(frame2, cmap='gray')
-plt.title('Frame from Beam 2')
-plt.subplot(2,2,3)
-plt.imshow(frame3, cmap='gray') 
-plt.title('Frame from Beam 3')
-plt.subplot(2,2,4)
-plt.imshow(frame4, cmap='gray')
-plt.title('Frame from Beam 4')
+# import cv2
+arr=np.ones((5,5))
+plt.imshow(arr)
 plt.show()
+plt.close()
+# frame1=CamObj.GetFrame(1)
+# frame2=CamObj.GetFrame(2)
+# frame3=CamObj.GetFrame(3)
+# frame4=CamObj.GetFrame(4)
+# plt.figure(figsize=(8, 8))
+# plt.subplot(2,2,1)
+# plt.imshow(frame1, cmap='gray')
+# plt.title('Frame from Beam 1')
+# plt.subplot(2,2,2)
+# plt.imshow(frame2, cmap='gray')
+# plt.title('Frame from Beam 2')
+# plt.subplot(2,2,3)
+# plt.imshow(frame3, cmap='gray') 
+# plt.title('Frame from Beam 3')
+# plt.subplot(2,2,4)
+# plt.imshow(frame4, cmap='gray')
+# plt.title('Frame from Beam 4')
+# plt.savefig('delme.png')
+
+# plt.show()
+# # plt.show()
+# plt.close() 
 
 
-AlignObj=AlignForm.AlginmentObj([StageObj], [CamObj])
+# AlignObj=AlignForm.AlginmentObj([StageObj], [CamObj])
 
 CamROI_xCenter=150
 CamROI_yCenter=120

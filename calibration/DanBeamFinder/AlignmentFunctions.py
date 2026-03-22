@@ -5,8 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import ctypes
 import copy
-from IPython.display import display, clear_output
-import ipywidgets
+# from IPython.display import display, clear_output
+# import ipywidgets
 import multiprocessing
 import time
 import scipy.io

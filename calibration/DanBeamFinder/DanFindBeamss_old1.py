@@ -230,7 +230,19 @@ socket = context.socket(zmq.REQ)
 
 socket.setsockopt(zmq.RCVTIMEO, args.timeout)
 
-server_address = f"tcp://{args.host}:{args.port}"
+server_address = f"tcp://{args.h# plt.figure(figsize=(8, 8))
+# plt.subplot(2,2,1)
+# plt.imshow(frame1, cmap='gray')
+# plt.title('Frame from Beam 1')
+# plt.subplot(2,2,2)
+# plt.imshow(frame2, cmap='gray')
+# plt.title('Frame from Beam 2')
+# plt.subplot(2,2,3)
+# plt.imshow(frame3, cmap='gray') 
+# plt.title('Frame from Beam 3')
+# plt.subplot(2,2,4)
+# plt.imshow(frame4, cmap='gray')
+# plt.title('Frame from Beam 4')ost}:{args.port}"
 
 socket.connect(server_address)
 
@@ -313,123 +325,123 @@ c = shm( f"/dev/shm/baldr{args.beam}.im.shm")
 img_tmp =  c.get_data() 
 if len( img_tmp.shape )>2:
     img_tmp = np.mean( c.get_data() ,axis=0) # do this just in case it returns data cube (conventions change)
-# plt.figure(figsize=(8, 8))
-# plt.imshow(np.log10(img_tmp), cmap='gray',origin='upper' ) #, origin='upper') #extent=[0, full_im.shape[1], 0, full_im.shape[0]]
-# plt.colorbar(label='Intensity')
-# plt.savefig('delme.png')
-# plt.show()
-# plt.close() 
-CamForm.GetRelativePower(
-            frame=img_tmp,
-            centre=None,
-            x_half_width=32,
-            y_half_width=32,
-            show_plot=True,
-            avgCount=1
-        )
+plt.figure(figsize=(8, 8))
+plt.imshow(np.log10(img_tmp), cmap='gray',origin='upper' ) #, origin='upper') #extent=[0, full_im.shape[1], 0, full_im.shape[0]]
+plt.colorbar(label='Intensity')
+plt.savefig('delme.png')
+plt.show()
+plt.close() 
+# CamForm.GetRelativePower(
+#             frame=img_tmp,
+#             centre=None,
+#             x_half_width=32,
+#             y_half_width=32,
+#             show_plot=True,
+#             avgCount=1
+#         )
 
 
-CamROI_xCenter=150
-CamROI_yCenter=120
-CamROI_xhalfwidth=128
-CamROI_yhalfwidth=128
+# CamROI_xCenter=150
+# CamROI_yCenter=120
+# CamROI_xhalfwidth=128
+# CamROI_yhalfwidth=128
 
-scanNx=40
-scanNy=40
-# Xshift=-1000
-# Yshift=2000
-step=6000
-Xshift=6000
-Yshift=6000
-powermatrix=np.zeros((scanNy,scanNx))
-# raster_points = pct.raster_scan_with_orientation(starting_point, dx, dy, width, height, orientation)
+# scanNx=40
+# scanNy=40
+# # Xshift=-1000
+# # Yshift=2000
+# step=6000
+# Xshift=6000
+# Yshift=6000
+# powermatrix=np.zeros((scanNy,scanNx))
+# # raster_points = pct.raster_scan_with_orientation(starting_point, dx, dy, width, height, orientation)
 
 
-# FibreStage.Set_all_stage_Positions_abs(InitalStageValues)
-# FibreStage.Set_Single_Stage_State_abs(stageLib.Axes.ROLL,FibreStage.deviceMaxLimits[stageLib.Axes.ROLL]/2)
-# FibreStage.Set_Single_Stage_State_abs(stageLib.Axes.YAW,FibreStage.deviceMaxLimits[stageLib.Axes.YAW]/2)
-# FibreStage.Set_Single_Stage_State_abs(stageLib.Axes.PITCH,FibreStage.deviceMaxLimits[stageLib.Axes.PITCH]/2)
-# FibreStage.Set_Single_Stage_State_abs(stageLib.Axes.X,FibreStage.deviceMaxLimits[stageLib.Axes.X]/2+Xshift)
-# FibreStage.Set_Single_Stage_State_abs(stageLib.Axes.Y,FibreStage.deviceMaxLimits[stageLib.Axes.Y]/2+Yshift)
-# FibreStage.Set_Single_Stage_State_abs(stageLib.Axes.Z,FibreStage.deviceMaxLimits[stageLib.Axes.Z]-3000)
-# currentPostions=FibreStage.Get_all_stage_Positions()
-# print(currentPostions)
+# # FibreStage.Set_all_stage_Positions_abs(InitalStageValues)
+# # FibreStage.Set_Single_Stage_State_abs(stageLib.Axes.ROLL,FibreStage.deviceMaxLimits[stageLib.Axes.ROLL]/2)
+# # FibreStage.Set_Single_Stage_State_abs(stageLib.Axes.YAW,FibreStage.deviceMaxLimits[stageLib.Axes.YAW]/2)
+# # FibreStage.Set_Single_Stage_State_abs(stageLib.Axes.PITCH,FibreStage.deviceMaxLimits[stageLib.Axes.PITCH]/2)
+# # FibreStage.Set_Single_Stage_State_abs(stageLib.Axes.X,FibreStage.deviceMaxLimits[stageLib.Axes.X]/2+Xshift)
+# # FibreStage.Set_Single_Stage_State_abs(stageLib.Axes.Y,FibreStage.deviceMaxLimits[stageLib.Axes.Y]/2+Yshift)
+# # FibreStage.Set_Single_Stage_State_abs(stageLib.Axes.Z,FibreStage.deviceMaxLimits[stageLib.Axes.Z]-3000)
+# # currentPostions=FibreStage.Get_all_stage_Positions()
+# # print(currentPostions)
 
-xstart=0#-step
-xstop=10000
-# xstage_arr=np.linspace(0,(FibreStage.deviceMaxLimits[stageLib.Axes.X]/2),scanNx)
-# ystage_arr=np.linspace(0,(FibreStage.deviceMaxLimits[stageLib.Axes.Y]/2),scanNy)
-xstage_arr=np.linspace(xstart,xstop,scanNx)
+# xstart=0#-step
+# xstop=10000
+# # xstage_arr=np.linspace(0,(FibreStage.deviceMaxLimits[stageLib.Axes.X]/2),scanNx)
+# # ystage_arr=np.linspace(0,(FibreStage.deviceMaxLimits[stageLib.Axes.Y]/2),scanNy)
+# xstage_arr=np.linspace(xstart,xstop,scanNx)
 
-# ystage_arr=np.linspace(ystart,ystop,scanNy)
-dx=xstage_arr[1]-xstage_arr[0]
-# dy=ystage_arr[1]-ystage_arr[0]
+# # ystage_arr=np.linspace(ystart,ystop,scanNy)
+# dx=xstage_arr[1]-xstage_arr[0]
+# # dy=ystage_arr[1]-ystage_arr[0]
 
-print(dx)
-for ix in range( scanNx):
-    # FibreStage.Set_Single_Stage_State_abs(LuminosStageLib.Axes.X,xstage_arr[ix])
-    start_time = time.time()
-    message = f"moveabs BMX{args.beam} {x_pos}"
-    state_dict["socket"].send_string(message)
-    response = state_dict["socket"].recv_string()
-    print(response)
-        # FibreStage.Get_all_stage_Positions(displayState=True)
-        # powermatrix[iy,ix]=pwrMeter.GetPower()
-    CamForm.GetRelativePower(
-            frame=img_tmp,
-            centre=None,
-            x_half_width=32,
-            y_half_width=32,
-            show_plot=True,
-            avgCount=1
-        )
-    powermatrix[iy,ix]=CamForm.GetRelativePower(centre=[CamROI_xCenter, CamROI_yCenter],x_half_width=CamROI_xhalfwidth,y_half_width=CamROI_yhalfwidth,show_plot=False)
-        # powermatrix[iy,ix]=Cam.CamObject.GetRelativePower()
+# print(dx)
+# for ix in range( scanNx):
+#     # FibreStage.Set_Single_Stage_State_abs(LuminosStageLib.Axes.X,xstage_arr[ix])
+#     start_time = time.time()
+#     message = f"moveabs BMX{args.beam} {x_pos}"
+#     state_dict["socket"].send_string(message)
+#     response = state_dict["socket"].recv_string()
+#     print(response)
+#         # FibreStage.Get_all_stage_Positions(displayState=True)
+#         # powermatrix[iy,ix]=pwrMeter.GetPower()
+#     CamForm.GetRelativePower(
+#             frame=img_tmp,
+#             centre=None,
+#             x_half_width=32,
+#             y_half_width=32,
+#             show_plot=True,
+#             avgCount=1
+#         )
+#     powermatrix[iy,ix]=CamForm.GetRelativePower(centre=[CamROI_xCenter, CamROI_yCenter],x_half_width=CamROI_xhalfwidth,y_half_width=CamROI_yhalfwidth,show_plot=False)
+#         # powermatrix[iy,ix]=Cam.CamObject.GetRelativePower()
 
 
         
-plt.imshow((powermatrix))
-# Cam.CamObject.SetContinousFrameCapMode()
+# plt.imshow((powermatrix))
+# # Cam.CamObject.SetContinousFrameCapMode()
 
 
-# # dont show full frame with cropped region, omment out 
-# full_im = c.get_image_in_another_region( )
+# # # dont show full frame with cropped region, omment out 
+# # full_im = c.get_image_in_another_region( )
 
-# # Plot the image
-# plt.figure(figsize=(8, 8))
-# plt.imshow(np.log10(full_im), cmap='gray',origin='upper' ) #, origin='upper') #extent=[0, full_im.shape[1], 0, full_im.shape[0]]
-# plt.colorbar(label='Intensity')
+# # # Plot the image
+# # plt.figure(figsize=(8, 8))
+# # plt.imshow(np.log10(full_im), cmap='gray',origin='upper' ) #, origin='upper') #extent=[0, full_im.shape[1], 0, full_im.shape[0]]
+# # plt.colorbar(label='Intensity')
 
-# # Overlay red boxes for each cropping region
-# for beam_tmp, (row1, row2, column1, column2) in  baldr_pupils.items():
-#     plt.plot([column1, column2, column2, column1, column1],
-#              [row1, row1, row2, row2, row1],
-#              color='red', linewidth=2, label=f'Beam {beam_tmp}' if beam_tmp == 1 else "")
-#     plt.text((column1 + column2) / 2, row1 , f'Beam {beam_tmp}', 
-#              color='red', fontsize=15, ha='center', va='bottom')
+# # # Overlay red boxes for each cropping region
+# # for beam_tmp, (row1, row2, column1, column2) in  baldr_pupils.items():
+# #     plt.plot([column1, column2, column2, column1, column1],
+# #              [row1, row1, row2, row2, row1],
+# #              color='red', linewidth=2, label=f'Beam {beam_tmp}' if beam_tmp == 1 else "")
+# #     plt.text((column1 + column2) / 2, row1 , f'Beam {beam_tmp}', 
+# #              color='red', fontsize=15, ha='center', va='bottom')
 
-# # Add labels and legend
-# plt.title('Image with Baldr Cropping Regions')
-# plt.xlabel('Columns')
-# plt.ylabel('Rows')
-# plt.legend(loc='upper right')
-# plt.savefig('delme.png')
-# plt.show()
-# plt.close() 
+# # # Add labels and legend
+# # plt.title('Image with Baldr Cropping Regions')
+# # plt.xlabel('Columns')
+# # plt.ylabel('Rows')
+# # plt.legend(loc='upper right')
+# # plt.savefig('delme.png')
+# # plt.show()
+# # plt.close() 
 
 
 
-# # get all available files 
-# valid_reference_position_files = glob.glob(
-#     f"/home/asg/Progs/repos/asgard-alignment/config_files/phasemask_positions/beam{args.beam}/*json"
-#     )
+# # # get all available files 
+# # valid_reference_position_files = glob.glob(
+# #     f"/home/asg/Progs/repos/asgard-alignment/config_files/phasemask_positions/beam{args.beam}/*json"
+# #     )
 
-# if 'recent' in args.initial_pos:
+# # if 'recent' in args.initial_pos:
 
-#     # read in the most recent and make initial posiition the most recent one for given mask 
-#     with open(max(valid_reference_position_files, key=os.path.getmtime)
-#     , "r") as file:
-#         start_position_dict = json.load(file)
+# #     # read in the most recent and make initial posiition the most recent one for given mask 
+# #     with open(max(valid_reference_position_files, key=os.path.getmtime)
+# #     , "r") as file:
+# #         start_position_dict = json.load(file)
 
 #     Xpos = start_position_dict[args.phasemask_name][0]
 #     Ypos = start_position_dict[args.phasemask_name][1]
