@@ -12,9 +12,16 @@ from xaosim.shmlib import shm
 class GeneralCameraObject():
     def __init__(self):
         pass
+        self.SharedMemoryFullFrame()
+        self.SharedMemorybeam1()
+        self.SharedMemorybeam2()
+        self.SharedMemorybeam3()
+        self.SharedMemorybeam4()
+
+
     
     def SharedMemoryFullFrame(self):
-        self.shmFrame_beamFull = None
+        self.shmFrame_beamFull = shm("/dev/shm/cred1.im.shm")
 
     def SharedMemorybeam1(self):
         self.shmFrame_beam1 = shm("/dev/shm/baldr1.im.shm")
@@ -28,7 +35,7 @@ class GeneralCameraObject():
     def SharedMemorybeam4(self):
         self.shmFrame_beam4 = shm("/dev/shm/baldr4.im.shm")
         
-    def GetFrame(self, ibeam, shmFrame=None):
+    def GetFrame(self, ibeam):
         if ibeam == 1:
             shmFrame = self.shmFrame_beam1
         elif ibeam == 2:
@@ -184,7 +191,11 @@ class GeneralCameraObject():
                 ax.plot(cx, cy, marker="+", color="red", markersize=10, markeredgewidth=1.5)
 
         plt.show()
-
+        # plt.close()
+    @staticmethod
+    def FindMaxValueOnFrame(frame):
+        Maxidx= np.unravel_index(np.argmax(frame),frame.shape)
+        return Maxidx
     @staticmethod
     def PlotFrames(iframe, Framebuffer):
         fig, ax1 = plt.subplots()
@@ -225,6 +236,9 @@ class GeneralCameraObject():
         )
 
         plt.show()
+        # plt.show(block=False)
+
+        block=False
         return fig
 
     @staticmethod
@@ -308,4 +322,6 @@ class GeneralCameraObject():
         )
 
         plt.show()
+        # plt.show(block=False)
+
         return fig
