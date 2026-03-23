@@ -13,7 +13,7 @@ def PlotResults(iscan,Ref_frame,AllFrames,gridpoints,MetricMatrix):
     # Plot full path
     # Plot ONE highlighted point
     
-
+    plt.figure(1)
     fig, ax1=plt.subplots(2,2);
     fig.subplots_adjust(wspace=0.1, hspace=0.1);
 
@@ -33,5 +33,9 @@ def PlotResults(iscan,Ref_frame,AllFrames,gridpoints,MetricMatrix):
     ax1[1][1].imshow(CamImage);
     ax1[1][1].set_title('Cam Image',fontsize = 8);
     ax1[1][1].axis('off')
+    plt.savefig(f"Data/Plots/imag{iscan}")
+
+    # plt.show(block=False)
+    plt.close()
     
     

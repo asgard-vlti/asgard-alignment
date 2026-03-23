@@ -1,5 +1,6 @@
 import zmq
 import time
+import numpy as np
 class GeneralStageObject:
     def __init__(self,host="192.168.100.2",port=5555):
         self.host = host
@@ -52,7 +53,7 @@ class GeneralStageObject:
         last_pos = None
         while True:
             current_pos = self.Get_pos(stage,beam)
-            print(current_pos)
+            # print(current_pos)
             last_pos = current_pos
 
             if abs(current_pos - pos)<= tol:
@@ -90,14 +91,14 @@ class GeneralStageObject:
         x=np.linspace(xmin,xmax,StepCountX)
         y=np.linspace(ymin,ymax,StepCountY)
 
-        gridpoints = np.zeros((StepCountX*StepCountY))
+        gridpoints = np.zeros((StepCountX,StepCountY,2))
         
         for iy in range(StepCountY):
             for ix in range(StepCountX):
                 if iy % 2==0:
                     gridpoints[iy,ix,0]= x[ix]
                 else:
-                    gridpoints[iy,ix,0]= x[stepCountX-1-ix]
+                    gridpoints[iy,ix,0]= x[StepCountX-1-ix]
                 gridpoints[iy,ix,1]= y[iy]
         return gridpoints
 

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import libs.GeneralCameraClass as CamForm
 import libs.GeneralStageClass as StageForm
 import libs.plotingFunction as pltfunc
-import ipywidgets
+# import ipywidgets
 # %matplotlib
 # import AlignmentRoutine as AlignForm
 
@@ -25,100 +25,84 @@ for ibeam in beamNum_arr:
     
     print(f"initial position for beam {ibeam} is x,y = {initial_Xpos}, {intial_Ypos}")
 
+
+StageObj.Set_pos(stage='BMX', beam=ibeam,pos=5299.995749999997)
+StageObj.Set_pos(stage='BMY', beam=ibeam,pos=4354.996687499998)
+
+print(StageObj.Get_pos(stage='BMX', beam=ibeam))
+print(StageObj.Get_pos(stage='BMY', beam=ibeam))
+print("test")
+
+
 frame1=CamObj.GetFrame(1)
 frame2=CamObj.GetFrame(2)
 frame3=CamObj.GetFrame(3)
 frame4=CamObj.GetFrame(4)
 
-# plt.figure(figsize=(8, 8))
-# plt.subplot(2,2,1)
-# plt.imshow(frame1, cmap='gray')
-# plt.title('Frame from Beam 1')
-# plt.subplot(2,2,2)
-# plt.imshow(frame2, cmap='gray')
-# plt.title('Frame from Beam 2')
-# plt.subplot(2,2,3)
-# plt.imshow(frame3, cmap='gray') 
-# plt.title('Frame from Beam 3')
-# plt.subplot(2,2,4)
-# plt.imshow(frame4, cmap='gray')
-# plt.title('Frame from Beam 4')
-# plt.savefig('delme.png')
-
-# plt.show(block=False)
-# # plt.show()
-# plt.close() 
-
-
-
-# appxcenters=CamObj.FindMaxValueOnFrame(frame1)
-# relpwr=CamObj.GetRelativePower(
-#         frame=frame4,
-#         centre=[idx[0],idx[1]],
-#         x_half_width=5,
-#         y_half_width=5,
-#         show_plot=False,
-#         avgCount=1
-#     )
-# ibeam=1
-# print(relpwr)
-# print("ibeam",ibeam)
-# start= time.time()
-# initial_Xpos=StageObj.Get_pos(stage='BMX', beam=ibeam) # just to check connection and print initial positioninitial_Xpos
-
-# postomove=8159.972249999996#initial_Xpos+2
-# print(postomove)
-# StageObj.Set_pos(stage='BMX', beam=ibeam,pos=postomove) # just to check connection and print initial positioninitial_Xpos
-# end=time.time()
-# print(f"time for move {end-start:.6f} sec")
-
-# aftermove_Xpos=StageObj.Get_pos(stage='BMX', beam=ibeam) # just to check connection and print initial positioninitial_Xpos
-# print("after move ",aftermove_Xpos," diff= ",aftermove_Xpos-postomove )
-
-
-
-
 
 ibeam=1
 StartX=StageObj.Get_pos(stage='BMX', beam=ibeam)
 StartY=StageObj.Get_pos(stage='BMY', beam=ibeam)
-StepAwayFromStartX =600
-StepAwayFromStartY =600
-StepCountX = 20
-StepCountY = 20
+StepAwayFromStartX = 200
+StepAwayFromStartY = 200
+StepCountX = 10
+StepCountY = 10
 # make a snake like grid pattern
 grid_points = StageObj.rasterScanSnakePattern(StartX,StartY,StepAwayFromStartX,StepAwayFromStartY,StepCountX, StepCountY)
 
 # get a frame that you know the beam is not on a masks
-MountPosNoFeatureY=1000
-MountPosNoFeaturex=1000
+MountPosNoFeatureY=4700.2
+MountPosNoFeaturex=4498.2
 StageObj.Set_pos(stage='BMY', beam=ibeam,pos=MountPosNoFeatureY)   
 StageObj.Set_pos(stage='BMX', beam=ibeam,pos=MountPosNoFeaturex)
-Ref_frame=CamObj.GetFrame(beam=ibeam)
+Ref_frame=CamObj.GetFrame(ibeam)
 appxcenters_Ref_frame=CamObj.FindMaxValueOnFrame(Ref_frame)
 ref_flux=CamObj.GetRelativePower(
         frame=Ref_frame,centre=[appxcenters_Ref_frame[0],appxcenters_Ref_frame[1]],
         x_half_width=5,y_half_width=5)
+ref_corr_temp=Ref_frame.astype(float).ravel()
+ref_corr_temp = ref_corr_temp-np.mean(ref_corr_temp)
 
 # do the scan 
-TotalscanScount=0   
-ix=0
-for iy in range(StepCountY):
-    StageObj.Set_pos(stage='BMY', beam=ibeam,pos=grid_points[iy,ix,1])
+AllFrames=np.zeros((StepCountY*StepCountX,Ref_frame.shape[0],Ref_frame.shape[1]))
+MetricMatrix_flux=np.zeros((StepCountY,StepCountX))
+MetricMatrix_corr=np.zeros((StepCountY,StepCountX))
 
-    for _ in range(StepCountX):
+TotalscanScount=StepCountY*StepCountX
+icount=0  
+ixCounting=0
+
+for iy in range(StepCountY):
+    StageObj.Set_pos(stage='BMY', beam=ibeam,pos=grid_points[iy,0,1])
+    print(iy)
+    for ix in range(StepCountX):
     
         StageObj.Set_pos(stage='BMX', beam=ibeam,pos=grid_points[iy,ix,0])
-        ix+=1
+        # ix+=1
         
-        frame = CamObj.GetFrame(beam=ibeam)
-        
-        flux = CamObj.GetRelativePower(
-        frame=frame,centre=[appxcenters_Ref_frame[0],appxcenters_Ref_frame[1]],
-        x_half_width=5,y_half_width=5)
-        TotalscanScount+=1
+        frame = CamObj.GetFrame(ibeam=ibeam)
+        AllFrames[icount]=frame
 
-ipywidgets.interact(pltfunc.PlotResults,iscan=(0,TotalscanScount,1),Ref_frame=ipywidgets.fixed(Ref_frame),AllFrames=ipywidgets.fixed(AllFrames),gridpoints=ipywidgets.fixed(gridpoints),MetricMatrix=ipywidgets.fixed(MetricMatrix))
+        flux = CamObj.GetRelativePower(frame=frame,centre=[appxcenters_Ref_frame[0],appxcenters_Ref_frame[1]],
+        x_half_width=5,y_half_width=5)
+        
+        #spatial correlation
+        frame_corr_temp=frame.astype(float).ravel()
+        frame_corr_temp = frame_corr_temp-np.mean(frame_corr_temp)
+        corr = np.sum(frame_corr_temp*ref_corr_temp)/np.sqrt(np.sum(frame_corr_temp**2)*np.sum(ref_corr_temp**2))
+
+
+        MetricMatrix_corr[iy,ix]=corr
+        MetricMatrix_flux[iy,ix]=flux
+        pltfunc.PlotResults(icount,Ref_frame=Ref_frame,AllFrames=AllFrames,gridpoints=grid_points,MetricMatrix=MetricMatrix_corr)
+
+        icount+=1
+
+
+np.save("Data/Allframes.npy",AllFrames)
+np.save("Data/MetrixMatrix_flux.npy",MetricMatrix_flux)
+np.save("Data/MetrixMatrix_Corr.npy",MetricMatrix_corr)
+
 
 
 

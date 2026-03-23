@@ -45,7 +45,7 @@ class BMode:
             self._move_all_BLF_beams("FAINT")
         elif self.mode == "STANDARD":
             # Implementation for STANDARD mode
-            file_pth = "/home/asg/.config/asgard-alignment/stable_states/baldr_ONLY_bright.json"
+            file_pth = "/home/asg/.config/asgard-alignment/stable_states/baldr_ONLY_standard.json"
             self._move_all_BLF_beams("STANDARD")
         else:
             raise ValueError("Invalid mode. Please specify either 'FAINT' or 'STANDARD'.")
