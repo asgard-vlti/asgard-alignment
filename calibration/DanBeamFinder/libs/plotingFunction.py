@@ -33,7 +33,7 @@ def PlotResults(iscan,Ref_frame,AllFrames,gridpoints,MetricMatrix):
     ax1[1][1].imshow(CamImage);
     ax1[1][1].set_title('Cam Image',fontsize = 8);
     ax1[1][1].axis('off')
-    plt.savefig(f"Data/Plots/imag{iscan}")
+    plt.savefig(f"Data/Plots/imag")
 
     # plt.show(block=False)
     plt.close()

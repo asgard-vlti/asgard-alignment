@@ -197,6 +197,10 @@ class GeneralCameraObject():
         Maxidx= np.unravel_index(np.argmax(frame),frame.shape)
         return Maxidx
     @staticmethod
+    def FindMinValueOnFrame(frame):
+        Mindx= np.unravel_index(np.argmin(frame),frame.shape)
+        return Mindx
+    @staticmethod
     def PlotFrames(iframe, Framebuffer):
         fig, ax1 = plt.subplots()
         ax1.imshow(np.squeeze(Framebuffer[iframe, :, :]), cmap="gray", origin="upper")

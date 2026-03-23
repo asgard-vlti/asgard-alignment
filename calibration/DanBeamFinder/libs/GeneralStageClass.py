@@ -91,7 +91,7 @@ class GeneralStageObject:
         x=np.linspace(xmin,xmax,StepCountX)
         y=np.linspace(ymin,ymax,StepCountY)
 
-        gridpoints = np.zeros((StepCountX,StepCountY,2))
+        gridpoints = np.zeros((StepCountY,StepCountX,2))
         
         for iy in range(StepCountY):
             for ix in range(StepCountX):
