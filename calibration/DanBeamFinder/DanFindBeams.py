@@ -4,6 +4,8 @@ import time
 import matplotlib.pyplot as plt
 import libs.GeneralCameraClass as CamForm
 import libs.GeneralStageClass as StageForm
+import libs.plotingFunction as pltfunc
+import ipywidgets
 # %matplotlib
 # import AlignmentRoutine as AlignForm
 
@@ -98,7 +100,8 @@ ref_flux=CamObj.GetRelativePower(
         frame=Ref_frame,centre=[appxcenters_Ref_frame[0],appxcenters_Ref_frame[1]],
         x_half_width=5,y_half_width=5)
 
-# do the scan    
+# do the scan 
+TotalscanScount=0   
 ix=0
 for iy in range(StepCountY):
     StageObj.Set_pos(stage='BMY', beam=ibeam,pos=grid_points[iy,ix,1])
@@ -113,10 +116,16 @@ for iy in range(StepCountY):
         flux = CamObj.GetRelativePower(
         frame=frame,centre=[appxcenters_Ref_frame[0],appxcenters_Ref_frame[1]],
         x_half_width=5,y_half_width=5)
+        TotalscanScount+=1
+
+ipywidgets.interact(pltfunc.PlotResults,iscan=(0,TotalscanScount,1),Ref_frame=ipywidgets.fixed(Ref_frame),AllFrames=ipywidgets.fixed(AllFrames),gridpoints=ipywidgets.fixed(gridpoints),MetricMatrix=ipywidgets.fixed(MetricMatrix))
 
 
 
 
+
+
+    
 
 
 
