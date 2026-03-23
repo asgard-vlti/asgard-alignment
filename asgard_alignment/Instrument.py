@@ -640,10 +640,14 @@ class Instrument:
         self._controllers["controllino"].set_PI_loop("Lower", 258, 360, 10)
         self._controllers["controllino"].set_PI_loop("Upper", 255, 360, 10)
 
-        self._controllers["stepper_controllino"] = (
-            asgard_alignment.controllino.Controllino(
-                self._other_config["controllino1"]["ip_address"]
-            )
+        # self._controllers["stepper_controllino"] = (
+        #     asgard_alignment.controllino.Controllino(
+        #         self._other_config["controllino1"]["ip_address"]
+        #     )
+        # )
+
+        self._controllers["rotm_teensy"] = asgard_alignment.controllino.Controllino(
+            self._other_config["controllino1"]["ip_address"]
         )
 
     def _remove_devices(self, dev_list):
@@ -1193,13 +1197,13 @@ class Instrument:
                 self._motor_config[name]["named_pos"],
             )
             return True
-        elif self._motor_config[name]["motor_type"] in ["GD40Z"]:
-            self.devices[name] = asgard_alignment.CustomMotors.GD40Z(
-                name,
-                self._motor_config[name]["semaphore_id"],
-                self._controllers["stepper_controllino"],
-            )
-            return True
+        # elif self._motor_config[name]["motor_type"] in ["GD40Z"]:
+        #     self.devices[name] = asgard_alignment.CustomMotors.GD40Z(
+        #         name,
+        #         self._motor_config[name]["semaphore_id"],
+        #         self._controllers["stepper_controllino"],
+        #     )
+        #     return True
 
     @staticmethod
     def find_managed_USB_hub_port():

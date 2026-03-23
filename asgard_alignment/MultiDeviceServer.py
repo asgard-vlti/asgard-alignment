@@ -986,7 +986,6 @@ class MultiDeviceServer:
             """
             Relative move of multiple rotation stages
             """
-
             if isinstance(idxes, str):
                 pass
 

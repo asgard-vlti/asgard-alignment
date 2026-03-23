@@ -554,6 +554,13 @@
         "serial_number": "",
         "named_pos" : {},
         "semaphore_id": 43
+    },
+    {
+        "name": "HPOL1",
+        "motor_type": "GD40Z",
+        "serial_number": "",
+        "named_pos" : {},
+        "semaphore_id": 41
     }
 ],
     "lamps" : [
@@ -591,7 +598,7 @@
             "ip_address" : "192.168.100.10"
         },
         {
-            "name": "controllino1",
+            "name": "rotm_teensy",
             "ip_address" : "192.168.100.12"
         }
     ]
