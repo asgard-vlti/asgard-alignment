@@ -722,7 +722,10 @@ class Instrument:
             for dev in all_devs:
                 if dev in self.devices:
                     # park the axis
-                    self.devices[dev].axis.park()
+                    try:
+                        self.devices[dev].axis.park()
+                    except:
+                        logging.warning(f"WARN: Unable to park {dev}  - perhaps it is already switched off.")
                 else:
                     logging.warning(f"WARN: {dev} not in devices dictionary")
 
@@ -734,8 +737,11 @@ class Instrument:
 
             # close all zaber connections
             for controller in controller_connctions:
-                logging.info(f"Closing connection to {controller}")
-                self._controllers[controller].close()
+                try:
+                    self._controllers[controller].close()
+                    logging.info(f"Closed connection to {controller}")
+                except:
+                    logging.info(f"WARN: Coule not close connection to {controller}. Already closed?")
 
             # manage instrument internals to no longer show these connections
             self._remove_controllers(controller_connctions)
@@ -814,10 +820,14 @@ class Instrument:
                     + [f"BDS{i}" for i in range(1, 5)]
                     + ["SSS"]
                 ]
-                controller_connctions += [
-                    self._motor_config["BFO"]["x_mcc_ip_address"],
-                    self.find_zaber_usb_port(),  # the usb connections for the BDS
-                ]
+                try:
+                    next_connection = [
+                        self._motor_config["BFO"]["x_mcc_ip_address"],
+                        self.find_zaber_usb_port(),  # the usb connections for the BDS
+                    ]
+                    controller_connctions += next_connection
+                except:
+                    logging.info(f"WARN: Unable to find {device} - maybe not online!")
 
             if controller_connctions is None:
                 controller_connctions = []
@@ -940,7 +950,8 @@ class Instrument:
             os.system(usb_command)
             time.sleep(0.1)
 
-        time.sleep(5.0)
+        logging.info(f"Sleeping 10 seconds to enumerate USB ports")
+        time.sleep(10.0)
 
         # reconnect all
         self._prev_port_mapping = self.compute_serial_to_port_map()
