@@ -39,15 +39,15 @@ class BSaveMode:
         save_path = f"{save_dir}/{filename}"
         os.makedirs(save_dir, exist_ok=True)
         try:
-            shutil.copy(load_path, save_path)
+            shutil.move(load_path, save_path)
             print(f"Archived current state to {save_path}")
         except Exception as e:
             print(f"Error archiving current state: {e}")
 
     def _save_all_BLF_beams(self):
         #Save path is relative
-        save_path = f"../stable_states/baldr_ONLY_{target_pos.lower()}.json"
-        message = f"save {target} baldr"
+        save_path = f"../stable_states/baldr_ONLY_{self.mode}"
+        message = f"save baldr {save_path}"
         try:
             res = self._send_and_get_response(message)
         except Exception as e:
@@ -55,8 +55,8 @@ class BSaveMode:
         return res
 
     def run(self):
-        self._archive_current_state
-        self._save_all_BLF_beams()
+        self._archive_current_state()
+        print(self._save_all_BLF_beams())
         
 def main():
     # Use argv to determine the mode (FAINT or STANDARD) and other parameters
@@ -67,7 +67,7 @@ def main():
     if mode not in ["FAINT", "STANDARD"]:
         print("Invalid mode. Please specify either 'FAINT' or 'STANDARD'.")
         sys.exit(1)
-    saveit = BMode(mode)
+    saveit = BSaveMode(mode.lower())
     saveit.run()
 
 if __name__ == "__main__":    
