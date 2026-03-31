@@ -29,7 +29,6 @@ except:
     print("CANT IMPORT PHASEMASK CENTERING TOOL!")
 
 
-
 # Function to run script
 def run_script(command):
     """
@@ -1343,8 +1342,8 @@ def handle_bistable_motor():
             st.write(res)
 
 
-def handle_linbo_motor():
-    st.subheader("LiNbO3 Stepper motor interface")
+def handle_rotation_motor(component):
+    st.subheader("Rotation stepper motor interface")
 
     # 3 buttons: read pos, read state, home
     cols = st.columns(4)
@@ -1363,25 +1362,33 @@ def handle_linbo_motor():
             message = f"home_steppers {target}"
             res = send_and_get_response(message)
             st.write(res)
-
     with cols[3]:
         if st.button("Stop", type="primary"):
             message = f"stop {target}"
             res = send_and_get_response(message)
             st.write(res)
 
+    if "HPOL" in component:
+        step_size = 100
+        min_value = -24000 // 4
+        max_value = 24000 // 4
+    else:
+        step_size = 100
+        min_value = -24000 // 4
+        max_value = 24000 // 4
+
     # now setting a position, using relative move
     st.write("Move absolute")
     inc = st.number_input(
         "Value (steps)",
         value=0,
-        min_value=-24000 // 4,
-        max_value=24000 // 4,
-        key="linbo_pos",
-        step=100,
+        min_value=min_value,
+        max_value=max_value,
+        key="rotm_pos",
+        step=step_size,
         format="%d",
     )
-    with st.form(key="abs_move_linbo"):
+    with st.form(key="abs_move_rotm"):
         submit = st.form_submit_button("Move")
         if submit:
             message = f"moveabs {target} {float(inc)}"  # move only does floats, but motor class will convert back to int
@@ -1536,8 +1543,8 @@ with col_main:
             elif component in ["BLF"]:
                 handle_lens_flipper()
 
-            elif component in ["HPOL"]:
-                handle_linbo_motor()
+            elif component in ["HPOL", "BACL", "BACU"]:
+                handle_rotation_motor(component)
 
     elif operating_mode == "Routines":
         # move pupil and move image go here
@@ -1552,6 +1559,7 @@ with col_main:
                 "Heimdallr shutters",
                 "Move image/pupil",
                 "Phasemask Alignment",
+                "Rotation stages",
                 "Scan Mirror",
                 "Save state",
                 "Load state",
@@ -1615,7 +1623,7 @@ with col_main:
 
             def move_all_BLF_beams(target_pos: str):
                 results = []
-                for beam_num in [1,2,3,4]:
+                for beam_num in [1, 2, 3, 4]:
                     target = f"BLF{beam_num}"
                     message = f"asg_setup {target} NAME {target_pos}"
                     try:
@@ -1630,8 +1638,9 @@ with col_main:
             with col_std:
                 if st.button("STANDARD", use_container_width=True):
 
-                    
-                    with st.spinner("Moving baldr lens flippers to STANDARD (bright mode)…"):
+                    with st.spinner(
+                        "Moving baldr lens flippers to STANDARD (bright mode)…"
+                    ):
                         results = move_all_BLF_beams("STANDARD")
                     st.success("Commands sent.")
                     for beam_num, msg, res in results:
@@ -1641,7 +1650,7 @@ with col_main:
                     # we use a hard coded path for now
                     file_pth = "/home/asg/.config/asgard-alignment/stable_states/baldr_ONLY_standard.json"
 
-                    st.write( f"loading hard coded stable state from {file_pth}")
+                    st.write(f"loading hard coded stable state from {file_pth}")
                     with open(file_pth) as f:
                         states = json.load(f)
 
@@ -1656,7 +1665,6 @@ with col_main:
                                         f"moveabs {state['name']} {state['position']}"
                                     )
                                     send_and_get_response(message)
-                        
 
             with col_faint:
                 if st.button("FAINT", use_container_width=True):
@@ -1669,8 +1677,8 @@ with col_main:
                         st.write(res)
 
                     # we use a hard coded path for now
-                    file_pth = "/home/asg/.config/asgard-alignment/stable_states/baldr_ONLY_faint.json"#"~/.config/asgard-alignment/stable_states/baldr_ONLY_faint.json"
-                    st.write( f"loading hard coded stable state from {file_pth}")
+                    file_pth = "/home/asg/.config/asgard-alignment/stable_states/baldr_ONLY_faint.json"  # "~/.config/asgard-alignment/stable_states/baldr_ONLY_faint.json"
+                    st.write(f"loading hard coded stable state from {file_pth}")
                     with open(file_pth) as f:
                         states = json.load(f)
 
@@ -1685,7 +1693,6 @@ with col_main:
                                         f"moveabs {state['name']} {state['position']}"
                                     )
                                     send_and_get_response(message)
-                                            
 
             st.title("Deformable Mirrors (DM's)")
 
@@ -3107,6 +3114,31 @@ with col_main:
             targets = [f"phasemask{beam_number}"]
 
             handle_phasemask()
+
+        if routine_options == "Rotation stages":
+            # ADCS, pols
+            st.title("Rotation Stage Control")
+
+            if st.button("Disable all"):
+                send_and_get_response("rotm_disable")
+
+            st.subheading("Slew subset")
+            # dropdown with "adc_upper", "adc_lower", "hpol"
+            motor_set = st.selectbox(
+                "Select motor set to slew",
+                ["adc_upper", "adc_lower", "hpol"],
+                key="motor_set",
+            )
+
+            # text entry for n steps:
+            n_steps = st.number_input(
+                "Number of steps to slew (positive or negative)",
+                value=0,
+                step=1,
+                key="n_steps",
+            )
+
+            msg = f"rotm_slew {motor_set} {n_steps}"
 
         if routine_options == "Save state":
             instruments = ["Heimdallr", "Baldr", "Solarstein", "All"]

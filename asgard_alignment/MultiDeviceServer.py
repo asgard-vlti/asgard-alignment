@@ -979,21 +979,25 @@ class MultiDeviceServer:
             """
             # TODO clever homing that knows which way to go and/or doesnt spin around the full way...
 
-        def adc_disable():
+        def rotm_disable():
             """
-            Disable all adc motors
+            Disable all rotation stage motors
             """
             self.instr._controllers["rotm_teensy"].disable_all()
+            return "ACK"
 
-        def adc_slew(adc_set, reltarget):
+        def rotm_slew(adc_set, reltarget):
             """
             Enable motor set U or L, then move them relative
             """
             self.instr._controllers["rotm_teensy"].disable_all()
 
-            self.instr._controllers["rotm_teensy"].enable_subset
+            self.instr._controllers["rotm_teensy"].enable_subset(adc_set)
+            self.instr._controllers["rotm_teensy"].move_relative(reltarget)
 
-        # TODO: restart controller functionality?
+            return "ACK"
+
+        # TODO: restart controller function?
         first_word_to_function = {
             "read": read_msg,
             "stop": stop_msg,
@@ -1037,7 +1041,7 @@ class MultiDeviceServer:
             "set_kaya": set_kaya_msg,
             "rotm_home": home_rotm,
             "adc_slew": adc_slew,
-            "adc_disable": adc_disable,
+            "rotm_disable": rotm_disable,
         }
 
         first_word_to_format = {
@@ -1123,7 +1127,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # logname from the current time
-    log_fname = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d_%H-%M-%S") + ".log"
+    log_fname = (
+        datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+        + ".log"
+    )
     log_path = os.path.join(os.path.expanduser(args.log_location), log_fname)
 
     # Remove all handlers associated with the root logger object (if any)

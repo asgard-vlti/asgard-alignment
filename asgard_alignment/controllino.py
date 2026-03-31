@@ -1174,9 +1174,16 @@ class RotationMotorTeensy(UController):
     def enable(self, motor_name):
         self.send_command_anyreply(f"e{STEPPER_NAME_TO_NUM[motor_name]}")
 
+    def enable_subset(self, subset_name):
+        if subset_name not in STEPPER_GROUPS.keys():
+            raise ValueError(f"Unknown subset name '{subset_name}'")
+
+        for name in STEPPER_GROUPS[subset_name]:
+            self.enable(name)
+
     def enable_group(self, subset_name):
         if subset_name not in STEPPER_GROUPS.keys():
-            raise ValueError()  # TODO: error message
+            raise ValueError(f"Unknown subset name '{subset_name}'")
 
         for name in STEPPER_GROUPS[subset_name]:
             self.enable(name)
