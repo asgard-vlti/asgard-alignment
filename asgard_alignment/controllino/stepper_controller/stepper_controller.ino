@@ -10,6 +10,8 @@
 //  "z[MOTOR]" Find if the motor is homed.
 //  "p[MOTOR]"  Read out the zero Pin directy.
 //  "s[MOTOR] [STEPS]" Move to a fixed number of steps from zero. 
+//  "f[MOTOR] [STEPS]" Fix a motor to a forced position of this many steps. 
+//  "v" Find the version of the installed software.
 // This only works with one motor, so only one motor should be enabled at a time.
 //  "?" Ping
 //  "q" Quit this client. Can start another! (only 1 at a time)
@@ -30,6 +32,7 @@ IPAddress ip(192,168,100,12);                           // IP address (arbitrari
 EthernetServer server(23);                            // HTTP port
 int next_str_ix;  // The next index in the string we're passing (saves passing back and forth)
 
+#define VERSION 1
 #define MAX_MOTORS 12
 #define STEP_PIN 27
 #define DIR_PIN 28
@@ -145,6 +148,10 @@ void loop() {
       } 
       if (c=='?'){
         return success(clients[i]);
+      } 
+      if (c=='v'){
+        clients[i].println(String(VERSION));
+        return;
       }
       // Get the "pin" value (the first integer)
       next_str_ix = 1;
@@ -156,10 +163,13 @@ void loop() {
       // Now the commands which use 1 or more arguments
       if (c == 'r'){
         // Add this movement to all active motors. Here "pin" is the 
-        // distance to move XXX
+        // distance to move 
         for (int i=0;i<MAX_MOTORS;i++){
           if (enable_motors[i]) target_pos[i] += pin;
         }
+        if (pin > 0) rdir = 1;
+        if (pin < 0) rdir = -1;
+        rsteps = (pin < 0) ? -pin : pin;
         return success(clients[i]);
       }
       else if (c == 'e'){
@@ -192,6 +202,15 @@ void loop() {
         enable_one_motor(pin);
         target_pos[pin] = value;
         return success(clients[i]);
+      } 
+      else if (c == 'f') {
+        int value = get_value(request);
+        // Check we have the right motor.
+        if ((pin >= MAX_MOTORS) || (pin < 0)) return failure(clients[i]);
+        // Set the current AND target positions to this value.
+        current_pos[pin] = value;
+        target_pos[pin] = value;
+        return success(clients[i]);
       } else if (c=='h'){
         if ((pin >= MAX_MOTORS) || (pin < 0)) return failure(clients[i]);
         enable_one_motor(pin);
@@ -210,7 +229,9 @@ void loop() {
         else clients[i].println(String(int(found_home[pin])));
       } else if (c=='p'){ //Read out zero pin directly
         if ((pin >= MAX_MOTORS) || (pin < 0)) return failure(clients[i]); 
-        else clients[i].println(String(digitalRead(zero_pins[i]) ));
+        else {
+          clients[i].println(String(digitalRead(zero_pins[pin]) ));
+        }
       } else {
         Serial.println("Invalid command character.");
         return failure(clients[i]);
@@ -227,35 +248,33 @@ void loop() {
     }
   }
 
-
-
-
   // Now lets move the motors!!!
+  bool step_a_motor = false;
   for (int i=0;i<MAX_MOTORS;i++){
     if (looking_for_home[i]){
       if (digitalRead(zero_pins[i]) == 1){
-        /*Serial.println("Found home the first time");
+        Serial.println("Found home the first time");
         delay(10);
-        if (digitalRead(zero_pins[i] == 1)){
+        if (digitalRead(zero_pins[i]) == 1){
           Serial.println("Found home the second time");
           delay(10);
-          if (digitalRead(zero_pins[i] == 1)){
+          if (digitalRead(zero_pins[i]) == 1){
             Serial.println("Found home the third time");
             delay(10);
-            if (digitalRead(zero_pins[i]) == 1){*/
+            if (digitalRead(zero_pins[i]) == 1){
                 target_pos[i]=0;
                 current_pos[i]=0;
                 looking_for_home[i]=false;
                 found_home[i]=true;
-    /*        }
+            }
           }
-        }*/
+        }
       }
     }
 
   
     if (!enable_motors[i]) continue;
-    if ((target_pos[i] == current_pos[i]) && rdir==0) continue;
+    if (target_pos[i] == current_pos[i]) continue;
 
     // Print the current steps.
     Serial.print(i);
@@ -266,27 +285,37 @@ void loop() {
     Serial.print(" ");
     Serial.print(stepit);
     Serial.println();
+
+    // We will step now! But only update stepit on the step pin going high.
+    step_a_motor=true;
     if (stepit){
-      if (((target_pos[i] > current_pos[i]) && (rdir ==0)) || (rdir==1)) {
-        digitalWrite(DIR_PIN,HIGH); 
-        digitalWrite(STEP_PIN,HIGH);
-        current_pos[i] += 1;
+      if (target_pos[i] > current_pos[i]) {
+        current_pos[i] += 1; 
+        if (rdir == 0) digitalWrite(DIR_PIN,HIGH); 
       }
-      if (((target_pos[i] < current_pos[i]) && (rdir ==0)) || (rdir==-1)) {
-        digitalWrite(DIR_PIN,LOW);
-        digitalWrite(STEP_PIN,HIGH);
-        current_pos[i] -= 1;
+      else {
+        current_pos[i] -= 1; 
+        if (rdir == 0) digitalWrite(DIR_PIN,LOW); 
       }
-    } else {
-      digitalWrite(STEP_PIN,LOW);
-    }
-    stepit = (stepit + 1) % 2;
-    if (rdir != 0){
-      rsteps -= 1;
-      if (rsteps <= 0) rdir = 0;
     }
   }
-  delay(1); // If not looking for the home sensor.
+  // Now we'ver dealt with individual motor code. Let's deal with rdir != 0 and general code for stepping.
+  if (step_a_motor || (rdir != 0)) {
+    if (stepit){
+        if (rdir == 1) digitalWrite(DIR_PIN,HIGH); 
+        else if (rdir == -1) digitalWrite(DIR_PIN,LOW); 
+        digitalWrite(STEP_PIN,HIGH);
+    } else {
+        digitalWrite(STEP_PIN,LOW);
+    }
+    stepit = (stepit + 1) % 2;
+  }
+  // Now change the relative move steps.
+  if (rdir != 0){
+     rsteps -= 1;
+     if (rsteps <= 0) rdir = 0;
+  }
+  delay(1); 
 }
 
 int get_value(String request){
@@ -304,7 +333,7 @@ int get_value(String request){
 
     // Initial command - check that the pin number isn't silly.
     // We can do more sophisticated checking later!
-    if (next_str_ix == 1 && value > 80) value=BAD_INT;
+    //if (next_str_ix == 1 && value > 80) value=BAD_INT;
    
     //Increment the place of the next number.
     next_str_ix += i;
