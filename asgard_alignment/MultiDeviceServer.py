@@ -145,7 +145,7 @@ class MultiDeviceServer:
         # return time.strftime("%Y-%m-%dT%H:%M:%S", time_now)
 
         # Get the current UTC time
-        current_utc_time = datetime.datetime.utcnow()
+        current_utc_time = datetime.datetime.now(datetime.timezone.utc)
 
         # Format the UTC time
         return current_utc_time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -608,10 +608,7 @@ class MultiDeviceServer:
             reply["reply"]["content"] = "OK"
 
         # Send back reply to ic0fb process (wag)
-
-        timeNow = datetime.datetime.now()
-        timeStamp = timeNow.strftime("%Y-%m-%dT%H:%M:%S")
-        reply["reply"]["time"] = timeStamp
+        reply["reply"]["time"] = self.get_time_stamp()
 
         # Convert reply JSON structure into a character string
         # terminated with null character (because ic0fb process on wag
@@ -982,16 +979,6 @@ class MultiDeviceServer:
             """
             # TODO clever homing that knows which way to go and/or doesnt spin around the full way...
 
-        def relmove_multiple_rotm(idxes: list | str, n_steps: int):
-            """
-            Relative move of multiple rotation stages
-            """
-            if isinstance(idxes, str):
-                pass
-
-            # enable the relevant motors
-            self.instr._controllers["rotm_teensy"].send
-
         def adc_disable():
             """
             Disable all adc motors
@@ -1006,7 +993,7 @@ class MultiDeviceServer:
 
             self.instr._controllers["rotm_teensy"].enable_subset
 
-        # TODO: restart controller functionality? 
+        # TODO: restart controller functionality?
         first_word_to_function = {
             "read": read_msg,
             "stop": stop_msg,
@@ -1136,7 +1123,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # logname from the current time
-    log_fname = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".log"
+    log_fname = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d_%H-%M-%S") + ".log"
     log_path = os.path.join(os.path.expanduser(args.log_location), log_fname)
 
     # Remove all handlers associated with the root logger object (if any)
