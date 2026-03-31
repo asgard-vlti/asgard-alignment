@@ -538,29 +538,100 @@
         "name": "HPOL1",
         "motor_type": "GD40Z",
         "serial_number": "",
-        "named_pos" : {},
+        "named_pos" : {
+            "ZERO": 0
+        },
         "semaphore_id": 41
     },
     {
         "name": "HPOL2",
         "motor_type": "GD40Z",
         "serial_number": "",
-        "named_pos" : {},
+        "named_pos" : {
+            "ZERO": 0
+        },
         "semaphore_id": 42
     },
     {
         "name": "HPOL4",
         "motor_type": "GD40Z",
         "serial_number": "",
-        "named_pos" : {},
+        "named_pos" : {
+            "ZERO": 0
+        },
         "semaphore_id": 43
     },
     {
-        "name": "HPOL1",
-        "motor_type": "GD40Z",
+        "name": "BACL1",
+        "motor_type": "PR50PP",
         "serial_number": "",
-        "named_pos" : {},
-        "semaphore_id": 41
+        "named_pos" : {
+            "ZERO": 0
+        },
+        "semaphore_id": 44
+    },
+    {
+        "name": "BACL2",
+        "motor_type": "PR50PP",
+        "serial_number": "",
+        "named_pos" : {
+            "ZERO": 0
+        },
+        "semaphore_id": 45
+    },
+    {
+        "name": "BACL3",
+        "motor_type": "PR50PP",
+        "serial_number": "",
+        "named_pos" : {
+            "ZERO": 0
+        },
+        "semaphore_id": 46
+    },
+    {
+        "name": "BACL4",
+        "motor_type": "PR50PP",
+        "serial_number": "",
+        "named_pos" : {
+            "ZERO": 0
+        },
+        "semaphore_id": 47
+    },
+    {
+        "name": "BACU1",
+        "motor_type": "PR50PP",
+        "serial_number": "",
+        "named_pos" : {
+            "ZERO": 0
+        },
+        "semaphore_id": 48
+    },
+    {
+        "name": "BACU2",
+        "motor_type": "PR50PP",
+        "serial_number": "",
+        "named_pos" : {
+            "ZERO": 0
+        },
+        "semaphore_id": 49
+    },
+    {
+        "name": "BACU3",
+        "motor_type": "PR50PP",
+        "serial_number": "",
+        "named_pos" : {
+            "ZERO": 0
+        },
+        "semaphore_id": 50
+    },
+    {
+        "name": "BACU4",
+        "motor_type": "PR50PP",
+        "serial_number": "",
+        "named_pos" : {
+            "ZERO": 0
+        },
+        "semaphore_id": 51
     }
 ],
     "lamps" : [

@@ -256,8 +256,8 @@ class RotationStage(asgard_alignment.ESOdevice.Motor):
         self.home()
 
 
-class NewportRotationStage(RotationStage):
-    """TODO find the proper name of the stage..."""
+class PR50PP(RotationStage):
+    """PR50PP rotation stage, used for the ADCs"""
 
     def __init__(
         self,

@@ -992,7 +992,21 @@ class MultiDeviceServer:
             # enable the relevant motors
             self.instr._controllers["rotm_teensy"].send
 
+        def adc_disable():
+            """
+            Disable all adc motors
+            """
+            self.instr._controllers["rotm_teensy"].disable_all()
 
+        def adc_slew(adc_set, reltarget):
+            """
+            Enable motor set U or L, then move them relative
+            """
+            self.instr._controllers["rotm_teensy"].disable_all()
+
+            self.instr._controllers["rotm_teensy"].enable_subset
+
+        # TODO: restart controller functionality? 
         first_word_to_function = {
             "read": read_msg,
             "stop": stop_msg,
@@ -1035,6 +1049,8 @@ class MultiDeviceServer:
             "temp_status": temp_status_msg,
             "set_kaya": set_kaya_msg,
             "rotm_home": home_rotm,
+            "adc_slew": adc_slew,
+            "adc_disable": adc_disable,
         }
 
         first_word_to_format = {
@@ -1078,6 +1094,8 @@ class MultiDeviceServer:
             "h_splay": "h_splay {}",
             "temp_status": "temp_status {}",
             "set_kaya": "set_kaya {}",
+            "adc_disable": "adc_disable",
+            "adc_slew": "adc_slew {} {} {}",
         }
 
         try:

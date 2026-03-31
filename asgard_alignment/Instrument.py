@@ -23,7 +23,6 @@ import time
 
 import asgard_alignment.controllino
 
-
 phasemask_position_directory = Path.cwd().joinpath("config_files/phasemask_positions")
 
 
@@ -95,8 +94,8 @@ class Instrument:
         self._rm = pyvisa.ResourceManager()
 
         # Create the connections to the controllers
-        self._open_controllino()
-        logging.info("Controllino on")
+        self._open_ucontrollers()
+        logging.info("Controllino and teensy on")
 
         time.sleep(
             2
@@ -632,9 +631,11 @@ class Instrument:
     # _combined_device <- new variable dictionary , multiDeviceServer <- custom functions
     # update Mutil device server
 
-    def _open_controllino(self):
-        self._controllers["controllino"] = asgard_alignment.controllino.Controllino(
-            self._other_config["controllino0"]["ip_address"]
+    def _open_ucontrollers(self):
+        self._controllers["controllino"] = (
+            asgard_alignment.controllino.PowerControllino(
+                self._other_config["controllino0"]["ip_address"]
+            )
         )
 
         self._controllers["controllino"].set_PI_loop("Lower", 258, 360, 10)
@@ -646,8 +647,10 @@ class Instrument:
         #     )
         # )
 
-        self._controllers["rotm_teensy"] = asgard_alignment.controllino.Controllino(
-            self._other_config["controllino1"]["ip_address"]
+        self._controllers["rotm_teensy"] = (
+            asgard_alignment.controllino.RotationMotorTeensy(
+                self._other_config["rotm_teensy"]["ip_address"]
+            )
         )
 
     def _remove_devices(self, dev_list):
@@ -725,7 +728,9 @@ class Instrument:
                     try:
                         self.devices[dev].axis.park()
                     except:
-                        logging.warning(f"WARN: Unable to park {dev}  - perhaps it is already switched off.")
+                        logging.warning(
+                            f"WARN: Unable to park {dev}  - perhaps it is already switched off."
+                        )
                 else:
                     logging.warning(f"WARN: {dev} not in devices dictionary")
 
@@ -741,7 +746,9 @@ class Instrument:
                     self._controllers[controller].close()
                     logging.info(f"Closed connection to {controller}")
                 except:
-                    logging.info(f"WARN: Coule not close connection to {controller}. Already closed?")
+                    logging.info(
+                        f"WARN: Coule not close connection to {controller}. Already closed?"
+                    )
 
             # manage instrument internals to no longer show these connections
             self._remove_controllers(controller_connctions)
