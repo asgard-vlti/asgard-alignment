@@ -1040,7 +1040,7 @@ class MultiDeviceServer:
             "temp_status": temp_status_msg,
             "set_kaya": set_kaya_msg,
             "rotm_home": home_rotm,
-            "adc_slew": adc_slew,
+            "rotm_slew": rotm_slew,
             "rotm_disable": rotm_disable,
         }
 
@@ -1085,8 +1085,8 @@ class MultiDeviceServer:
             "h_splay": "h_splay {}",
             "temp_status": "temp_status {}",
             "set_kaya": "set_kaya {}",
-            "adc_disable": "adc_disable",
-            "adc_slew": "adc_slew {} {} {}",
+            "rotm_disable": "rotm_disable",
+            "rotm_slew": "rotm_slew {} {} {}",
         }
 
         try:
