@@ -38,23 +38,27 @@ def load_config(config_path):
     ]
 
 
-def wait_until_reached(client, motor_index, abs_target, timeout_s=60):
-    motor_name = adc_names[motor_index]
-    print(f"Waiting for {motor_name} to slew to {abs_target} centidegrees...")
+def wait_until_reached(socket, adc_name, abs_target, timeout_s=60, poll_interval_s=0.5):
+    print(f"Waiting for {adc_name} to reach {abs_target}...")
     total_time = 0.0
-    current = None
-    while total_time < timeout_s:
-        time.sleep(0.5)
-        response = client.send_and_recv(f"read {motor_name}")
-        current = float(response)
-        if current == abs_target:
-            print(f"{motor_name} reached the target position.")
-            return
-        total_time += 0.5
 
-    print(
-        f"ERROR: {motor_name} did not reach the target position within {timeout_s} seconds."
-    )
+    while total_time < timeout_s:
+        time.sleep(poll_interval_s)
+        response = send_and_recv(socket, f"read {adc_name}")
+        try:
+            current = float(response)
+        except ValueError:
+            print(f"WARN: Could not parse position for {adc_name}: {response!r}")
+            total_time += poll_interval_s
+            continue
+
+        if current == abs_target:
+            print(f"{adc_name} reached the target position.")
+            return
+
+        total_time += poll_interval_s
+
+    print(f"ERROR: {adc_name} did not reach {abs_target} within {timeout_s} seconds.")
     sys.exit(1)
 
 
@@ -85,3 +89,4 @@ def main():
         print(f"Moving {adc_name} to zero position: {zeropos}")
         response = send_and_recv(socket, f"moveabs {adc_name} {zeropos}")
         print(f"Response: {response}")
+        wait_until_reached(socket, adc_name, zeropos)
