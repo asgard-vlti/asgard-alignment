@@ -1220,6 +1220,7 @@ class Instrument:
                 name,
                 self._motor_config[name]["semaphore_id"],
                 self._controllers["rotm_teensy"],
+                named_pos = {},
             )
             return True
         elif self._motor_config[name]["motor_type"] in ["PR50PP"]:
@@ -1227,6 +1228,7 @@ class Instrument:
                 name,
                 self._motor_config[name]["semaphore_id"],
                 self._controllers["rotm_teensy"],
+                named_pos = {},
             )
             return True
 
