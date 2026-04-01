@@ -10,6 +10,7 @@ import datetime
 import glob
 import subprocess
 import sys
+import streamlit.components.v1 as components
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 from io import StringIO
@@ -90,7 +91,15 @@ os.makedirs(quick_data_path, exist_ok=True)
 
 
 # make GUI wide
-st.set_page_config(layout="wide")
+st.set_page_config(page_title="Asgard alignment engineering GUI", layout="wide")
+
+
+def set_tab_title(title):
+    safe_title = json.dumps(title)
+    components.html(
+        f"<script>window.parent.document.title = {safe_title};</script>",
+        height=0,
+    )
 
 if "message_history" not in st.session_state:
     st.session_state["message_history"] = []
@@ -1450,6 +1459,7 @@ with col_main:
                 key="component",
             )
             component = all_devices_labels_to_dev[component_nice]
+            set_tab_title(f"{component_nice}")
 
         if component in beam_specific_devices:
             if component == "BOTX":
@@ -1569,6 +1579,7 @@ with col_main:
             ],
             key="routine_options",
         )
+        set_tab_title(f"{routine_options}")
 
         if routine_options == "Quick buttons":
 
