@@ -70,10 +70,10 @@ STEPPER_NAME_TO_NUM = {
 
 # TODO: check that the upper/lower and beam correspondence is right!!
 STEPPER_NAME_TO_NUM = {
-    "BACU0": 0,
-    "BACU1": 1,
-    "BACU2": 2,
-    "BACU3": 3,
+    "BACU1": 0,
+    "BACU2": 1,
+    "BACU3": 2,
+    "BACU4": 3,
     "HPOL1": 4,
     "HPOL2": 5,
     "HPOL3": 6,
@@ -85,8 +85,8 @@ STEPPER_NAME_TO_NUM = {
 }
 
 STEPPER_GROUPS = {
-    "adc_upper": ["BACU0", "BACU1", "BACU2", "BACU3"],
-    "adc_lower": ["BACL0", "BACL1", "BACL2", "BACL3"],
+    "adc_upper": ["BACU1", "BACU2", "BACU3", "BACU4"],
+    "adc_lower": ["BACL1", "BACL2", "BACL3", "BACL4"],
     "hpol": ["HPOL1", "HPOL2", "HPOL3", "HPOL4"],
 }
 
