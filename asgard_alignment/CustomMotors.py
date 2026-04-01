@@ -173,7 +173,7 @@ class RotationStage(asgard_alignment.ESOdevice.Motor):
         self,
         name,
         semaphore_id,
-        rotm_controller: asgard_alignment.controllino.UController,
+        rotm_controller: asgard_alignment.controllino.RotationMotorTeensy,
         named_positions,
     ):
         super().__init__(
@@ -251,7 +251,7 @@ class PR50PP(RotationStage):
         self,
         name,
         semaphore_id,
-        rotm_controller: asgard_alignment.controllino.UController,
+        rotm_controller: asgard_alignment.controllino.RotationMotorTeensy,
         named_positions,
     ):
         super().__init__(name, semaphore_id, rotm_controller, named_positions)
@@ -271,7 +271,7 @@ class GD40Z(RotationStage):
         self,
         name,
         semaphore_id,
-        rotm_controller: asgard_alignment.controllino.UController,
+        rotm_controller: asgard_alignment.controllino.RotationMotorTeensy,
         named_positions,
     ):
         super().__init__(name, semaphore_id, rotm_controller, named_positions)
