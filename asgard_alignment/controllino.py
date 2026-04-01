@@ -26,7 +26,7 @@ CONNEXIONS = {
     "LS16P (HFO)": 49,
     "Lower Kickstart": 78,
     "Upper Kickstart": 79,
-    "Piezo/Laser": 80,
+    "Piezo/Laser/Teensy": 80,
     "BLF1": 26,
     "BLF2": 23,
     "BLF3": 24,
@@ -105,7 +105,6 @@ PI_loop_infos = [
         "m_min": 10,
     },
 ]
-
 
 
 class UController:
@@ -275,7 +274,7 @@ class PowerControllino(UController):
 
         # The turn-on command needs a string, not a number!
         if init_motors:
-            self.turn_on("Piezo/Laser")
+            self.turn_on("Piezo/Laser/Teensy")
             self.turn_on("MFF101 (BLF)")
             self.turn_on("LS16P (HFO)")
             self.turn_on("X-MCC (BMX,BMY)")
