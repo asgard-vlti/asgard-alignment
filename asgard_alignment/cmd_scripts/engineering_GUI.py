@@ -181,7 +181,8 @@ all_devices_labels_to_dev = {
     "SDL12 (S delay line 12)": "SDL12",
     "SDL34 (S delay line 34)": "SDL34",
     "Lamps (S lamps)": "lamps",
-    "BLF (B lens flipper)": "BLF",
+    "BACU (B ADC upper): ": "BACU",
+    "BACL (B ADC lower): ": "BACL",
 }
 
 

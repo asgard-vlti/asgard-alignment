@@ -71,16 +71,16 @@ STEPPER_NAME_TO_NUM = {
 # TODO: check that the upper/lower and beam correspondence is right!!
 STEPPER_NAME_TO_NUM = {
     "BACU1": 0,
-    "BACU2": 1,
-    "BACU3": 2,
-    "BACU4": 3,
+    "BACL1": 1,
+    "BACU2": 2,
+    "BACL2": 3,
     "HPOL1": 4,
     "HPOL2": 5,
     "HPOL3": 6,
     "HPOL4": 7,
-    "BACL1": 8,
-    "BACL2": 9,
-    "BACL3": 10,
+    "BACU3": 8,
+    "BACL3": 8,
+    "BACU4": 10,
     "BACL4": 11,
 }
 

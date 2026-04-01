@@ -38,8 +38,6 @@ def load_config(config_path):
     ]
 
 
-
-
 def wait_until_reached(client, motor_index, abs_target, timeout_s=60):
     motor_name = adc_names[motor_index]
     print(f"Waiting for {motor_name} to slew to {abs_target} centidegrees...")
@@ -58,6 +56,7 @@ def wait_until_reached(client, motor_index, abs_target, timeout_s=60):
         f"ERROR: {motor_name} did not reach the target position within {timeout_s} seconds."
     )
     sys.exit(1)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Move ADCs to zero positions")
@@ -80,7 +79,9 @@ def main():
     socket.connect("tcp://mimir:5555")
 
     for i, zeropos in enumerate(adc_zeropos):
-        adc_name = f"BADCU{i+1}"
+        upper_or_lower = "upper" if i % 2 == 0 else "lower"
+        adc_num = (i // 2) + 1
+        adc_name = f"BAC{upper_or_lower[0].upper()}{adc_num}"
         print(f"Moving {adc_name} to zero position: {zeropos}")
         response = send_and_recv(socket, f"moveabs {adc_name} {zeropos}")
         print(f"Response: {response}")
