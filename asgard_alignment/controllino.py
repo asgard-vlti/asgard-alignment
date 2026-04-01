@@ -562,6 +562,23 @@ class PowerControllino(UController):
         value = int(value)
         return self.send_command(f"a{channel} {value}")
 
+    def get_status(self, key: str) -> str:
+        """
+        Command to get the power status of a device.
+
+        Parameters
+        ----------
+        key : str
+            Device key.
+
+        Returns
+        -------
+        str
+            Power status of the device.
+        """
+        self._ensure_device(key)
+        return self.send_command_anyreply(f"g{CONNEXIONS[key]}")
+
 
 class RotationMotorTeensy(UController):
     """
