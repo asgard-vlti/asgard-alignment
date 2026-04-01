@@ -91,15 +91,28 @@ os.makedirs(quick_data_path, exist_ok=True)
 
 
 # make GUI wide
-st.set_page_config(page_title="Asgard alignment engineering GUI", layout="wide")
+DEFAULT_TAB_TITLE = "Asgard alignment engineering GUI"
+st.set_page_config(page_title=DEFAULT_TAB_TITLE, layout="wide")
 
 
-def set_tab_title(title):
+def _apply_tab_title(title):
     safe_title = json.dumps(title)
     components.html(
         f"<script>window.parent.document.title = {safe_title};</script>",
         height=0,
     )
+
+
+def set_tab_title(title):
+    st.session_state["tab_title"] = title
+    _apply_tab_title(title)
+
+
+if "tab_title" not in st.session_state:
+    st.session_state["tab_title"] = DEFAULT_TAB_TITLE
+
+# Re-apply the most recent title on each rerun so button interactions do not reset it.
+_apply_tab_title(st.session_state["tab_title"])
 
 if "message_history" not in st.session_state:
     st.session_state["message_history"] = []
