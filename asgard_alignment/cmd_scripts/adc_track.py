@@ -145,14 +145,26 @@ def parse_args():
 
 
 def parse_ra_dec(ra_str, dec_str):
-    ra = float(ra_str[:2]) + float(ra_str[2:4]) / 60 + float(ra_str[4:]) / 3600
+    if '.' not in ra_str and '.' not in dec_str:
+        # case where the format is hhmmss or ddmmss are ints
+        ra_int = int(ra_str)
+        dec_int = int(dec_str)
+        ra = ra_int // 10000 + (ra_int % 10000) // 100 / 60 + (ra_int % 100) / 3600
+        sign = -1 if dec_int < 0 else 1
+        dec_int = abs(dec_int)
+        dec = sign * (dec_int // 10000 + (dec_int % 10000) // 100 / 60 + (dec_int % 100) / 3600)
+
+    elif '.'  in ra_str  '.' not in dec_str:
+        ra = float(ra_str[:2]) + float(ra_str[2:4]) / 60 + float(ra_str[4:]) / 3600
+        sign = -1 if dec_str[0] == "-" else 1
+        if dec_str[0] in ["-", "+"]:
+            dec_str = dec_str[1:]
+        dec = float(dec_str[:2]) + float(dec_str[2:4]) / 60 + float(dec_str[4:]) / 3600
+        dec *= sign
+    else:
+        print("ERROR: RA and Dec must both be in the same format (either hhmmss/ddmmss or hhmmss.ssss/ddmmss.ss).")
     ra *= 15
 
-    sign = -1 if dec_str[0] == "-" else 1
-    if dec_str[0] in ["-", "+"]:
-        dec_str = dec_str[1:]
-    dec = float(dec_str[:2]) + float(dec_str[2:4]) / 60 + float(dec_str[4:]) / 3600
-    dec *= sign
     return ra, dec
 
 
