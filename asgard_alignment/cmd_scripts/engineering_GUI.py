@@ -3818,7 +3818,7 @@ with col_main:
             
 
             st.subheader("Module/Beam Selection")
-            modules = ["Heimdallr", "Baldr", "Solarstein"]
+            modules = ["Heimdallr", "Baldr"]
             beams = [1, 2, 3, 4]
 
             header_cols = st.columns(5)
@@ -3835,7 +3835,7 @@ with col_main:
                     st.write(module)
 
                 for col, beam in zip(row_cols[1:], beams):
-                    tick_value = f"{module}_beam{beam}"
+                    tick_value = f"{module[0]}{beam}"
                     checkbox_key = f"load_state_tick_{module}_{beam}"
                     with col:
                         if st.checkbox(
@@ -3844,6 +3844,31 @@ with col_main:
                             all_ticks.append(tick_value)
 
             st.text(f"Selected: {all_ticks}")
+            if st.button("Load subset (never loads devices common to all beams)"):
+                if selected_file is not None:
+                    full_file = os.path.join(pth, selected_file)
+                    print(f"reading {full_file}")
+                    with open(full_file) as f:
+                        states = json.load(f)
+
+                    for state in states:
+                        st.text(state["name"])
+                        starting_letter = state["name"][0]
+                        beam_idx = state["name"][-1]
+
+                        if state["is_connected"]:
+                            if "BLF" in state["name"]:
+                                # BLF can't tell where it is, so do nothing
+                                print("passing on BLF")
+                                pass
+                            else:
+                                for tick in all_ticks:
+                                    if tick[0] == starting_letter and tick[1] == beam_idx:
+                                        message = (
+                                            f"moveabs {state['name']} {state['position']}"
+                                        )
+                                        send_and_get_response(message)
+
 
         if routine_options == "See All States":
 
