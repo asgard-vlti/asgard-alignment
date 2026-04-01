@@ -3131,11 +3131,15 @@ with col_main:
                     for beam in range(1,5):
                         msg = f"read {n}{beam}"
                         pos=  send_and_get_response(msg)
-                        ss.append(float(pos))
+                        try:
+                            pos = float(pos)
+                        except:
+                            pos=None
+                        ss.append(pos)
                     steps.append(ss)
                 
                 for n,ss in zip(names, steps):
-                    st.print("\t".join(ss))
+                    st.text("\t".join([str(s) for s in ss]))
 
             st.subheader("Slew subset")
             # dropdown with "adc_upper", "adc_lower", "hpol"
@@ -3154,6 +3158,9 @@ with col_main:
             )
 
             msg = f"rotm_slew {motor_set} {n_steps}"
+            if st.button("Send"):
+                res = send_and_get_response(msg)
+                st.text(res)
 
         if routine_options == "Save state":
             instruments = ["Heimdallr", "Baldr", "Solarstein", "All"]
