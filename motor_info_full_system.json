@@ -553,7 +553,7 @@
         "semaphore_id": 42
     },
     {
-        "name": "HPOL2",
+        "name": "HPOL3",
         "motor_type": "GD40Z",
         "serial_number": "",
         "named_pos" : {

@@ -3817,6 +3817,34 @@ with col_main:
             st.subheader("Load subset")
             
 
+            st.subheader("Module/Beam Selection")
+            modules = ["Heimdallr", "Baldr", "Solarstein"]
+            beams = [1, 2, 3, 4]
+
+            header_cols = st.columns(5)
+            with header_cols[0]:
+                st.markdown("**Module**")
+            for col, beam in zip(header_cols[1:], beams):
+                with col:
+                    st.markdown(f"**{beam}**")
+
+            all_ticks = []
+            for module in modules:
+                row_cols = st.columns(5)
+                with row_cols[0]:
+                    st.write(module)
+
+                for col, beam in zip(row_cols[1:], beams):
+                    tick_value = f"{module}_beam{beam}"
+                    checkbox_key = f"load_state_tick_{module}_{beam}"
+                    with col:
+                        if st.checkbox(
+                            "", key=checkbox_key, label_visibility="collapsed"
+                        ):
+                            all_ticks.append(tick_value)
+
+            st.text(f"Selected: {all_ticks}")
+
         if routine_options == "See All States":
 
             # Mapping dictionary for the motor data on the image
