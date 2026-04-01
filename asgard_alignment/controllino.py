@@ -686,6 +686,22 @@ class RotationMotorTeensy(UController):
         for name in STEPPER_GROUPS[subset_name]:
             self.enable(name)
 
+    def move_enabled_relative(self, steps: int) -> bool:
+        """
+        Command to move all enabled stepper motors by a relative number of steps.
+
+        Parameters
+        ----------
+        steps : int
+            Number of steps to move.
+
+        Returns
+        -------
+        bool
+            Status of the command.
+        """
+        return self.send_command(f"r{steps}")
+
     # Some functions for the stepper motors
     def rmove(self, steps: int) -> bool:
         """

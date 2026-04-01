@@ -998,7 +998,7 @@ class MultiDeviceServer:
             self.instr._controllers["rotm_teensy"].disable_all()
 
             self.instr._controllers["rotm_teensy"].enable_subset(adc_set)
-            self.instr._controllers["rotm_teensy"].move_relative(reltarget)
+            self.instr._controllers["rotm_teensy"].move_enabled_relative(reltarget)
 
             return "ACK"
 
