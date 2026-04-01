@@ -1,0 +1,18 @@
+[observatory]
+lat = -24.62743941
+long = -70.40498689
+el = 2669
+
+[dispersion_eqns]
+const_a = 1.0
+sign1 = 1.0
+
+[adcs_zeropos]
+BADCU1 = -2000
+BADCL1 = -14800
+BADCU2 = -7400
+BADCL2 = -16500
+BADCU3 = -7800
+BADCL3 = 1200
+BADCU4 = 13200
+BADCL4 = -13200
