@@ -61,12 +61,12 @@ def get_devices():
 
 # stepper motors. First entry corresponds to motor config file, second to the
 # number in the Teensy.
-STEPPER_NAME_TO_NUM = {
-    "HPOL1": 4,
-    "HPOL2": 5,
-    "HPOL3": 6,
-    "HPOL4": 7,
-}
+# STEPPER_NAME_TO_NUM = {
+#     "HPOL1": 4,
+#     "HPOL2": 5,
+#     "HPOL3": 6,
+#     "HPOL4": 7,
+# }
 
 # TODO: check that the upper/lower and beam correspondence is right!!
 STEPPER_NAME_TO_NUM = {
@@ -79,7 +79,7 @@ STEPPER_NAME_TO_NUM = {
     "HPOL3": 6,
     "HPOL4": 7,
     "BACU3": 8,
-    "BACL3": 8,
+    "BACL3": 9,
     "BACU4": 10,
     "BACL4": 11,
 }
