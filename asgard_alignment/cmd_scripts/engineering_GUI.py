@@ -3152,17 +3152,17 @@ with col_main:
                 steps = []
                 for n in names:
                     ss = []
-                    for beam in range(1,5):
+                    for beam in range(1, 5):
                         msg = f"read {n}{beam}"
-                        pos=  send_and_get_response(msg)
+                        pos = send_and_get_response(msg)
                         try:
                             pos = float(pos)
                         except:
-                            pos=None
+                            pos = None
                         ss.append(pos)
                     steps.append(ss)
-                
-                for n,ss in zip(names, steps):
+
+                for n, ss in zip(names, steps):
                     st.text("\t".join([str(s) for s in ss]))
 
             st.subheader("Slew subset")
@@ -3772,6 +3772,7 @@ with col_main:
                 # plt.savefig(args.data_path + f'clusters_heatmap_beam{args.beam}.png')
                 st.pyplot(fig)
                 plt.close("all")
+
         if routine_options == "Load state":
             # text box and reading of the json
             text_col, button_col = st.columns(2)
