@@ -258,14 +258,14 @@ def ensure_common_position(label, positions):
 
 def calculate_adc_targets(alt, az, constants):
     dispersion = 1.0 / np.tan(np.radians(alt))
-    acos_arg = 1 - constants.const_a * dispersion
-    if acos_arg < -1 or acos_arg > 1:
+    asin_arg = constants.const_a * dispersion
+    if asin_arg < -1 or asin_arg > 1:
         print(
             f"ERROR: Invalid acos input {acos_arg:.6f}. Target not reachable for current model."
         )
         sys.exit(1)
 
-    delta = np.degrees(np.arccos(acos_arg))
+    delta = np.degrees(np.asin(asin_arg))
     adc_a_target = constants.sign1 * (az - alt - 12.98) + delta
     adc_b_target = constants.sign1 * (az - alt - 12.98) - delta
     return int(adc_a_target * 100), int(adc_b_target * 100)

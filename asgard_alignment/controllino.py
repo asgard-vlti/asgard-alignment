@@ -70,18 +70,18 @@ def get_devices():
 
 # TODO: check that the upper/lower and beam correspondence is right!!
 STEPPER_NAME_TO_NUM = {
-    "BACU1": 0,
-    "BACL1": 1,
-    "BACU2": 2,
-    "BACL2": 3,
+    "BACL1": 0,
+    "BACU1": 1,
+    "BACL2": 2,
+    "BACU2": 3,
     "HPOL1": 4,
     "HPOL2": 5,
     "HPOL3": 6,
     "HPOL4": 7,
-    "BACU3": 8,
-    "BACL3": 9,
-    "BACU4": 10,
-    "BACL4": 11,
+    "BACL3": 8,
+    "BACU3": 9,
+    "BACL4": 10,
+    "BACU4": 11,
 }
 
 STEPPER_GROUPS = {

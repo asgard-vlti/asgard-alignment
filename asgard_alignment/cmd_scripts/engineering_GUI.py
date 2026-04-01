@@ -87,14 +87,6 @@ quick_data_path = (
     f"/home/asg/Progs/repos/asgard-alignment/calibration/reports/{tstamp_rough}/"
 )
 
-os.makedirs(quick_data_path, exist_ok=True)
-
-
-# make GUI wide
-DEFAULT_TAB_TITLE = "Asgard alignment engineering GUI"
-st.set_page_config(page_title=DEFAULT_TAB_TITLE, layout="wide")
-
-
 def _apply_tab_title(title):
     safe_title = json.dumps(title)
     components.html(
@@ -102,16 +94,22 @@ def _apply_tab_title(title):
         height=0,
     )
 
+DEFAULT_TAB_TITLE = "Asgard alignment engineering GUI"
 
 def set_tab_title(title):
     st.session_state["tab_title"] = title
     _apply_tab_title(title)
 
+os.makedirs(quick_data_path, exist_ok=True)
+
 
 if "tab_title" not in st.session_state:
     st.session_state["tab_title"] = DEFAULT_TAB_TITLE
 
-print(st.session_state["tab_title"])
+# make GUI wide
+st.set_page_config(page_title=st.session_state["tab_title"], layout="wide")
+
+
 
 # Re-apply the most recent title on each rerun so button interactions do not reset it.
 _apply_tab_title(st.session_state["tab_title"])
@@ -3189,7 +3187,6 @@ with col_main:
                 st.text(res)
 
             
-            print("after click", st.session_state["tab_title"])
 
         if routine_options == "Save state":
             instruments = ["Heimdallr", "Baldr", "Solarstein", "All"]
@@ -3798,25 +3795,27 @@ with col_main:
 
                 selected_file = st.selectbox("Select a file:", suffixes)
 
-            with button_col:
-                if st.button("Load"):
-                    if selected_file is not None:
-                        full_file = os.path.join(pth, selected_file)
-                        print(f"reading {full_file}")
-                        with open(full_file) as f:
-                            states = json.load(f)
+            if st.button("Load all motors"):
+                if selected_file is not None:
+                    full_file = os.path.join(pth, selected_file)
+                    print(f"reading {full_file}")
+                    with open(full_file) as f:
+                        states = json.load(f)
 
-                        for state in states:
-                            if state["is_connected"]:
-                                if "BLF" in state["name"]:
-                                    # BLF can't tell where it is, so do nothing
-                                    print("passing on BLF")
-                                    pass
-                                else:
-                                    message = (
-                                        f"moveabs {state['name']} {state['position']}"
-                                    )
-                                    send_and_get_response(message)
+                    for state in states:
+                        if state["is_connected"]:
+                            if "BLF" in state["name"]:
+                                # BLF can't tell where it is, so do nothing
+                                print("passing on BLF")
+                                pass
+                            else:
+                                message = (
+                                    f"moveabs {state['name']} {state['position']}"
+                                )
+                                send_and_get_response(message)
+
+            st.subheader("Load subset")
+            
 
         if routine_options == "See All States":
 
@@ -4059,5 +4058,3 @@ with col_main:
                         col.write(data[i][keys[j]])
 
 
-
-print("very end", st.session_state["tab_title"])
