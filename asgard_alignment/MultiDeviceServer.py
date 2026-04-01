@@ -990,6 +990,11 @@ class MultiDeviceServer:
             """
             Enable motor set U or L, then move them relative
             """
+            reltarget = int(reltarget)
+
+            if adc_set not in asgard_alignment.controllino.STEPPER_GROUPS.keys():
+                return f"NACK: Invalid ADC set {adc_set}, must be one of {list(asgard_alignment.controllino.STEPPER_GROUPS.keys())}"
+
             self.instr._controllers["rotm_teensy"].disable_all()
 
             self.instr._controllers["rotm_teensy"].enable_subset(adc_set)
@@ -1086,7 +1091,7 @@ class MultiDeviceServer:
             "temp_status": "temp_status {}",
             "set_kaya": "set_kaya {}",
             "rotm_disable": "rotm_disable",
-            "rotm_slew": "rotm_slew {} {} {}",
+            "rotm_slew": "rotm_slew {} {}",
         }
 
         try:
