@@ -3122,7 +3122,21 @@ with col_main:
             if st.button("Disable all"):
                 send_and_get_response("rotm_disable")
 
-            st.subheading("Slew subset")
+            if st.button("read all"):
+                names = ["BACU", "BACL", "HPOL"]
+                steps = []
+                for n in names:
+                    ss = []
+                    for beam in range(1,5):
+                        msg = f"read {n}{beam}"
+                        pos=  send_and_get_response(msg)
+                        ss.append(float(pos))
+                    steps.append(ss)
+                
+                for n,ss in zip(names, steps):
+                    st.print("\t".join(ss))
+
+            st.subheader("Slew subset")
             # dropdown with "adc_upper", "adc_lower", "hpol"
             motor_set = st.selectbox(
                 "Select motor set to slew",
