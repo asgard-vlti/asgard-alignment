@@ -48,7 +48,7 @@ def shutdown(inc_CRED):
     if inc_CRED:
         c_red_connection = open_zmq_connection(6667)
 
-    cc = co.Controllino("192.168.100.10", init_motors=False)
+    cc = co.PowerControllino("192.168.100.10", init_motors=False)
 
     # turn off all sources: SRL, SGL and SBB
     lamps = ["SRL", "SGL", "SBB"]

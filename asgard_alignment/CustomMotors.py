@@ -9,7 +9,7 @@ class MFF101(asgard_alignment.ESOdevice.Motor):
         self,
         name: str,
         semaphore_id: int,
-        controllino_controller: asgard_alignment.controllino.Controllino,
+        controllino_controller: asgard_alignment.controllino.UController,
         named_pos: dict,
     ) -> None:
         super().__init__(
@@ -78,7 +78,7 @@ class Flip8893KM(asgard_alignment.ESOdevice.Motor):
         self,
         name,
         semaphore_id,
-        controllino_controller: asgard_alignment.controllino.Controllino,
+        controllino_controller: asgard_alignment.controllino.UController,
         modulation_value,
         delay_time,
     ) -> None:
@@ -166,7 +166,7 @@ class RotationController:
     Each rotation stage knows this controller
     """
 
-    def __init__(self, con: asgard_alignment.controllino.Controllino) -> None:
+    def __init__(self, con: asgard_alignment.controllino.UController) -> None:
         self.con = con
 
 
