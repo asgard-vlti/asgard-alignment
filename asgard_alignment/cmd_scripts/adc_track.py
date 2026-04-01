@@ -17,6 +17,11 @@ import numpy as np
 import astropy.units as u
 from astropy.coordinates import SkyCoord, EarthLocation, AltAz
 from astropy.time import Time
+from astropy.utils import iers
+
+iers.conf.auto_download = False
+print(iers.conf.iers_degraded_accuracy)
+iers.conf.iers_degraded_accuracy = "warn"
 
 try:
     import tomllib

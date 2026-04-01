@@ -111,6 +111,8 @@ def set_tab_title(title):
 if "tab_title" not in st.session_state:
     st.session_state["tab_title"] = DEFAULT_TAB_TITLE
 
+print(st.session_state["tab_title"])
+
 # Re-apply the most recent title on each rerun so button interactions do not reset it.
 _apply_tab_title(st.session_state["tab_title"])
 
@@ -3186,6 +3188,9 @@ with col_main:
                 res = send_and_get_response(msg)
                 st.text(res)
 
+            
+            print("after click", st.session_state["tab_title"])
+
         if routine_options == "Save state":
             instruments = ["Heimdallr", "Baldr", "Solarstein", "All"]
             # grid of 3 rows, 2 cols, with first col being the save location
@@ -4051,3 +4056,7 @@ with col_main:
                                 send_and_get_response(message)
                     else:
                         col.write(data[i][keys[j]])
+
+
+
+print("very end", st.session_state["tab_title"])
