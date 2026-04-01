@@ -634,7 +634,7 @@ class Instrument:
     def _open_ucontrollers(self):
         self._controllers["controllino"] = (
             asgard_alignment.controllino.PowerControllino(
-                self._other_config["controllino0"]["ip_address"]
+                self._other_config["controllino"]["ip_address"]
             )
         )
 
@@ -1215,13 +1215,20 @@ class Instrument:
                 self._motor_config[name]["named_pos"],
             )
             return True
-        # elif self._motor_config[name]["motor_type"] in ["GD40Z"]:
-        #     self.devices[name] = asgard_alignment.CustomMotors.GD40Z(
-        #         name,
-        #         self._motor_config[name]["semaphore_id"],
-        #         self._controllers["stepper_controllino"],
-        #     )
-        #     return True
+        elif self._motor_config[name]["motor_type"] in ["GD40Z"]:
+            self.devices[name] = asgard_alignment.CustomMotors.GD40Z(
+                name,
+                self._motor_config[name]["semaphore_id"],
+                self._controllers["rotm_teensy"],
+            )
+            return True
+        elif self._motor_config[name]["motor_type"] in ["PR50PP"]:
+            self.devices[name] = asgard_alignment.CustomMotors.PR50PP(
+                name,
+                self._motor_config[name]["semaphore_id"],
+                self._controllers["rotm_teensy"],
+            )
+            return True
 
     @staticmethod
     def find_managed_USB_hub_port():

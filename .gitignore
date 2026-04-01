@@ -18,6 +18,8 @@
 !config_files/phasemask_positions/beam4/phase_positions_beam_4_2024-12-16T02-05-00.json
 !config_files/default_cred1_config.json
 
+*.npy
+
 *.log
 
 *.delete_this
