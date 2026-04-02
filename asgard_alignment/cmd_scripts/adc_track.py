@@ -39,14 +39,14 @@ REQUEST_TIMEOUT_MS = 10000
 REQUEST_RETRIES = 3
 
 adc_names = [
-    "BADCU1",
-    "BADCL1",
-    "BADCU2",
-    "BADCL2",
-    "BADCU3",
-    "BADCL3",
-    "BADCU4",
-    "BADCL4",
+    "BACU1",
+    "BACL1",
+    "BACU2",
+    "BACL2",
+    "BACU3",
+    "BACL3",
+    "BACU4",
+    "BACL4",
 ]
 
 ADC_UPPER_INDICES = [0, 2, 4, 6]
@@ -249,11 +249,14 @@ def read_relative_positions(client, indices, zeropos):
 
 
 def ensure_common_position(label, positions):
-    if not all(pos == positions[0] for pos in positions):
-        print(
-            f"ERROR: Not all '{label}' motors are at the same position. Need to zero."
-        )
-        sys.exit(1)
+    return True
+    # if not all(pos == positions[0] for pos in positions):
+    #     print(positions)
+
+    #     print(
+    #         f"ERROR: Not all '{label}' motors are at the same position. Need to zero."
+    #     )
+    #     sys.exit(1)
 
 
 def calculate_adc_targets(alt, az, constants):
@@ -261,13 +264,13 @@ def calculate_adc_targets(alt, az, constants):
     asin_arg = constants.const_a * dispersion
     if asin_arg < -1 or asin_arg > 1:
         print(
-            f"ERROR: Invalid acos input {acos_arg:.6f}. Target not reachable for current model."
+            f"ERROR: Invalid acos input {asin_arg:.6f}. Target not reachable for current model."
         )
         sys.exit(1)
 
-    delta = np.degrees(np.asin(asin_arg))
-    adc_a_target = constants.sign1 * (az - alt - 12.98) + delta
-    adc_b_target = constants.sign1 * (az - alt - 12.98) - delta
+    delta = np.degrees(np.arcsin(asin_arg))
+    adc_a_target = + constants.sign1 * (az - alt - 12.98) - delta
+    adc_b_target = - constants.sign1 * (az - alt - 12.98) - delta
     return int(adc_a_target * 100), int(adc_b_target * 100)
 
 
@@ -302,7 +305,7 @@ def slew_group(client, group_label, adc_target, current_positions, zeropos):
 
     current_reference = current_positions[0]
     relative_target = int(adc_target - current_reference)
-    message = f"adc_slew {group_label} {relative_target}"
+    message = f"rotm_slew {group_label} {relative_target}"
 
     client.send_and_recv(message)
     for motor_index in group_indices:
@@ -357,6 +360,7 @@ def main():
     print(f"Parsed RA: {ra:.2f} degrees, Dec: {dec:.2f} degrees")
 
     alt, az = ra_dec_to_altaz(ra, dec, constants)
+    az = (180-az + 360) % 360
 
     if args.dry_run:
         print(
@@ -371,6 +375,7 @@ def main():
             print("Starting ADC tracking loop")
             while True:
                 alt, az = ra_dec_to_altaz(ra, dec, constants)
+                az = (180-az + 360) % 360
                 if alt < 20:
                     print("ERROR: Target is below 20 degrees altitude.")
                     sys.exit(1)

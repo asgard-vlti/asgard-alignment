@@ -38,7 +38,7 @@ def load_config(config_path):
     ]
 
 
-def wait_until_reached(socket, adc_name, abs_target, timeout_s=60, poll_interval_s=0.5):
+def wait_until_reached(socket, adc_name, abs_target, timeout_s=120, poll_interval_s=0.5):
     print(f"Waiting for {adc_name} to reach {abs_target}...")
     total_time = 0.0
 
@@ -70,7 +70,7 @@ def main():
         default=os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             "config_files",
-            "adc_zeropos_config.toml",
+            "adc_slew_config.toml",
         ),
         help="Path to the ADC zero positions config file",
     )
@@ -90,3 +90,6 @@ def main():
         response = send_and_recv(socket, f"moveabs {adc_name} {zeropos}")
         print(f"Response: {response}")
         wait_until_reached(socket, adc_name, zeropos)
+
+if __name__ == "__main__":
+    main()

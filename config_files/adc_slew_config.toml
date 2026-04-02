@@ -4,7 +4,7 @@ long = -70.40498689
 el = 2669
 
 [dispersion_eqns]
-const_a = 1.0
+const_a = 0.57
 sign1 = 1.0
 
 # done in lab 1/4/2026
@@ -13,19 +13,19 @@ BADCL1 = 3800
 BADCU1 = 13800
 BADCL2 = -13500
 BADCU2 = -11100
-BADCL3 = 4600
-BADCU3 = 4600
+BADCL3 = -13400
+BADCU3 = -13400
 BADCL4 = 4500
 BADCU4 = -4500
 
 
 # opposite dispersion direction case
 # [adcs_zeropos]
-BADCL1 = -14200
-BADCU1 = -4200
-BADCL2 = 4500
-BADCU2 = 6900
-BADCL3 = -13400
-BADCU3 = -13400
-BADCL4 = -13500
-BADCU4 = 13500
+# BADCL1 = -14200
+# BADCU1 = -4200
+# BADCL2 = 4500
+# BADCU2 = 6900
+# BADCL3 = 4600
+# BADCU3 = 4600
+# BADCL4 = -13500
+# BADCU4 = 13500
