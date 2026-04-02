@@ -5,7 +5,8 @@ el = 2669
 
 [dispersion_eqns]
 const_a = 0.57
-sign1 = 1.0
+sign1 = -1.0
+sign2 = -1.0
 
 # done in lab 1/4/2026
 [adcs_zeropos]
