@@ -67,6 +67,9 @@ for target in targets:
 
     adc_upper, adc_lower = af.calculate_adc_targets(alt, az, consts)
 
+    print(adc_upper, adc_lower)
+    print((adc_upper + 18000) % 36000 - 18000, (adc_lower + 18000) % 36000 - 18000)
+
     vec_lower = af.angle_to_vector(adc_lower)
     vec_upper = af.angle_to_vector(18000 - adc_upper)
 
