@@ -1002,6 +1002,10 @@ class MultiDeviceServer:
 
             return "ACK"
 
+        def status():
+            # TODO
+            return None
+
         # TODO: restart controller function?
         first_word_to_function = {
             "read": read_msg,
@@ -1047,6 +1051,7 @@ class MultiDeviceServer:
             "rotm_home": home_rotm,
             "rotm_slew": rotm_slew,
             "rotm_disable": rotm_disable,
+            "status": status,
         }
 
         first_word_to_format = {
@@ -1092,6 +1097,7 @@ class MultiDeviceServer:
             "set_kaya": "set_kaya {}",
             "rotm_disable": "rotm_disable",
             "rotm_slew": "rotm_slew {} {}",
+            "status": "status",
         }
 
         try:
