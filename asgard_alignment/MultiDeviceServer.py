@@ -615,7 +615,7 @@ class MultiDeviceServer:
         # in coded in C++ and needs null character to mark end of the string)
 
         repMsg = json.dumps(reply) + "\0"
-        logging.info(repMsg)
+        logging.info(json.dumps(reply))
         # self.server.send_string(repMsg)
 
         return False, repMsg
