@@ -7,28 +7,43 @@ import time
 # socket = context.socket(zmq.REP)
 # socket.bind("tcp://*:5555")
 
+scripts_of_interest = {
+    "MDS": "python asgard_alignment/MultiDeviceServer.py",
+    "Eng gui":"streamlit run asgard_alignment/cmd_scripts/engineering_GUI.py",
+    "CRED1": "/bin/cred1_server",
+    "DM": "/bin/cred1_server",
+    "BTT1": "/usr/local/bin/baldr_tt /usr/local/etc/def1.toml --socket 'tcp://*:6671'",
+    "BTT2": "/usr/local/bin/baldr_tt /usr/local/etc/def2.toml --socket 'tcp://*:6672'",
+    "BTT3": "/usr/local/bin/baldr_tt /usr/local/etc/def3.toml --socket 'tcp://*:6673'",
+    "BTT4": "/usr/local/bin/baldr_tt /usr/local/etc/def4.toml --socket 'tcp://*:6674'",
+    "Heimdallr": "/usr/local/bin/heimdallr",
+    "MCS" : "/home/asg/.conda/envs/asgard/bin/mcs-client",
+    "Heim Telem":"/home/asg/.conda/envs/asgard/bin/save-ft-performance",
+    "DCS (back end)":"/home/asg/.conda/envs/asgard/bin/back-end-server"
+}
 
-def get_running_scripts():
-    status = {}
+
+def get_running_scripts(scripts_of_interest):
+    status = {k:"closed" for k in scripts_of_interest.keys()}
     for proc in psutil.process_iter(["pid", "name", "cmdline"]):
         try:
-            # Look for python scripts; filter by specific keywords in your filenames
-            if "python" in proc.info["name"].lower():
-                cmdline = " ".join(proc.info["cmdline"])
-                print(cmdline)
-                # if "my_experiment_script.py" in cmdline:
-                #     status["Experiment_1"] = "Running"
+            cmdline = " ".join(proc.info["cmdline"])
+            if "xterm" in cmdline:
+                for k,v in scripts_of_interest.items():
+                    if v in cmdline:
+                        status[k] = "open"
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return status
 
 
 if __name__ == "__main__":
-    last = time.time()
+    last = 0
     while True:
         if time.time() - last > 5:  # Check every 5 seconds
-            print("Current running scripts:", get_running_scripts())
+            print("Current running scripts:", get_running_scripts(scripts_of_interest))
             last = time.time()
+
 
 # while True:
 # message = socket.recv_string()
