@@ -75,7 +75,7 @@ def parse_args():
     parser.add_argument(
         "--track-interval",
         type=float,
-        default=5.0,
+        default=1.0,
         help="Seconds between track updates (only with --track)",
     )
 
