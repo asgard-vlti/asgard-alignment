@@ -16,16 +16,16 @@ config_file = "/home/taras/Documents/usyd/asgard/asgard-alignment/config_files/a
 consts = af.load_config(config_file)
 
 # %%
-sim_time = datetime.datetime(2026, 4, 2, 2, 40, 43, tzinfo=datetime.timezone.utc)
-# 	10 10 53.14,	-80 39 20.07
-ra = "101053.14"
-dec = "-803920.07"
+# sim_time = datetime.datetime(2026, 4, 2, 2, 40, 43, tzinfo=datetime.timezone.utc)
+# # 	10 10 53.14,	-80 39 20.07
+# ra = "101053.14"
+# dec = "-803920.07"
 
-# target 2:
-sim_time = datetime.datetime(2026, 4, 2, 3, 16, 43, tzinfo=datetime.timezone.utc)
-# 	14 57 33.25	-00 10 03.40
-ra = "145733.25"
-dec = "-001003.40"
+# # target 2:
+# sim_time = datetime.datetime(2026, 4, 2, 3, 16, 43, tzinfo=datetime.timezone.utc)
+# # 	14 57 33.25	-00 10 03.40
+# ra = "145733.25"
+# dec = "-001003.40"
 
 # target 3:
 # sim_time = datetime.datetime(2026, 4, 2, 3, 36, 43, tzinfo=datetime.timezone.utc)
@@ -34,21 +34,31 @@ dec = "-001003.40"
 # dec = "+352214.03"
 
 
+sim_time = datetime.datetime(2026, 4, 3, 1, 51, 43, tzinfo=datetime.timezone.utc)
+# 	06 51 07.87	-77 40 27.64
+ra = "065107.87"
+dec = "-774027.64"
+
 targets = [
+    # {
+    #     "ra": "101053.14",
+    #     "dec": "-803920.07",
+    #     "time": datetime.datetime(2026, 4, 2, 2, 40, 43, tzinfo=datetime.timezone.utc),
+    # },
+    # {
+    #     "ra": "145733.25",
+    #     "dec": "-001003.40",
+    #     "time": datetime.datetime(2026, 4, 2, 3, 16, 43, tzinfo=datetime.timezone.utc),
+    # },
+    # {
+    #     "ra": "112753.18",
+    #     "dec": "+352214.03",
+    #     "time": datetime.datetime(2026, 4, 2, 3, 36, 43, tzinfo=datetime.timezone.utc),
+    # },
     {
-        "ra": "101053.14",
-        "dec": "-803920.07",
-        "time": datetime.datetime(2026, 4, 2, 2, 40, 43, tzinfo=datetime.timezone.utc),
-    },
-    {
-        "ra": "145733.25",
-        "dec": "-001003.40",
-        "time": datetime.datetime(2026, 4, 2, 3, 16, 43, tzinfo=datetime.timezone.utc),
-    },
-    {
-        "ra": "112753.18",
-        "dec": "+352214.03",
-        "time": datetime.datetime(2026, 4, 2, 3, 36, 43, tzinfo=datetime.timezone.utc),
+        "ra": "065107.87",
+        "dec": "-774027.64",
+        "time": datetime.datetime(2026, 4, 3, 1, 51, 43, tzinfo=datetime.timezone.utc),
     },
 ]
 
