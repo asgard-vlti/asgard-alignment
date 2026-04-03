@@ -1003,8 +1003,7 @@ class MultiDeviceServer:
             return "ACK"
 
         def status():
-            # TODO
-            return None
+            return "ACK"
 
         # TODO: restart controller function?
         first_word_to_function = {
