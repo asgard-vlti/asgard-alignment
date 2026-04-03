@@ -19,9 +19,6 @@ import time
 
 from asgard_alignment import FLI_Cameras as FLI
 import asgard_alignment.Engineering
-import common.DM_basis_functions
-
-from asgard_alignment.DM_shm_ctrl import dmclass
 
 try:
     import common.phasemask_centering_tool as pct
@@ -734,224 +731,6 @@ def handle_kaya():
             else:
                 st.success(f"Kaya powered off successfully.")
 
-
-def handle_deformable_mirror():
-
-    beam = targets[0].split("DM")[1]
-
-    if "dm_targets" not in st.session_state:
-        if not targets:
-            st.session_state["dm_targets"] = []
-        else:
-            st.session_state["dm_targets"] = [target for target in targets]
-            st.session_state["dm_targets"] = [target for target in targets]
-
-    if "dm_last_command" not in st.session_state:
-        st.session_state["dm_last_command"] = None  # To store the last DM command
-
-    if "dm_apply_flat_map" not in st.session_state:
-        st.session_state["dm_apply_flat_map"] = False  # Track if Flat Map is applied
-
-    if "dm_apply_cross" not in st.session_state:
-        st.session_state["dm_apply_cross"] = False  # Track if Flat Map is applied
-
-    # Add a subheader for Deformable Mirror (DM) control
-    st.subheader("Deformable Mirror (DM) Control")
-
-    ff = "/home/asg/Progs/repos/asgard-alignment/config_files/dm_shared_memory_config.json"
-    with open(ff, "r") as f:
-        config_data = json.load(f)
-
-        url = config_data["commands_urls"][f"{int(beam)-1}"]
-        dm_shm = sa.from_url(np.ndarray, url)
-        # Note an absolute change here will not change the shared memory variable, only the local copy
-        # make sure to use relative changes
-        dm_shm *= 0.0  # zero all the DMs
-        dm_shm += 1.0  # unity all the DMs
-
-        # for beam in [0,1,2,3]:
-
-        #     url_dict[beam+1] = config_data['commands_urls'][f'{beam}'] # url of the shared memory for the DM
-
-        #     dm_dict[beam+1] = sa.from_url(np.ndarray, url_dict[beam]) # relative changes to this variable changes it in shared memory!
-        #     # Note an absolute change here will not change the shared memory variable, only the local copy
-        #     # make sure to use relative changes
-        #     dm_dict[beam+1] *= 0.0 # zero all the DMs
-        #     dm_dict[beam+1] += 1.0 # unity all the DMs
-
-    # Dropdown for selecting the DM
-    # dm_name = st.selectbox(
-    #     "Select DM",
-    #     ["DM1", "DM2", "DM3", "DM4"],  # Assuming DM names from your config
-    #     key="dm_name",
-    # )
-
-    # Button to apply the flat map to the selected DM
-    # s_col1, s_col2, s_col3 = st.columns(3)
-
-    combined_mode = np.zeros(140)
-
-    # if st.button("Apply Flat Map"):
-    #     st.session_state["dm_apply_flat_map"] = True
-
-    #     if not targets:
-    #         st.error("No targets specified.")
-
-    #     combined_mode += common.DM_basis_functions.dm_flatmap_dict[f"{beam}"]
-
-    #     # for target in targets:
-    #     #     message = f"dmapplyflat {target}"
-    #     #     response = send_and_get_response(message)
-    #     #     if "ACK" in response:
-    #     #         st.success(f"Flat map successfully applied to {target}")
-    #     #     else:
-    #     #         st.error(f"Failed to apply flat map to {target}. Response: {response}")
-
-    #     st.session_state["dm_last_command"] = "Apply Flat Map"
-
-    # if st.button("Apply Cross"):
-    #     st.session_state["dm_apply_cross"] = True
-
-    #     if not targets:
-    #         st.error("No targets specified.")
-
-    #     combined_mode += 0.2 * common.DM_basis_functions.cross_map
-
-    #     # for target in targets:
-    #     #     message = f"dmapplycross {target}"
-    #     #     response = send_and_get_response(message)
-    #     #     if "ACK" in response:
-    #     #         st.success(f"Cross map successfully applied to {target}")
-    #     #     else:
-    #     #         st.error(f"Failed to apply cross map to {target}. Response: {response}")
-
-    #     st.session_state["dm_last_command"] = "Apply Cross Map"
-
-    apply_flat = st.checkbox(
-        "Apply Flat Map",
-        value=st.session_state["dm_apply_flat_map"],
-        key="flat_checkbox",
-    )
-    apply_cross = st.checkbox(
-        "Apply Cross Map",
-        value=st.session_state["dm_apply_cross"],
-        key="cross_checkbox",
-    )
-
-    if apply_flat:
-        combined_mode += common.DM_basis_functions.dm_flatmap_dict[f"{beam}"]
-        st.session_state["dm_last_command"] = "Apply Flat Map"
-
-    if apply_cross:
-        combined_mode += 0.2 * common.DM_basis_functions.cross_map
-        st.session_state["dm_last_command"] = "Apply Cross Map"
-
-    # Add a button to reset all sliders to zero
-    if st.button("Reset All Amplitudes", key="reset_amplitudes_button"):
-        for i in range(11):
-            st.session_state[f"slider_{i}"] = 0.0  # Reset slider values to zero
-
-    basis = common.DM_basis_functions.construct_command_basis(
-        basis="Zernike_pinned_edges",
-        number_of_modes=11,
-        Nx_act_DM=12,
-        Nx_act_basis=12,
-        act_offset=(0, 0),
-        without_piston=False,
-    ).T
-
-    basis[0] = (
-        1 / np.max(basis[0]) * basis[0]
-    )  # make piston = 1 (not normalized as others <M|M>=1)
-
-    # Zernike mode names for the first 11 modes
-    zernike_modes = [
-        "Z₀₀: Piston",
-        "Z₁₋₁: Tip (X Tilt)",
-        "Z₁₁: Tilt (Y Tilt)",
-        "Z₂₀: Defocus",
-        "Z₂₋₂: Astigmatism (45°)",
-        "Z₂₂: Astigmatism (0°/90°)",
-        "Z₃₋₃: Coma (X)",
-        "Z₃₁: Coma (Y)",
-        "Z₃₋₁: Trefoil (X)",
-        "Z₃₃: Trefoil (Y)",
-        "Z₄₀: Spherical Aberration",
-    ]
-
-    # Create two columns for sliders and plot
-    slider_col, plot_col = st.columns([1, 1])
-    with slider_col:
-        # Sliders for setting amplitudes for the first 11 modes in the `basis`
-        st.subheader("Set Amplitudes for Modes")
-        amplitudes = []
-        for i, mode_name in enumerate(zernike_modes):
-            amp = st.slider(
-                f"Amplitude for {mode_name}",
-                min_value=-0.2,
-                max_value=0.2,
-                value=0.0,
-                step=0.01,
-                key=f"slider_{i}",
-            )
-            amplitudes.append(amp)
-
-    with plot_col:
-        # Compute the weighted sum of basis terms
-        # if st.button("Apply Mode Combination", key="apply_mode_combination"):
-        if len(basis) != 11:
-            st.error(
-                "Insufficient basis functions provided. At least 11 modes are required."
-            )
-        else:
-            combined_mode += sum(
-                amplitude * mode for amplitude, mode in zip(amplitudes, basis[:11])
-            )
-            st.session_state["dm_last_command"] = "Apply Mode Combination"
-        # else:
-        #    combined_mode = np.zeros(140)
-
-        # Add flat and cross maps if ticked
-        # if apply_flat:
-        #     flat_map = common.DM_basis_functions.dm_flatmap_dict[f"{beam}"]
-        #     combined_mode += flat_map
-
-        # if apply_cross:
-        #     cross_map = common.DM_basis_functions.cross_map
-        #     combined_mode += 0.2 * cross_map
-
-        # Plot the combined mode
-        fig, ax = plt.subplots()
-        cax = ax.imshow(
-            common.DM_basis_functions.get_DM_command_in_2D(combined_mode),
-            cmap="viridis",
-            # vmax=0.8,
-            # vmin=0.2,
-        )  # Adjust dimensions as needed
-        fig.colorbar(cax, ax=ax)
-        ax.set_title("Applied Combined Mode")
-        st.pyplot(fig)
-        plt.close("all")
-
-    # set the DM to unity and then multiply by the combined mode.. We really need a set method!!!
-    dm_shm *= 0.0  # zero all the DMs
-    dm_shm += 1.0  # unity all the DMs
-    dm_shm *= combined_mode  # add the modes
-
-    ### Below is when we opened DM in the multi device server and communicated via ZMQ
-    # Placeholder for sending the combined mode to the DM
-    # response = send_and_get_response(f"dmapply {combined_mode}")
-    # if "ACK" in response:
-    #    st.success("Combined mode successfully applied to the DM.")
-    # else:
-    #    st.error(f"Failed to apply combined mode. Response: {response}")
-
-    # with s_col2:
-    #     pass
-    # with s_col3:
-    #     pass
-
-
 def handle_linear_stage():
     # linear stage interface
     st.subheader("Linear Stage Interface")
@@ -1512,25 +1291,18 @@ with col_main:
             )
             print(is_connected)
             if not is_connected:
-                if "DM" in component:
-                    st.write(
-                        f"DM uses shared memory, start server \n>ipython -i asgard_alignment/DM_shared_memory_server.py\
-                            \nneeds to run in conda base (check >conda env list). \nAlso DMs must not be connected any where else\
-                            (check no other server is using them)\n To Do: run this within MDS. Still experimental. Zernike modes disabled"
-                    )
-                else:
-                    st.write(f"Component(s) {targets} is/are not connected!")
+                st.write(f"Component(s) {targets} is/are not connected!")
 
-                    with st.form(key="connect_request"):
-                        submit = st.form_submit_button("Connect")
+                with st.form(key="connect_request"):
+                    submit = st.form_submit_button("Connect")
 
-                    if submit:
-                        for target in targets:
-                            # debug here
-                            if "BLF" in target:
-                                st.write(target)
-                            message = f"connect {target}"
-                            send_and_get_response(message)
+                if submit:
+                    for target in targets:
+                        # debug here
+                        if "BLF" in target:
+                            st.write(target)
+                        message = f"connect {target}"
+                        send_and_get_response(message)
 
             if (
                 component not in ["HTXP", "HTXI", "BTX", "BOTX"]
@@ -1556,7 +1328,8 @@ with col_main:
                 handle_linear_actuator()
 
             elif component in ["DM"]:
-                handle_deformable_mirror()
+                #handle_deformable_mirror()
+                print("WARNING: tried to use a DM. This is not implemented here.")
 
             elif component in ["phasemask"]:
                 handle_phasemask()
@@ -1578,17 +1351,16 @@ with col_main:
             "Select Routine",
             [
                 "Quick buttons",
-                # "Camera & DMs",
                 "Illumination",
                 "Heimdallr shutters",
                 "Move image/pupil",
-                "Phasemask Alignment",
                 "Rotation stages",
-                "Scan Mirror",
                 "Save state",
                 "Load state",
-                "See All States",
+                #"See All States",
                 "Health",
+                "Scan Mirror",
+                "Phasemask Alignment",
             ],
             key="routine_options",
         )
@@ -1718,91 +1490,6 @@ with col_main:
                                         f"moveabs {state['name']} {state['position']}"
                                     )
                                     send_and_get_response(message)
-
-            st.title("Deformable Mirrors (DM's)")
-
-            zbasis = common.DM_basis_functions.zer_bank(1, 10)
-
-            # use_calibrated_dm_flat = st.checkbox('Use a calibrated "Baldr DM flat')
-
-            if "dm_shm_dict" not in st.session_state:
-                st.session_state.dm_shm_dict = {
-                    beam_id: dmclass(beam_id=beam_id) for beam_id in [1, 2, 3, 4]
-                }
-
-            col1, col2, col3, col4, col5 = st.columns(5)
-            with col1:
-                if st.button("Zero all DM's"):
-                    for beam in [1, 2, 3, 4]:
-                        st.session_state.dm_shm_dict[beam].zero_all()
-
-            with col2:
-                if st.button("Apply Factory DM flat's"):
-                    for beam in [1, 2, 3, 4]:
-                        st.session_state.dm_shm_dict[beam].activate_flat()
-                        # if use_calibrated_dm_flat:
-                        #    st.session_state.dm_shm_dict[beam].activate_calibrated_flat()
-                        # else:
-            with col3:
-                if st.button("Apply Baldr DM flat's"):
-                    for beam in [1, 2, 3, 4]:
-                        st.session_state.dm_shm_dict[beam].activate_calibrated_flat()
-
-            with col4:
-                if st.button("Apply Heim DM flat's"):
-                    for beam in [1, 2, 3, 4]:
-                        # st.session_state.dm_shm_dict[beam].activate_cross(amp=0.2)
-                        wdirtmp = "/home/asg/Progs/repos/asgard-alignment/DMShapes/"  # os.path.dirname(__file__)
-                        flat_cmd = st.session_state.dm_shm_dict[beam].cmd_2_map2D(
-                            np.loadtxt(
-                                st.session_state.dm_shm_dict[beam].select_flat_cmd(
-                                    wdirtmp
-                                )
-                            )
-                        )
-                        flat_cmd_offset = np.loadtxt(
-                            wdirtmp + f"heim_flat_beam_{beam}.txt"
-                        )
-                        st.session_state.dm_shm_dict[beam].shms[0].set_data(
-                            flat_cmd + flat_cmd_offset
-                        )
-                        ##
-                        st.session_state.dm_shm_dict[beam].shm0.post_sems(1)
-            with col5:
-                if st.button("Apply DM cross"):
-                    for beam in [1, 2, 3, 4]:
-                        st.session_state.dm_shm_dict[beam].activate_cross(amp=0.2)
-
-            # st.write("Defocus")
-
-            # strength = st.slider(
-            #     "Strength", min_value=-0.5, max_value=0.5, value=0.0, step=0.01
-            # )
-
-            # if st.button("Apply defocus"):
-            #     for beam in [1, 2, 3, 4]:
-            #         st.session_state.dm_shm_dict[beam].set_data(strength * zbasis[3])
-
-            # basis = st.selectbox(
-            #     "Select Basis",
-            #     options=[
-            #         "Hadamard",
-            #         "Zonal",
-            #         "Zonal_pinned_edges",
-            #         "Zernike",
-            #         "Zernike_pinned_edges",
-            #         "fourier",
-            #         "fourier_pinned_edges",
-            #     ],
-            # )
-
-            # mode = st.number_input("Mode", min_value=0, max_value=50, value=5, step=1)
-
-            # strength = st.slider("Strength", min_value=0.0, max_value=1.0, value=0.1, step=0.01)
-
-            # if st.button("Apply aberration"):
-            #     for beam in [1,2,3,4]:
-            #         st.session_state.dm_shm_dict[beam].shms[2].set_data(  )
 
             st.title("Phase masks")
 
@@ -2292,193 +1979,6 @@ with col_main:
                             else:
                                 st.warning(f"Cannot find {fig_path}")
 
-            ##########################################
-            # COMMENT THINGS OUT THAT WE DONT WANT TO SHOW IN DEMO
-            ##########################################
-            # st.subheader("Build Strehl Models")
-            # st.write("have the phasemask's well aligned prior to starting.")
-            # st.write("We are going to apply varying degrees of turbulence and analyse the signals")
-
-            # phasemask_input = st.text_input("phasemask", "H3")
-            # cam_fps_input = st.number_input("Camera frames per seconds", min_value=100, max_value=1000, value=100, step=1)
-            # cam_gain_input = st.number_input("Camera gain", min_value=1, max_value=10, value=1, step=1)
-
-            # # "--max_time",f"{120}","--number_of_iterations",f"{10000}"
-            # STREHL_SCRIPTS = {
-            # "build_Strehl_model_beam_1": ["python", "calibration/build_strehl_model.py", "--beam_id", "1", "--phasemask", phasemask_input,"--max_time",f"{10}","--number_of_iterations",f"{10000}", "--cam_fps", f"{cam_fps_input}", "--cam_gain", f"{cam_gain_input}", "--fig_path", quick_data_path ],
-            # "build_Strehl_model_beam_2": ["python", "calibration/build_strehl_model.py", "--beam_id", "2", "--phasemask", phasemask_input,"--max_time",f"{10}","--number_of_iterations",f"{10000}", "--cam_fps", f"{cam_fps_input}", "--cam_gain", f"{cam_gain_input}", "--fig_path", quick_data_path ],
-            # "build_Strehl_model_beam_3": ["python", "calibration/build_strehl_model.py", "--beam_id", "3", "--phasemask", phasemask_input,"--max_time",f"{10}","--number_of_iterations",f"{10000}", "--cam_fps", f"{cam_fps_input}", "--cam_gain", f"{cam_gain_input}", "--fig_path", quick_data_path ],
-            # "build_Strehl_model_beam_4": ["python", "calibration/build_strehl_model.py", "--beam_id", "4", "--phasemask", phasemask_input,"--max_time",f"{10}","--number_of_iterations",f"{10000}", "--cam_fps", f"{cam_fps_input}", "--cam_gain", f"{cam_gain_input}", "--fig_path", quick_data_path ],
-            # }
-
-            # btn_key = f"build_Strehl_model_ALL_BEAMS"
-            # if st.button(f"{btn_key}"):
-            #     success = run_script(["python", "calibration/build_strehl_model.py", "--beam_id", "1,2,3,4", "--phasemask", phasemask_input, "--max_time","10.0","--number_of_iterations","10000","--cam_fps", f"{cam_fps_input}", "--cam_gain", f"{cam_gain_input}", "--fig_path", quick_data_path ] )
-
-            #     if success:
-            #         cols = st.columns(4)
-            #         for i, col in enumerate(cols):
-            #             with col:
-            #                 fig_path = os.path.join(quick_data_path,  f'strehl_model_beam{i+1}.png')
-            #                 if os.path.exists(fig_path):
-            #                     st.image(Image.open(fig_path), caption=f"Beam {i+1} Output", use_column_width=True)
-            #                 else:
-            #                     st.warning(f"Cannot find {fig_path}")
-
-            # cols = st.columns(4)
-            # for i, col in enumerate(cols):
-            #     with col:
-            #         btn_key = f"build_Strehl_model_beam_{i+1}"
-            #         if st.button(f"Run {btn_key}"):
-            #             success = run_script(STREHL_SCRIPTS[btn_key])
-
-            #             if success:
-            #                 # Note 'DM_registration_in_pixel_space.png' is generated in
-            #                 # calibrate_transform_between_DM_and_image from DM_registration which
-            #                 # doesn't have knowlodge of the beam number - so just overwrites the same
-            #                 # image each time.. so looking at the most recent - fine if done immediately after running script
-            #                 fig_path = os.path.join(STREHL_SCRIPTS[btn_key][-1], f"strehl_model_beam{i+1}.png")
-            #                 if os.path.exists(fig_path):
-            #                     st.image(Image.open(fig_path), caption=f"{btn_key} Output", use_column_width=True)
-            #                 else:
-            #                     st.warning(f"Cannot find {fig_path}")
-
-            # st.subheader("Build Interaction Matrix")
-            # st.write("have the phasemask's well aligned prior to starting.")
-
-            # cam_fps = st.number_input("Frames per sec", min_value=100, max_value=1500, value=100, step=50)
-            # cam_gain = st.number_input("Gain", min_value=1, max_value=20, value=1, step=1)
-            # signal_space =  st.selectbox('signal space for IM',('dm','pixel'))
-            # DM_flat = st.selectbox('DM flat',('baldr','factory'))
-            # basis_name = st.selectbox("Basis Name",('zonal','zernike')) #st.text_input("Basis Name", "zonal")
-            # poke_amp = st.number_input("Poke Amplitude", min_value=0.0, max_value=0.1, value=0.05, step=0.01)
-            # Nmodes = st.number_input("Number of Modes to Probe (zonal does 140 automatically)", min_value=1, max_value=140, value=140, step=1)
-            # phasemask = st.text_input("Phasemask", "H3")
-
-            # IM_SCRIPTS = {
-            # "build_IM_beam_1": ["python", "calibration/build_IM.py", "--beam_id", "1","--cam_fps",f"{cam_fps}","--cam_gain",f"{cam_gain}","--basis_name", f"{basis_name}","--DM_flat",f"{DM_flat}","--signal_space",f"{signal_space}","--Nmodes",f"{Nmodes}", "--phasemask", f"{phasemask}","--fig_path", quick_data_path ],
-            # "build_IM_beam_2": ["python", "calibration/build_IM.py", "--beam_id", "2","--cam_fps",f"{cam_fps}","--cam_gain",f"{cam_gain}","--basis_name", f"{basis_name}","--DM_flat",f"{DM_flat}","--signal_space",f"{signal_space}","--Nmodes",f"{Nmodes}", "--phasemask", f"{phasemask}","--fig_path", quick_data_path ],
-            # "build_IM_beam_3": ["python", "calibration/build_IM.py", "--beam_id", "3","--cam_fps",f"{cam_fps}","--cam_gain",f"{cam_gain}","--basis_name", f"{basis_name}","--DM_flat",f"{DM_flat}","--signal_space",f"{signal_space}","--Nmodes",f"{Nmodes}", "--phasemask", f"{phasemask}","--fig_path", quick_data_path ],
-            # "build_IM_beam_4": ["python", "calibration/build_IM.py", "--beam_id", "4","--cam_fps",f"{cam_fps}","--cam_gain",f"{cam_gain}","--basis_name", f"{basis_name}","--DM_flat",f"{DM_flat}","--signal_space",f"{signal_space}","--Nmodes",f"{Nmodes}", "--phasemask", f"{phasemask}","--fig_path", quick_data_path ],
-            # }
-
-            # cols = st.columns(4)
-            # for i, col in enumerate(cols):
-            #     with col:
-
-            #         btn_key = f"build_IM_beam_{i+1}"
-
-            #         # Run the script when button is clicked
-            #         if st.button(f"Run {btn_key}"):
-            #             success = run_script(IM_SCRIPTS[btn_key])
-
-            #             if success:
-            #                 fig_path = os.path.join(IM_SCRIPTS[btn_key][-1], f'IM_singularvalues_beam{i+1}.png')
-            #                 if os.path.exists(fig_path):
-            #                     st.image(Image.open(fig_path), caption=f"{btn_key} Output", use_column_width=True)
-            #                 else:
-            #                     st.warning(f"Cannot find {fig_path}")
-
-            # st.subheader("Process Interaction Matrix (Build Control Matrix)")
-            # st.write("have the phasemask's well aligned prior to starting.")
-
-            # LO = st.number_input("Max Zernike Index considered for low order modes (2 = tip/tilt)", min_value=2, max_value=10, value=2, step=1)
-            # inverse_method = st.selectbox("IM matrix inverse method",["zonal","map","pinv"]+[f"svd_truncation-{x}" for x in [2,5,10,15,20,30,40,50,60,70,80,90]])
-            # phasemask = st.text_input("Phasemask", "H3", key="phasemask_ctrl_matrix")
-
-            # PROCESS_IM_SCRIPTS = {
-            # "proc_IM_beam_1": ["python", "calibration/build_baldr_control_matrix.py", "--beam_id", "1","--LO",f"{LO}","--inverse_method",f"{inverse_method}", "--phasemask", f"{phasemask}","--fig_path", quick_data_path ],
-            # "proc_IM_beam_2": ["python", "calibration/build_baldr_control_matrix.py", "--beam_id", "2","--LO",f"{LO}","--inverse_method",f"{inverse_method}", "--phasemask", f"{phasemask}","--fig_path", quick_data_path ],
-            # "proc_IM_beam_3": ["python", "calibration/build_baldr_control_matrix.py", "--beam_id", "3","--LO",f"{LO}","--inverse_method",f"{inverse_method}", "--phasemask", f"{phasemask}","--fig_path", quick_data_path ],
-            # "proc_IM_beam_4": ["python", "calibration/build_baldr_control_matrix.py", "--beam_id", "4","--LO",f"{LO}","--inverse_method",f"{inverse_method}", "--phasemask", f"{phasemask}","--fig_path", quick_data_path ],
-            # }
-
-            # cols = st.columns(4)
-            # for i, col in enumerate(cols):
-            #     with col:
-
-            #         btn_key = f"proc_IM_beam_{i+1}"
-
-            #         # Run the script when button is clicked
-            #         if st.button(f"Run {btn_key}"):
-            #             success = run_script(PROCESS_IM_SCRIPTS[btn_key])
-
-            #             if success:
-            #                 fig_path = os.path.join(PROCESS_IM_SCRIPTS[btn_key][-1], f'IM_singularvalues_beam{i+1}.png')
-            #                 if os.path.exists(fig_path):
-            #                     st.image(Image.open(fig_path), caption=f"{btn_key} Output", use_column_width=True)
-            #                 else:
-            #                     st.warning(f"Cannot find {fig_path}")
-
-            # st.subheader("Apply Turbulence")
-            # # Number of iterations
-            # number_of_iterations_input = st.text_input("Number of Iterations", value="10")
-
-            # # Simulation wavelength (um)
-            # wvl_input = st.text_input("Simulation wavelength (um)", value="1.65")
-
-            # # Telescope diameter (m)
-            # D_tel_input = st.text_input("Telescope Diameter (m)", value="1.8")
-
-            # # Fried parameter (r0) at 500nm (m)
-            # r0_input = st.text_input("Fried Parameter r0 (m)", value="0.15")
-
-            # # Equivalent turbulence velocity (m/s)
-            # V_input = st.text_input("Equivalent Turbulence Velocity (m/s)", value="0.50")
-
-            # # Number of Zernike modes removed
-            # number_of_modes_removed_input = st.text_input("Number of Zernike Modes Removed", value="0")
-
-            # # DM channel on shared memory
-            # DM_chn_input = st.text_input("DM Channel (0,1,2,3)", value="3")
-
-            # # Record telemetry: directory/name.fits or "None"
-            # record_telem_input = st.text_input("Record Telemetry (directory/name.fits or None)", value="None")
-
-            # # For record_telem, treat "None" (case insensitive) as an omitted argument.
-            # if record_telem_input.strip().lower() == "none":
-            #     record_telem_parsed = None
-            # else:
-            #     record_telem_parsed = record_telem_input.strip()
-
-            # # --- Build the Command Argument List ---
-            # args = [
-            #     "--number_of_iterations", number_of_iterations_input,
-            #     "--wvl", wvl_input,
-            #     "--D_tel", D_tel_input,
-            #     "--r0", r0_input,
-            #     "--V", V_input,
-            #     "--number_of_modes_removed", number_of_modes_removed_input,
-            #     "--DM_chn", DM_chn_input,
-            # ]
-
-            # TURB_SCRIPTS = {
-            # "turb_beam_1": ["python", "common/turbulence.py"] + ["--beam_id", "1"] + args,
-            # "turb_beam_2": ["python", "common/turbulence.py"] + ["--beam_id", "2"] + args,
-            # "turb_beam_3": ["python", "common/turbulence.py"] + ["--beam_id", "3"] + args,
-            # "turb_beam_4": ["python", "common/turbulence.py"] + ["--beam_id", "4"] + args,
-            # }
-
-            # cols = st.columns(4)
-            # for i, col in enumerate(cols):
-            #     with col:
-
-            #         btn_key = f"turb_beam_{i+1}"
-
-            #         # Run the script when button is clicked
-            #         if st.button(f"Run {btn_key}"):
-            #             success = run_script(TURB_SCRIPTS[btn_key])
-
-            #             if success:
-            #                 st.write("DONE")
-
-            # st.subheader("Close Loop")
-
-            # CLOSE_LOOP_SCRIPT = {"close_beam_2" :  ["python", "playground/baldr_CL/CL.py", "--number_of_iterations","1000"]}
-            # btn_key = f"close_beam_2"
-            # if st.button(f"Run {btn_key}"):
-            #     success = run_script(CLOSE_LOOP_SCRIPT[btn_key])
-
         if routine_options == "Heimdallr shutters":
             # all up and all down buttons
 
@@ -2523,138 +2023,6 @@ with col_main:
                     msg = "h_splay off"
                     response = send_and_get_response(msg)
                     st.write(f"{response}")
-
-        if routine_options == "Camera & DMs":
-            st.write("testing")
-
-            c = FLI.fli()
-            camera_command = st.text_input(
-                "Send Command to Camera:", key="camera_command", placeholder="fps"
-            )
-            try:
-                resp = c.send_fli_cmd(camera_command)
-                st.success(
-                    f"Command '{camera_command}' sent to camera!\nresponse = {resp}"
-                )
-            except Exception as e:
-                st.error(f"Failed to send command: {e}")
-
-            c.close(erase_file=False)
-
-            # if st.button("get image"):
-            #     img = np.mean( c.get_data() , axis=0)
-
-            #     import plotly.express as px
-
-            #     # Generate a random 2D NumPy array
-            #     image_array = np.random.rand(100, 100)
-
-            #     # Convert NumPy array to interactive heatmap
-            #     fig = px.imshow(img, color_continuous_scale="gray")
-
-            #     # Display in Streamlit
-            #     st.plotly_chart(fig, use_container_width=True)
-            #     plt.close()
-            #     # fig, ax = plt.subplots()
-            #     # ax.imshow( np.log10( img ), cmap="gray")
-            #     # st.pyplot(fig)
-
-            # c.close(erase_file=False)
-
-            # Initialize Camera and DM Objects in session state
-            # if "camera" not in st.session_state:
-            #     st.session_state.camera = FLI.fli()  # Open the camera shared memory object
-
-            # beam_ids = [1, 2, 3, 4]  # IDs for the four beams
-
-            # if "dm_shm_dict" not in st.session_state:
-            #     st.session_state.dm_shm_dict = {beam_id: dmclass(beam_id=beam_id) for beam_id in beam_ids}
-
-            # if "apply_dark" not in st.session_state:
-            #     st.session_state.apply_dark = False  # Default: Dark correction disabled
-
-            # # Streamlit UI Layout
-            # st.title("Live Camera & Deformable Mirror Commands")
-
-            # # Placeholder for Camera Frame
-            # camera_placeholder = st.empty()
-
-            # # Camera Command Input (Runs on Enter)
-            # camera_command = st.text_input("Send Command to Camera:", key="camera_command", placeholder="Enter command and press Enter")
-
-            # if camera_command:
-            #     try:
-            #         resp = st.session_state.camera.send_fli_cmd(camera_command)
-            #         st.success(f"Command '{camera_command}' sent to camera!\nresponse = {resp}")
-            #     except Exception as e:
-            #         st.error(f"Failed to send command: {e}")
-
-            # # "Build Dark" Button
-            # if st.button("Build Dark"):
-            #     try:
-            #         st.session_state.camera.build_manual_dark()
-            #         st.success("Dark frame built successfully.")
-            #     except Exception as e:
-            #         st.error(f"Failed to build dark frame: {e}")
-
-            # # "Apply Dark" Checkbox
-            # apply_dark = st.checkbox("Apply Dark Correction", value=st.session_state.apply_dark)
-            # st.session_state.apply_dark = apply_dark
-            # #st.write( st.session_state.apply_dark )
-
-            # # Create four columns for DM commands
-            # dm_columns = st.columns(4)
-            # dm_placeholders = {beam_id: col.empty() for beam_id, col in zip(beam_ids, dm_columns)}
-
-            # # UI Controls: Buttons, Dropdowns, and Input Fields (Created **once**)
-            # for beam_id, col in zip(beam_ids, dm_columns):
-            #     with col:
-            #         st.subheader(f"Beam {beam_id}")
-
-            #         # Buttons for DM control
-            #         if st.button(f"Zero All - Beam {beam_id}", key=f"zero_{beam_id}"):
-            #             st.session_state.dm_shm_dict[beam_id].zero_all()
-            #             st.success(f"Beam {beam_id} set to zero.")
-
-            #         if st.button(f"Flatten DM - Beam {beam_id}", key=f"flatten_{beam_id}"):
-            #             st.session_state.dm_shm_dict[beam_id].activate_flat()
-            #             st.success(f"Beam {beam_id} flattened.")
-
-            #         # Dropdown menus for "Apply Shape"
-            #         st.subheader("Apply Shape")
-            #         selected_channel = st.selectbox(f"Select Channel (Beam {beam_id})", ["Channel 1", "Channel 2", "Channel 3"], key=f"channel_{beam_id}")
-            #         selected_basis = st.selectbox(f"Select Basis (Beam {beam_id})", ["Basis A", "Basis B", "Basis C"], key=f"basis_{beam_id}")
-
-            #         # Input for amplitude
-            #         amplitude = st.text_input(f"Enter Amplitude (Beam {beam_id})", key=f"amplitude_{beam_id}", placeholder="e.g., 0.5")
-
-            # # **Main Loop** for Live Updates (Camera & DM Plots)
-            # if st.button("Update Camera & DM Signals"): #while True:
-            #     # Get the latest camera frame
-            #     camera_frame = np.mean(st.session_state.camera.get_data(apply_manual_reduction=st.session_state.apply_dark, which_index=-1), axis=0)
-
-            #     # Update Camera Frame
-            #     fig_cam, ax_cam = plt.subplots(figsize=(8, 6))
-            #     ax_cam.imshow(camera_frame, cmap="gray", origin="upper")
-            #     ax_cam.set_title("Camera Frame")
-            #     ax_cam.axis("off")
-            #     camera_placeholder.pyplot(fig_cam)
-            #     plt.close(fig_cam)  # Prevent memory leaks
-
-            #     # Update DM Command Visualizations in four columns
-            #     for beam_id in beam_ids:
-            #         dm_command = st.session_state.dm_shm_dict[beam_id].shm0.get_data()
-
-            #         fig_dm, ax_dm = plt.subplots(figsize=(3, 3))
-            #         ax_dm.imshow(dm_command, cmap="viridis", origin="upper")
-            #         ax_dm.set_title(f"Beam {beam_id} - DM Command")
-            #         ax_dm.axis("off")
-
-            #         dm_placeholders[beam_id].pyplot(fig_dm)
-            #         plt.close(fig_dm)  # Prevent memory leaks
-
-            #     # Refresh every second
-            #     time.sleep(1)
 
         if routine_options == "Illumination":
             # a few options to control sources, source position and flipper states

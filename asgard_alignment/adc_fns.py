@@ -164,6 +164,7 @@ def resolve_constants(args):
         ]
     )
     cfg = load_config(args.config) if need_config else None
+    print(cfg)
     if need_config:
         assert cfg is not None
     return ADCConstants(
@@ -172,6 +173,7 @@ def resolve_constants(args):
         el=args.el if args.el is not None else cfg.el,
         const_a=args.const_a if args.const_a is not None else cfg.const_a,
         sign1=args.sign1 if args.sign1 is not None else cfg.sign1,
+        sign2=cfg.sign2,
         adc_zeropos=(
             args.adc_zeropos if args.adc_zeropos is not None else cfg.adc_zeropos
         ),
@@ -207,14 +209,13 @@ def read_relative_positions(client, indices, zeropos):
 
 
 def ensure_common_position(label, positions):
-    return True
-    # if not all(pos == positions[0] for pos in positions):
-    #     print(positions)
-
-    #     print(
-    #         f"ERROR: Not all '{label}' motors are at the same position. Need to zero."
-    #     )
-    #     sys.exit(1)
+    
+    if not all(pos == positions[0] for pos in positions):
+         print(positions)
+         print(
+             f"ERROR: Not all '{label}' motors are at the same position. Need to zero."
+         )
+         sys.exit(1)
 
 
 def calculate_adc_targets(alt, az, constants):
@@ -263,6 +264,9 @@ def slew_group(client, group_label, adc_target, current_positions, zeropos):
 
     current_reference = current_positions[0]
     relative_target = int(adc_target - current_reference)
+
+    relative_target = (relative_target+18000) % 36000 - 18000
+
     message = f"rotm_slew {group_label} {relative_target}"
 
     client.send_and_recv(message)

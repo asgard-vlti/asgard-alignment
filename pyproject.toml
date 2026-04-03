@@ -14,6 +14,7 @@ restart-kaya = "asgard_alignment.cmd_scripts.restart_kaya:main"
 b-mode = "asgard_alignment.cmd_scripts.b_mode:main"
 b-savemode = "asgard_alignment.cmd_scripts.b_savemode:main"
 adc-track = "asgard_alignment.cmd_scripts.adc_track:main"
+adc-mv-zero = "asgard_alignment.cmd_scripts.adc_mv_zero:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["asgard_alignment"]

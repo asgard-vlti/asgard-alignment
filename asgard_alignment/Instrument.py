@@ -1028,30 +1028,6 @@ class Instrument:
         if name not in self._motor_config:
             raise ValueError(f"{name} is not in the config file")
 
-        if self._motor_config[name]["motor_type"] == "deformable_mirror":
-            # using shared memory (set up server such that DM is running and always looking to the shared memory)
-
-            # otherwise we are connecting directly here to the DM
-            serial_number = self._motor_config[name].get("serial_number")
-
-            # Load flat map and initialize DM
-            dm = bmc.BmcDm()
-            if dm.open_dm(serial_number) != 0:
-                logging.warning(
-                    f"Failed to connect to DM with serial number {serial_number}"
-                )
-                return False
-            flat_map_file = self._motor_config[name]["flat_map_file"]
-            flat_map = pd.read_csv(flat_map_file, header=None)[0].values
-            cross_map = pd.read_csv("DMShapes/Crosshair140.csv", header=None)[0].values
-            self._devices[name] = {
-                "dm": dm,
-                "flat_map": flat_map,
-                "cross_map": cross_map,
-            }
-            # print(f"Connected to {name} with serial number {serial_number}")
-            return True
-
         if self._motor_config[name]["motor_type"] in ["M100D", "LS16P"]:
             # this is a newport motor USB connection, create a newport motor
             # object
