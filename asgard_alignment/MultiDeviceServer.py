@@ -1005,6 +1005,57 @@ class MultiDeviceServer:
         def status():
             return "ACK"
 
+
+        first_word_to_format = {
+            "read": "read {}",
+            "stop": "stop {}",
+            "moveabs": "moveabs {} {:f}",
+            "connected?": "connected? {}",
+            "connect": "connect {}",
+            "init": "init {}",
+            "tt_step": "tt_step {} {}",
+            "tt_config_step": "tt_config_step {} {}",
+            "moverel": "moverel {} {:f}",
+            "state": "state {}",
+            "save": "save {} {}",
+            "dmapplyflat": "dmapplyflat {}",
+            "dmapplycross": "dmapplycross {}",
+            "fpm_getsavepath": "fpm_getsavepath {}",
+            "fpm_maskpositions": "fpm_maskpositions {}",
+            "fpm_movetomask": "fpm_movetomask {} {}",
+            "fpm_moverel": "fpm_moverel {} {}",
+            "fpm_moveabs": "fpm_moveabs {} {}",
+            "fpm_readpos": "fpm_readpos {}",
+            "fpm_update_position_file": "fpm_update_position_file {} {}",
+            "fpm_updatemaskpos": "fpm_updatemaskpos {} {}",
+            "fpm_offsetallmaskpositions": "fpm_offsetallmaskpositions {} {} {}",
+            "fpm_writemaskpos": "fpm_writemaskpos {}",
+            "fpm_updateallmaskpos": "fpm_updateallmaskpos {} {} {}",
+            "ping": "ping {}",
+            "health": "health",
+            "on": "on {}",
+            "off": "off {}",
+            "is_on": "is_on {}",
+            "reset": "reset {}",
+            "mv_img": "mv_img {} {} {:f} {:f}",  # mv_img {config} {beam_number} {x} {y}
+            "mv_pup": "mv_pup {} {} {:f} {:f}",  # mv_pup {config} {beam_number} {x} {y}
+            "asg_setup": "asg_setup {} {} {}",  # 2nd input is either a named position or a float
+            "home_steppers": "home_steppers {}",
+            "standby": "standby {}",
+            "online": "online {}",
+            "h_shut": "h_shut {} {}",
+            "h_splay": "h_splay {}",
+            "temp_status": "temp_status {}",
+            "set_kaya": "set_kaya {}",
+            "rotm_disable": "rotm_disable",
+            "rotm_slew": "rotm_slew {} {}",
+            "status": "status",
+            "command_names": "command_names",
+        }
+
+        def command_names():
+            return f"{list(first_word_to_function.keys())}"
+
         # TODO: restart controller function?
         first_word_to_function = {
             "read": read_msg,
@@ -1051,53 +1102,9 @@ class MultiDeviceServer:
             "rotm_slew": rotm_slew,
             "rotm_disable": rotm_disable,
             "status": status,
+            "command_names": command_names,
         }
 
-        first_word_to_format = {
-            "read": "read {}",
-            "stop": "stop {}",
-            "moveabs": "moveabs {} {:f}",
-            "connected?": "connected? {}",
-            "connect": "connect {}",
-            "init": "init {}",
-            "tt_step": "tt_step {} {}",
-            "tt_config_step": "tt_config_step {} {}",
-            "moverel": "moverel {} {:f}",
-            "state": "state {}",
-            "save": "save {} {}",
-            "dmapplyflat": "dmapplyflat {}",
-            "dmapplycross": "dmapplycross {}",
-            "fpm_getsavepath": "fpm_getsavepath {}",
-            "fpm_maskpositions": "fpm_maskpositions {}",
-            "fpm_movetomask": "fpm_movetomask {} {}",
-            "fpm_moverel": "fpm_moverel {} {}",
-            "fpm_moveabs": "fpm_moveabs {} {}",
-            "fpm_readpos": "fpm_readpos {}",
-            "fpm_update_position_file": "fpm_update_position_file {} {}",
-            "fpm_updatemaskpos": "fpm_updatemaskpos {} {}",
-            "fpm_offsetallmaskpositions": "fpm_offsetallmaskpositions {} {} {}",
-            "fpm_writemaskpos": "fpm_writemaskpos {}",
-            "fpm_updateallmaskpos": "fpm_updateallmaskpos {} {} {}",
-            "ping": "ping {}",
-            "health": "health",
-            "on": "on {}",
-            "off": "off {}",
-            "is_on": "is_on {}",
-            "reset": "reset {}",
-            "mv_img": "mv_img {} {} {:f} {:f}",  # mv_img {config} {beam_number} {x} {y}
-            "mv_pup": "mv_pup {} {} {:f} {:f}",  # mv_pup {config} {beam_number} {x} {y}
-            "asg_setup": "asg_setup {} {} {}",  # 2nd input is either a named position or a float
-            "home_steppers": "home_steppers {}",
-            "standby": "standby {}",
-            "online": "online {}",
-            "h_shut": "h_shut {} {}",
-            "h_splay": "h_splay {}",
-            "temp_status": "temp_status {}",
-            "set_kaya": "set_kaya {}",
-            "rotm_disable": "rotm_disable",
-            "rotm_slew": "rotm_slew {} {}",
-            "status": "status",
-        }
 
         try:
             first_word = message.split(" ")[0]
