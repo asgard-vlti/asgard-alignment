@@ -1005,7 +1005,6 @@ class MultiDeviceServer:
         def status():
             return "ACK"
 
-
         first_word_to_format = {
             "read": "read {}",
             "stop": "stop {}",
@@ -1105,7 +1104,6 @@ class MultiDeviceServer:
             "command_names": command_names,
         }
 
-
         try:
             first_word = message.split(" ")[0]
             if first_word in first_word_to_function:
@@ -1122,7 +1120,7 @@ class MultiDeviceServer:
             #         return func(*result)
         except Exception as e:
             logging.error(f"Custom command error: {e}")
-            return f"NACK: {e}"
+            return f"NACK: command usage is: {first_word_to_format.get(first_word, 'Unknown format')} \n {e}"
 
 
 if __name__ == "__main__":
