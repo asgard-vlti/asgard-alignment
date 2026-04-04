@@ -209,7 +209,6 @@ def read_relative_positions(client, indices, zeropos):
 
 
 def ensure_common_position(label, positions):
-    
     if not all(pos == positions[0] for pos in positions):
          print(positions)
          print(
@@ -242,6 +241,7 @@ def wait_until_reached(client, motor_index, abs_target, timeout_s=120):
         time.sleep(0.5)
         response = client.send_and_recv(f"read {motor_name}")
         current = float(response)
+        print(f"cur pos {current}")
         if current == abs_target:
             print(f"{motor_name} reached the target position.")
             return
@@ -262,16 +262,22 @@ def slew_group(client, group_label, adc_target, current_positions, zeropos):
         print(f"ERROR: Unknown ADC group label '{group_label}'.")
         sys.exit(1)
 
+    print(f"current_positions: {current_positions}")
     current_reference = current_positions[0]
     relative_target = int(adc_target - current_reference)
 
+    print(f"current_reference: {current_reference}")
+    print(f"relative_target before mod: {relative_target}")
+
     relative_target = (relative_target+18000) % 36000 - 18000
+    print(f"relative_target after mod: {relative_target}")
 
     message = f"rotm_slew {group_label} {relative_target}"
 
     client.send_and_recv(message)
     for motor_index in group_indices:
         abs_target = adc_target + zeropos[motor_index]
+        print(f"abs target: {abs_target}")
         wait_until_reached(client, motor_index, abs_target)
 
 
