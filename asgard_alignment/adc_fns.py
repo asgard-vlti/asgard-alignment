@@ -209,11 +209,13 @@ def read_relative_positions(client, indices, zeropos):
 
 
 def ensure_common_position(label, positions):
+    print(f"Positions: {positions}")
     if not all(pos == positions[0] for pos in positions):
-         print(positions)
+         print(f"Positions: {positions}")
          print(
              f"ERROR: Not all '{label}' motors are at the same position. Need to zero."
          )
+
          sys.exit(1)
 
 
@@ -276,7 +278,7 @@ def slew_group(client, group_label, adc_target, current_positions, zeropos):
 
     client.send_and_recv(message)
     for motor_index in group_indices:
-        abs_target = adc_target + zeropos[motor_index]
+        abs_target = relative_target+current_reference + zeropos[motor_index]
         print(f"abs target: {abs_target}")
         wait_until_reached(client, motor_index, abs_target)
 
