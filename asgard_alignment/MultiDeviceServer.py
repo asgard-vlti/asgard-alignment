@@ -14,6 +14,9 @@ import datetime
 from copy import deepcopy
 
 import enum
+from dataclasses import dataclass
+from typing import Callable
+
 import asgard_alignment.ESOdevice
 import asgard_alignment.Instrument
 import asgard_alignment.MultiDeviceServer
@@ -1005,111 +1008,242 @@ class MultiDeviceServer:
         def status():
             return "ACK"
 
-        first_word_to_format = {
-            "read": "read {}",
-            "stop": "stop {}",
-            "moveabs": "moveabs {} {:f}",
-            "connected?": "connected? {}",
-            "connect": "connect {}",
-            "init": "init {}",
-            "tt_step": "tt_step {} {}",
-            "tt_config_step": "tt_config_step {} {}",
-            "moverel": "moverel {} {:f}",
-            "state": "state {}",
-            "save": "save {} {}",
-            "dmapplyflat": "dmapplyflat {}",
-            "dmapplycross": "dmapplycross {}",
-            "fpm_getsavepath": "fpm_getsavepath {}",
-            "fpm_maskpositions": "fpm_maskpositions {}",
-            "fpm_movetomask": "fpm_movetomask {} {}",
-            "fpm_moverel": "fpm_moverel {} {}",
-            "fpm_moveabs": "fpm_moveabs {} {}",
-            "fpm_readpos": "fpm_readpos {}",
-            "fpm_update_position_file": "fpm_update_position_file {} {}",
-            "fpm_updatemaskpos": "fpm_updatemaskpos {} {}",
-            "fpm_offsetallmaskpositions": "fpm_offsetallmaskpositions {} {} {}",
-            "fpm_writemaskpos": "fpm_writemaskpos {}",
-            "fpm_updateallmaskpos": "fpm_updateallmaskpos {} {} {}",
-            "ping": "ping {}",
-            "health": "health",
-            "on": "on {}",
-            "off": "off {}",
-            "is_on": "is_on {}",
-            "reset": "reset {}",
-            "mv_img": "mv_img {} {} {:f} {:f}",  # mv_img {config} {beam_number} {x} {y}
-            "mv_pup": "mv_pup {} {} {:f} {:f}",  # mv_pup {config} {beam_number} {x} {y}
-            "asg_setup": "asg_setup {} {} {}",  # 2nd input is either a named position or a float
-            "home_steppers": "home_steppers {}",
-            "standby": "standby {}",
-            "online": "online {}",
-            "h_shut": "h_shut {} {}",
-            "h_splay": "h_splay {}",
-            "temp_status": "temp_status {}",
-            "set_kaya": "set_kaya {}",
-            "rotm_disable": "rotm_disable",
-            "rotm_slew": "rotm_slew {} {}",
-            "status": "status",
-            "command_names": "command_names",
-        }
+        @dataclass
+        class Command:
+            """Metadata for a command"""
+            info: str
+            format_str: str
+            func: Callable
 
-        def command_names():
-            return f"{list(first_word_to_function.keys())}"
-
-        # TODO: restart controller function?
-        first_word_to_function = {
-            "read": read_msg,
-            "stop": stop_msg,
-            "moveabs": moveabs_msg,
-            "connected?": connected_msg,
-            "connect": connect_msg,
-            "init": init_msg,
-            "tt_step": tt_step_msg,
-            "tt_config_step": tt_config_step_msg,
-            "moverel": moverel_msg,
-            "state": state_msg,
-            "save": save_msg,
-            "dmapplyflat": apply_flat_msg,
-            "dmapplycross": apply_cross_msg,
-            "fpm_getsavepath": fpm_get_savepath_msg,
-            "fpm_maskpositions": fpm_mask_positions_msg,
-            "fpm_movetomask": fpm_move_to_phasemask_msg,
-            "fpm_moverel": fpm_move_relative_msg,
-            "fpm_moveabs": fpm_move_absolute_msg,
-            "fpm_readpos": fpm_read_position_msg,
-            "fpm_update_position_file": fpm_update_position_file_msg,
-            "fpm_updatemaskpos": fpm_update_mask_position_msg,
-            "fpm_offsetallmaskpositions": fpm_offset_all_mask_positions_msg,
-            "fpm_writemaskpos": fpm_write_mask_positions_msg,
-            "fpm_updateallmaskpos": fpm_update_all_mask_positions_relative_to_current_msg,
-            "ping": ping_msg,
-            "health": health_msg,
-            "on": on_msg,
-            "off": off_msg,
-            "is_on": is_on_msg,
-            "reset": reset_msg,
-            "mv_img": mv_img_msg,
-            "mv_pup": mv_pup_msg,
-            "asg_setup": asg_setup_msg,
-            "home_steppers": home_steppers_msg,
-            "standby": standby_msg,
-            "online": online_msg,
-            "h_shut": h_shut_msg,
-            "h_splay": h_splay_msg,
-            "temp_status": temp_status_msg,
-            "set_kaya": set_kaya_msg,
-            "rotm_home": home_rotm,
-            "rotm_slew": rotm_slew,
-            "rotm_disable": rotm_disable,
-            "status": status,
-            "command_names": command_names,
+        commands = {
+            "read": Command(
+                info="read {axis} - read the position of the given axis",
+                format_str="read {}",
+                func=read_msg,
+            ),
+            "stop": Command(
+                info="stop {axis} - stop movement of the given axis",
+                format_str="stop {}",
+                func=stop_msg,
+            ),
+            "moveabs": Command(
+                info="moveabs {axis} {position} - move axis to absolute position",
+                format_str="moveabs {} {:f}",
+                func=moveabs_msg,
+            ),
+            "connected?": Command(
+                info="connected? {axis} - check if axis is connected",
+                format_str="connected? {}",
+                func=connected_msg,
+            ),
+            "connect": Command(
+                info="connect {axis} - attempt to open connection to axis",
+                format_str="connect {}",
+                func=connect_msg,
+            ),
+            "init": Command(
+                info="init {axis} - initialize the given axis",
+                format_str="init {}",
+                func=init_msg,
+            ),
+            "tt_step": Command(
+                info="tt_step {axis} {n_steps} - move tip-tilt stage by n_steps",
+                format_str="tt_step {} {}",
+                func=tt_step_msg,
+            ),
+            "tt_config_step": Command(
+                info="tt_config_step {axis} {step_size} - configure tip-tilt step size",
+                format_str="tt_config_step {} {}",
+                func=tt_config_step_msg,
+            ),
+            "moverel": Command(
+                info="moverel {axis} {position} - move axis by relative position",
+                format_str="moverel {} {:f}",
+                func=moverel_msg,
+            ),
+            "state": Command(
+                info="state {axis} - read the state of the given axis",
+                format_str="state {}",
+                func=state_msg,
+            ),
+            "save": Command(
+                info="save {subset} {filename} - save instrument state to file (subset: heimdallr, baldr, solarstein, or all)",
+                format_str="save {} {}",
+                func=save_msg,
+            ),
+            "dmapplyflat": Command(
+                info="dmapplyflat {dm_name} - apply flat map to deformable mirror",
+                format_str="dmapplyflat {}",
+                func=apply_flat_msg,
+            ),
+            "dmapplycross": Command(
+                info="dmapplycross {dm_name} - apply cross map to deformable mirror",
+                format_str="dmapplycross {}",
+                func=apply_cross_msg,
+            ),
+            "fpm_getsavepath": Command(
+                info="fpm_getsavepath {axis} - get save path for focal plane mask",
+                format_str="fpm_getsavepath {}",
+                func=fpm_get_savepath_msg,
+            ),
+            "fpm_maskpositions": Command(
+                info="fpm_maskpositions {axis} - get focal plane mask positions",
+                format_str="fpm_maskpositions {}",
+                func=fpm_mask_positions_msg,
+            ),
+            "fpm_movetomask": Command(
+                info="fpm_movetomask {axis} {maskname} - move focal plane mask to named position",
+                format_str="fpm_movetomask {} {}",
+                func=fpm_move_to_phasemask_msg,
+            ),
+            "fpm_moverel": Command(
+                info="fpm_moverel {axis} {new_pos} - move focal plane mask by relative position",
+                format_str="fpm_moverel {} {}",
+                func=fpm_move_relative_msg,
+            ),
+            "fpm_moveabs": Command(
+                info="fpm_moveabs {axis} {new_pos} - move focal plane mask to absolute position",
+                format_str="fpm_moveabs {} {}",
+                func=fpm_move_absolute_msg,
+            ),
+            "fpm_readpos": Command(
+                info="fpm_readpos {axis} - read focal plane mask position",
+                format_str="fpm_readpos {}",
+                func=fpm_read_position_msg,
+            ),
+            "fpm_update_position_file": Command(
+                info="fpm_update_position_file {axis} {filename} - update focal plane mask position file",
+                format_str="fpm_update_position_file {} {}",
+                func=fpm_update_position_file_msg,
+            ),
+            "fpm_updatemaskpos": Command(
+                info="fpm_updatemaskpos {axis} {mask_name} - update focal plane mask position",
+                format_str="fpm_updatemaskpos {} {}",
+                func=fpm_update_mask_position_msg,
+            ),
+            "fpm_offsetallmaskpositions": Command(
+                info="fpm_offsetallmaskpositions {axis} {rel_offset_x} {rel_offset_y} - offset all focal plane mask positions",
+                format_str="fpm_offsetallmaskpositions {} {} {}",
+                func=fpm_offset_all_mask_positions_msg,
+            ),
+            "fpm_writemaskpos": Command(
+                info="fpm_writemaskpos {axis} - write focal plane mask positions to file",
+                format_str="fpm_writemaskpos {}",
+                func=fpm_write_mask_positions_msg,
+            ),
+            "fpm_updateallmaskpos": Command(
+                info="fpm_updateallmaskpos {axis} {current_mask_name} {reference_mask_position_file} - update all focal plane mask positions relative to current",
+                format_str="fpm_updateallmaskpos {} {} {}",
+                func=fpm_update_all_mask_positions_relative_to_current_msg,
+            ),
+            "ping": Command(
+                info="ping {axis} - ping connection to axis",
+                format_str="ping {}",
+                func=ping_msg,
+            ),
+            "health": Command(
+                info="health - check health of the whole instrument",
+                format_str="health",
+                func=health_msg,
+            ),
+            "on": Command(
+                info="on {lamp_name} - turn on lamp",
+                format_str="on {}",
+                func=on_msg,
+            ),
+            "off": Command(
+                info="off {lamp_name} - turn off lamp",
+                format_str="off {}",
+                func=off_msg,
+            ),
+            "is_on": Command(
+                info="is_on {lamp_name} - check if lamp is on",
+                format_str="is_on {}",
+                func=is_on_msg,
+            ),
+            "reset": Command(
+                info="reset {axis} - reset the given axis",
+                format_str="reset {}",
+                func=reset_msg,
+            ),
+            "mv_img": Command(
+                info="mv_img {config} {beam_number} {x} {y} - move image for given config and beam",
+                format_str="mv_img {} {} {:f} {:f}",
+                func=mv_img_msg,
+            ),
+            "mv_pup": Command(
+                info="mv_pup {config} {beam_number} {x} {y} - move pupil for given config and beam",
+                format_str="mv_pup {} {} {:f} {:f}",
+                func=mv_pup_msg,
+            ),
+            "asg_setup": Command(
+                info="asg_setup {axis} {mtype} {value} - setup axis with motion type and value",
+                format_str="asg_setup {} {} {}",
+                func=asg_setup_msg,
+            ),
+            "home_steppers": Command(
+                info="home_steppers {motor} - home stepper motors (motor name or 'all')",
+                format_str="home_steppers {}",
+                func=home_steppers_msg,
+            ),
+            "standby": Command(
+                info="standby {axis} - put axis into standby mode",
+                format_str="standby {}",
+                func=standby_msg,
+            ),
+            "online": Command(
+                info="online {axes} - bring axes online (comma-separated list)",
+                format_str="online {}",
+                func=online_msg,
+            ),
+            "h_shut": Command(
+                info="h_shut {state} {beam_numbers} - control heimdallr shutter (state: open/close, beam_numbers: comma-separated or 'all')",
+                format_str="h_shut {} {}",
+                func=h_shut_msg,
+            ),
+            "h_splay": Command(
+                info="h_splay {state} - control heimdallr splay",
+                format_str="h_splay {}",
+                func=h_splay_msg,
+            ),
+            "temp_status": Command(
+                info="temp_status {mode} - get temperature status (mode: 'now' or 'keys')",
+                format_str="temp_status {}",
+                func=temp_status_msg,
+            ),
+            "set_kaya": Command(
+                info="set_kaya {state} - set kaya state (state: on/off)",
+                format_str="set_kaya {}",
+                func=set_kaya_msg,
+            ),
+            "rotm_disable": Command(
+                info="rotm_disable - disable all rotation stage motors",
+                format_str="rotm_disable",
+                func=rotm_disable,
+            ),
+            "rotm_slew": Command(
+                info="rotm_slew {adc_set} {reltarget} - enable and move rotation motor set (adc_set: U or L)",
+                format_str="rotm_slew {} {}",
+                func=rotm_slew,
+            ),
+            "status": Command(
+                info="status - get system status",
+                format_str="status",
+                func=status,
+            ),
+            "command_names": Command(
+                info="command_names - list all available commands",
+                format_str="command_names",
+                func=lambda: f"{list(commands.keys())}",
+            ),
         }
 
         try:
             first_word = message.split(" ")[0]
-            if first_word in first_word_to_function:
-                format_str = first_word_to_format[first_word]
-                result = parse(format_str, message)
-                return first_word_to_function[first_word](*result)
+            if first_word in commands:
+                cmd = commands[first_word]
+                result = parse(cmd.format_str, message)
+                return cmd.func(*result)
             else:
                 return "NACK: Unkown custom command"
 
@@ -1119,8 +1253,11 @@ class MultiDeviceServer:
             #     if result:
             #         return func(*result)
         except Exception as e:
+            first_word = message.split(" ")[0]
+            cmd = commands.get(first_word)
+            help_text = cmd.info if cmd else 'Unknown command'
             logging.error(f"Custom command error: {e}")
-            return f"NACK: command usage is: {first_word_to_format.get(first_word, 'Unknown format')} \n {e}"
+            return f"NACK: command usage is: {help_text} \n {e}"
 
 
 if __name__ == "__main__":
