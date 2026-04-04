@@ -198,6 +198,9 @@ class M100DAxis(ESOdevice.Motor):
 
     def move_stepping(self, n_steps: int):
         if not self.is_shuttered:
+            if self.read_state() == "STEPPING OL":
+                self._connection.write_str(f"1ST{self.axis}")
+
             self._connection.write_str(f"1XR{self.axis}{n_steps}")
         else:
             raise ValueError(
@@ -330,7 +333,7 @@ class M100DAxis(ESOdevice.Motor):
         """
         Internal positions in deg, ESO in mdeg (discrete)
         """
-        return int(value * 1e3)  # ESO in 
+        return int(value * 1e3)  # ESO in
 
     @staticmethod
     def ESO_to_internal(value):
