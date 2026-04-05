@@ -1,4 +1,3 @@
-
 import numpy as np
 from scipy.ndimage import distance_transform_edt
 from scipy.spatial import distance
@@ -6,68 +5,85 @@ from math import factorial
 import pandas as pd
 from pathlib import Path
 import subprocess
-# used in Frantz Zernike definitions for BMC DM 
+
+# used in Frantz Zernike definitions for BMC DM
 from xaosim.zernike import mkzer1
 from scipy.interpolate import griddata
 from xaosim.pupil import _dist as dist
 
 
-
 def get_git_root() -> Path:
     return Path(
-        subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
+        subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"], text=True
+        ).strip()
     )
 
-## Git project root path 
+
+## Git project root path
+# root_path = get_git_root()
 root_path = get_git_root()
 
 
-dm_shape_pth = root_path / "DMShapes/" #"/home/asg/Progs/repos/asgard-alignment/DMShapes/"
-dm_serials = {"1": dm_shape_pth  / "17DW019#113_FLAT_MAP_COMMANDS.csv", 
-              "2": dm_shape_pth  /  "17DW019#053_FLAT_MAP_COMMANDS.csv", 
-              "3": dm_shape_pth  / "17DW019#093_FLAT_MAP_COMMANDS.csv", 
-              "4": dm_shape_pth  / "17DW019#122_FLAT_MAP_COMMANDS.csv"}
+dm_shape_pth = (
+    root_path / "DMShapes/"
+)  # "/home/asg/Progs/repos/asgard-alignment/DMShapes/"
+dm_serials = {
+    "1": dm_shape_pth / "17DW019#113_FLAT_MAP_COMMANDS.csv",
+    "2": dm_shape_pth / "17DW019#053_FLAT_MAP_COMMANDS.csv",
+    "3": dm_shape_pth / "17DW019#093_FLAT_MAP_COMMANDS.csv",
+    "4": dm_shape_pth / "17DW019#122_FLAT_MAP_COMMANDS.csv",
+}
 
 
-dm_flatmap_dict = {f"{i}" : pd.read_csv(dm_serials[f"{i}"], header=None)[0].values for i in [1,2,3,4]}
+dm_flatmap_dict = {
+    f"{i}": pd.read_csv(dm_serials[f"{i}"], header=None)[0].values for i in [1, 2, 3, 4]
+}
 cross_map = pd.read_csv(dm_shape_pth / "Crosshair140.csv", header=None)[0].values
 
-def get_DM_command_in_2D(cmd,Nx_act=12):
+
+def get_DM_command_in_2D(cmd, Nx_act=12):
     # function so we can easily plot the DM shape (since DM grid is not perfectly square raw cmds can not be plotted in 2D immediately )
-    #puts nan values in cmd positions that don't correspond to actuator on a square grid until cmd length is square number (12x12 for BMC multi-2.5 DM) so can be reshaped to 2D array to see what the command looks like on the DM.
-    corner_indices = [0, Nx_act-1, Nx_act * (Nx_act-1), Nx_act*Nx_act]
+    # puts nan values in cmd positions that don't correspond to actuator on a square grid until cmd length is square number (12x12 for BMC multi-2.5 DM) so can be reshaped to 2D array to see what the command looks like on the DM.
+    corner_indices = [0, Nx_act - 1, Nx_act * (Nx_act - 1), Nx_act * Nx_act]
     cmd_in_2D = list(cmd.copy())
     for i in corner_indices:
-        cmd_in_2D.insert(i,np.nan)
-    return( np.array(cmd_in_2D).reshape(Nx_act,Nx_act) )
-
+        cmd_in_2D.insert(i, np.nan)
+    return np.array(cmd_in_2D).reshape(Nx_act, Nx_act)
 
 
 def shift(xs, n, m, fill_value=np.nan):
     # shifts a 2D array xs by n rows, m columns and fills the new region with fill_value
 
     e = xs.copy()
-    if n!=0:
+    if n != 0:
         if n >= 0:
-            e[:n,:] = fill_value
-            e[n:,:] =  e[:-n,:]
+            e[:n, :] = fill_value
+            e[n:, :] = e[:-n, :]
         else:
-            e[n:,:] = fill_value
-            e[:n,:] =  e[-n:,:]
-   
-       
-    if m!=0:
+            e[n:, :] = fill_value
+            e[:n, :] = e[-n:, :]
+
+    if m != 0:
         if m >= 0:
-            e[:,:m] = fill_value
-            e[:,m:] =  e[:,:-m]
+            e[:, :m] = fill_value
+            e[:, m:] = e[:, :-m]
         else:
-            e[:,m:] = fill_value
-            e[:,:m] =  e[:,-m:]
+            e[:, m:] = fill_value
+            e[:, :m] = e[:, -m:]
     return e
 
-def construct_command_basis( basis='Zernike_pinned_edges', number_of_modes = 20, Nx_act_DM = 12, Nx_act_basis = 12, act_offset=(0,0), without_piston=True):
+
+def construct_command_basis(
+    basis="Zernike_pinned_edges",
+    number_of_modes=20,
+    Nx_act_DM=12,
+    Nx_act_basis=12,
+    act_offset=(0, 0),
+    without_piston=True,
+):
     """
-    returns a change of basis matrix M2C to go from modes to DM commands, where columns are the DM command for a given modal basis. e.g. M2C @ [0,1,0,...] would return the DM command for tip on a Zernike basis. Modes are normalized on command space such that <M>=0, <M|M>=1. Therefore these should be added to a flat DM reference if being applied.    
+    returns a change of basis matrix M2C to go from modes to DM commands, where columns are the DM command for a given modal basis. e.g. M2C @ [0,1,0,...] would return the DM command for tip on a Zernike basis. Modes are normalized on command space such that <M>=0, <M|M>=1. Therefore these should be added to a flat DM reference if being applied.
 
     basis = string of basis to use
     number_of_modes = int, number of modes to create
@@ -77,35 +93,33 @@ def construct_command_basis( basis='Zernike_pinned_edges', number_of_modes = 20,
 
     """
 
-    
-   
     # shorter notations
-    #Nx_act = DM.num_actuators_width() # number of actuators across diameter of DM.
-    #Nx_act_basis = actuators_across_diam
+    # Nx_act = DM.num_actuators_width() # number of actuators across diameter of DM.
+    # Nx_act_basis = actuators_across_diam
     c = act_offset
     # DM BMC-3.5 is 12x12 missing corners so 140 actuators , we note down corner indicies of flattened 12x12 array.
-    corner_indices = [0, Nx_act_DM-1, Nx_act_DM * (Nx_act_DM-1), -1]
+    corner_indices = [0, Nx_act_DM - 1, Nx_act_DM * (Nx_act_DM - 1), -1]
 
-    
-
-    if basis == 'Hadamard':
+    if basis == "Hadamard":
         # BMC multi-3.5 DM is 12x12 with missing corners - not multiple of 2 so cannot apply standard method of construction
-        # first 
+        # first
         # Define a known 12x12 Hadamard matrix
-        H_12 = np.array([
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1],
-            [1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1],
-            [1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1],
-            [1, 1, 1, 1, -1, -1, -1, -1, 1, 1, 1, 1],
-            [1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, -1],
-            [1, 1, -1, -1, -1, -1, 1, 1, 1, 1, -1, -1],
-            [1, -1, -1, 1, -1, 1, 1, -1, 1, -1, -1, 1],
-            [1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1],
-            [1, -1, 1, -1, 1, -1, -1, 1, -1, 1, -1, 1],
-            [1, 1, -1, -1, 1, 1, 1, 1, -1, -1, -1, -1],
-            [1, -1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1]
-        ])
+        H_12 = np.array(
+            [
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                [1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1],
+                [1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1],
+                [1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1],
+                [1, 1, 1, 1, -1, -1, -1, -1, 1, 1, 1, 1],
+                [1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, -1],
+                [1, 1, -1, -1, -1, -1, 1, 1, 1, 1, -1, -1],
+                [1, -1, -1, 1, -1, 1, 1, -1, 1, -1, -1, 1],
+                [1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1],
+                [1, -1, 1, -1, 1, -1, -1, 1, -1, 1, -1, 1],
+                [1, 1, -1, -1, 1, 1, 1, 1, -1, -1, -1, -1],
+                [1, -1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1],
+            ]
+        )
 
         # Generate a 144x144 Hadamard matrix using Kronecker product
         H_144 = np.kron(H_12, H_12)
@@ -119,75 +133,102 @@ def construct_command_basis( basis='Zernike_pinned_edges', number_of_modes = 20,
 
         H_140 = []
         for h in H_144:
-            H_140.append( h.reshape(12,12)[corner_mask] )
-            
-        if without_piston:
-            M2C = np.array( H_140 )[1:].T #remove piston mode
-        else:
-            M2C = np.array( H_140 ).T # take transpose to make columns the modes in command space.
+            H_140.append(h.reshape(12, 12)[corner_mask])
 
+        if without_piston:
+            M2C = np.array(H_140)[1:].T  # remove piston mode
+        else:
+            M2C = np.array(
+                H_140
+            ).T  # take transpose to make columns the modes in command space.
 
     # to deal with
-    elif basis == 'Zernike':
+    elif basis == "Zernike":
         bmcdm_basis_list = []
         if without_piston:
-            number_of_modes += 1 # we add one more mode since we dont include piston 
+            number_of_modes += 1  # we add one more mode since we dont include piston
 
-        raw_basis = zernike_basis(nterms=number_of_modes, npix=Nx_act_basis )
-        for i,B in enumerate(raw_basis):
+        raw_basis = zernike_basis(nterms=number_of_modes, npix=Nx_act_basis)
+        for i, B in enumerate(raw_basis):
             # normalize <B|B>=1, <B>=0 (so it is an offset from flat DM shape)
-            Bnorm = np.sqrt( 1/np.nansum( B**2 ) ) * B
+            Bnorm = np.sqrt(1 / np.nansum(B**2)) * B
             # pad with zeros to fit DM square shape and shift pixels as required to center
             # we also shift the basis center with respect to DM if required
-            if np.mod( Nx_act_basis, 2) == 0:
-                pad_width = (Nx_act_DM - B.shape[0] )//2
-                padded_B = shift( np.pad( Bnorm , pad_width , constant_values=(np.nan,)) , c[0], c[1])
+            if np.mod(Nx_act_basis, 2) == 0:
+                pad_width = (Nx_act_DM - B.shape[0]) // 2
+                padded_B = shift(
+                    np.pad(Bnorm, pad_width, constant_values=(np.nan,)), c[0], c[1]
+                )
             else:
-                pad_width = (Nx_act_DM - B.shape[0] )//2 + 1
-                padded_B = shift( np.pad( Bnorm , pad_width , constant_values=(np.nan,)) , c[0], c[1])[:-1,:-1]  # we take off end due to odd numebr
+                pad_width = (Nx_act_DM - B.shape[0]) // 2 + 1
+                padded_B = shift(
+                    np.pad(Bnorm, pad_width, constant_values=(np.nan,)), c[0], c[1]
+                )[
+                    :-1, :-1
+                ]  # we take off end due to odd numebr
 
-            flat_B = padded_B.reshape(-1) # flatten basis so we can put it in the accepted DM command format
-            np.nan_to_num(flat_B,0 ) # convert nan -> 0
-            flat_B[corner_indices] = np.nan # convert DM corners to nan (so lenght flat_B = 140 which corresponds to BMC-3.5 DM)
+            flat_B = padded_B.reshape(
+                -1
+            )  # flatten basis so we can put it in the accepted DM command format
+            np.nan_to_num(flat_B, 0)  # convert nan -> 0
+            flat_B[corner_indices] = (
+                np.nan
+            )  # convert DM corners to nan (so lenght flat_B = 140 which corresponds to BMC-3.5 DM)
 
             # now append our basis function removing corners (nan values)
-            bmcdm_basis_list.append( flat_B[np.isfinite(flat_B)] )
+            bmcdm_basis_list.append(flat_B[np.isfinite(flat_B)])
 
         # our mode 2 command matrix
         if without_piston:
-            M2C = np.array( bmcdm_basis_list )[1:].T #remove piston mode
+            M2C = np.array(bmcdm_basis_list)[1:].T  # remove piston mode
         else:
-            M2C = np.array( bmcdm_basis_list ).T # take transpose to make columns the modes in command space.
+            M2C = np.array(
+                bmcdm_basis_list
+            ).T  # take transpose to make columns the modes in command space.
 
-
-    elif basis == 'Zernike_pinned_edges':
+    elif basis == "Zernike_pinned_edges":
         """
-        designed for BMC multi 3.5 DM, define zernike basis on 10x10 central grid and 
+        designed for BMC multi 3.5 DM, define zernike basis on 10x10 central grid and
         interpolate outside of this grid, pinning the value of perimeter actuators to the
-        inner perimeter value. 
+        inner perimeter value.
         """
-        nact_len = 12 # must be 12
+        nact_len = 12  # must be 12
         # alway construct with piston cause we use as a filter, we delete piston later if specified by user
-        b0 = construct_command_basis( basis='Zernike', number_of_modes = number_of_modes, Nx_act_DM = nact_len, Nx_act_basis = nact_len, act_offset=(0,0), without_piston=False)
+        b0 = construct_command_basis(
+            basis="Zernike",
+            number_of_modes=number_of_modes,
+            Nx_act_DM=nact_len,
+            Nx_act_basis=nact_len,
+            act_offset=(0, 0),
+            without_piston=False,
+        )
 
-        # put values outside pupil to nan 
-        btmp = np.array( [get_DM_command_in_2D( bb ) for bb in b0.T])
+        # put values outside pupil to nan
+        btmp = np.array([get_DM_command_in_2D(bb) for bb in b0.T])
 
         # interpolate
-        nan_mask = btmp[0] #get_DM_command_in_2D( b0.T[0] != 0 )
-        nan_mask[nan_mask==0] = np.nan
+        nan_mask = btmp[0]  # get_DM_command_in_2D( b0.T[0] != 0 )
+        nan_mask[nan_mask == 0] = np.nan
 
-        #nan_mask = np.isnan(nan_mask)
-        nearest_index = distance_transform_edt(np.isnan(nan_mask), return_distances=False, return_indices=True)
+        # nan_mask = np.isnan(nan_mask)
+        nearest_index = distance_transform_edt(
+            np.isnan(nan_mask), return_distances=False, return_indices=True
+        )
 
         # Use the indices to replace NaNs with the nearest non-NaN values
 
-        with_corners = np.array( [ (nan_mask * bb)[tuple(nearest_index)] for bb in btmp[:]] ).T
-        #filled_data = get_DM_command_in_2D( new_flat )[tuple(nearest_index)]
-
+        with_corners = np.array(
+            [(nan_mask * bb)[tuple(nearest_index)] for bb in btmp[:]]
+        ).T
+        # filled_data = get_DM_command_in_2D( new_flat )[tuple(nearest_index)]
 
         # Define the indices of the corners to be removed
-        corners = [(0, 0), (0, nact_len-1), (nact_len-1, 0), (nact_len-1, nact_len-1)]
+        corners = [
+            (0, 0),
+            (0, nact_len - 1),
+            (nact_len - 1, 0),
+            (nact_len - 1, nact_len - 1),
+        ]
         # Convert 2D corner indices to 1D
         corner_indices = [i * 12 + j for i, j in corners]
 
@@ -197,129 +238,182 @@ def construct_command_basis( basis='Zernike_pinned_edges', number_of_modes = 20,
             flattened_array = w.flatten()
             filtered_array = np.delete(flattened_array, corner_indices)
 
-            bmcdm_basis_list.append( filtered_array )
+            bmcdm_basis_list.append(filtered_array)
 
         # piston was taken care of in construction of original zernike basis  b0 = construct_command_basis(
         if without_piston:
-            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list[1:]]
+            control_basis = [
+                np.sqrt(1 / np.nansum(cb**2)) * cb.reshape(-1)
+                for cb in bmcdm_basis_list[1:]
+            ]
         else:
-            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list[:]]
-        M2C = np.array( control_basis ).T
+            control_basis = [
+                np.sqrt(1 / np.nansum(cb**2)) * cb.reshape(-1)
+                for cb in bmcdm_basis_list[:]
+            ]
+        M2C = np.array(control_basis).T
 
-             
-    elif basis == 'fourier':
-        # NOT TESTED YET ON REAL DM!! 
+    elif basis == "fourier":
+        # NOT TESTED YET ON REAL DM!!
         if without_piston:
-            number_of_modes += 1 # we add one more mode since we dont include piston 
+            number_of_modes += 1  # we add one more mode since we dont include piston
 
         # NOTE BECAUSE WE HAVE N,M DIMENSIONS WE NEED TO ROUND UP TO SQUARE NUMBER THE MIGHT NOT = EXACTLY number_of_modes
-        n = round( number_of_modes**0.5 ) + 1 # number of modes = (n-1)*(m-1) , n=m => (n-1)**2 
-        control_basis_dict  = develop_Fourier_basis( n, n ,P = 2 * Nx_act_DM, Nx = Nx_act_DM, Ny = Nx_act_DM )
-        
+        n = (
+            round(number_of_modes**0.5) + 1
+        )  # number of modes = (n-1)*(m-1) , n=m => (n-1)**2
+        control_basis_dict = develop_Fourier_basis(
+            n, n, P=2 * Nx_act_DM, Nx=Nx_act_DM, Ny=Nx_act_DM
+        )
+
         # create raw basis as ordered list from our dictionary
         raw_basis = []
-        for i in range( n-1 ):
-            for j in np.arange( i , n-1 ):
-                if i==j:
-                    raw_basis.append( control_basis_dict[i,i] )
+        for i in range(n - 1):
+            for j in np.arange(i, n - 1):
+                if i == j:
+                    raw_basis.append(control_basis_dict[i, i])
                 else:
-                    raw_basis.append( control_basis_dict[i,j] ) # get either side of diagonal 
-                    raw_basis.append( control_basis_dict[j,i] )
-                    
-        
+                    raw_basis.append(
+                        control_basis_dict[i, j]
+                    )  # get either side of diagonal
+                    raw_basis.append(control_basis_dict[j, i])
+
         bmcdm_basis_list = []
-        for i,B in enumerate(raw_basis):
+        for i, B in enumerate(raw_basis):
             B = B.reshape(-1)
             B[corner_indices] = np.nan
-            bmcdm_basis_list.append( B[np.isfinite(B)] )
-        # flatten & normalize each basis cmd 
+            bmcdm_basis_list.append(B[np.isfinite(B)])
+        # flatten & normalize each basis cmd
         # <M|M> = 1
         if without_piston:
-            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list[1:]] #remove piston mode
+            control_basis = [
+                np.sqrt(1 / np.nansum(cb**2)) * cb.reshape(-1)
+                for cb in bmcdm_basis_list[1:]
+            ]  # remove piston mode
         else:
-            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list]# take transpose to make columns the modes in command space.
-        M2C = np.array( control_basis ).T 
+            control_basis = [
+                np.sqrt(1 / np.nansum(cb**2)) * cb.reshape(-1)
+                for cb in bmcdm_basis_list
+            ]  # take transpose to make columns the modes in command space.
+        M2C = np.array(control_basis).T
 
-    elif basis == 'fourier_pinned_edges':
+    elif basis == "fourier_pinned_edges":
         """
-        designed for BMC multi 3.5 DM, define zernike basis on 10x10 central grid and 
+        designed for BMC multi 3.5 DM, define zernike basis on 10x10 central grid and
         interpolate outside of this grid, pinning the value of perimeter actuators to the
-        inner perimeter value. 
+        inner perimeter value.
         """
-        n = round( number_of_modes**0.5 ) + 1 # number of modes = (n-1)*(m-1) , n=m => (n-1)**2 
-        actlen_tmp = 10 # must be 10 for this option! we then calculate perimeter values here! 
-        control_basis_dict  = develop_Fourier_basis( n, n ,P = 2 * actlen_tmp, Nx = actlen_tmp, Ny = actlen_tmp )
-                
+        n = (
+            round(number_of_modes**0.5) + 1
+        )  # number of modes = (n-1)*(m-1) , n=m => (n-1)**2
+        actlen_tmp = (
+            10  # must be 10 for this option! we then calculate perimeter values here!
+        )
+        control_basis_dict = develop_Fourier_basis(
+            n, n, P=2 * actlen_tmp, Nx=actlen_tmp, Ny=actlen_tmp
+        )
+
         # create raw basis as ordered list from our dictionary
         raw_basis = []
-        for i in range( n-1 ):
-            for j in np.arange( i , n-1 ):
-                if i==j:
-                    raw_basis.append( control_basis_dict[i,i] )
+        for i in range(n - 1):
+            for j in np.arange(i, n - 1):
+                if i == j:
+                    raw_basis.append(control_basis_dict[i, i])
                 else:
-                    raw_basis.append( control_basis_dict[i,j] ) # get either side of diagonal 
-                    raw_basis.append( control_basis_dict[j,i] )
-                    
-        # pin_outer_actuators_to_inner requires 10x10 input!!! creates 12x12 with missing corner pinning outer actuators 
-        bmcdm_basis_list = np.array( [pin_outer_actuators_to_inner_diameter(bb.reshape(-1)) for bb in np.array( raw_basis)] )
+                    raw_basis.append(
+                        control_basis_dict[i, j]
+                    )  # get either side of diagonal
+                    raw_basis.append(control_basis_dict[j, i])
+
+        # pin_outer_actuators_to_inner requires 10x10 input!!! creates 12x12 with missing corner pinning outer actuators
+        bmcdm_basis_list = np.array(
+            [
+                pin_outer_actuators_to_inner_diameter(bb.reshape(-1))
+                for bb in np.array(raw_basis)
+            ]
+        )
 
         # <M|M> = 1
         if without_piston:
-            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list[1:]] #remove piston mode
+            control_basis = [
+                np.sqrt(1 / np.nansum(cb**2)) * cb.reshape(-1)
+                for cb in bmcdm_basis_list[1:]
+            ]  # remove piston mode
         else:
-            control_basis = [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list]# take transpose to make columns the modes in command space.
-        
-        M2C = np.array( control_basis ).T 
+            control_basis = [
+                np.sqrt(1 / np.nansum(cb**2)) * cb.reshape(-1)
+                for cb in bmcdm_basis_list
+            ]  # take transpose to make columns the modes in command space.
 
+        M2C = np.array(control_basis).T
 
-    elif basis == 'Zonal': 
-        #hardcoded for BMC multi3.5 DM (140 actuators)
-        M2C = np.eye( 140 ) # we just consider this over all actuators (so defaults to 140 modes) 
-        # we filter zonal basis in the eigenvectors of the control matrix. 
-    
-    elif basis == 'Zonal_pinned_edges':
+    elif basis == "Zonal":
+        # hardcoded for BMC multi3.5 DM (140 actuators)
+        M2C = np.eye(
+            140
+        )  # we just consider this over all actuators (so defaults to 140 modes)
+        # we filter zonal basis in the eigenvectors of the control matrix.
+
+    elif basis == "Zonal_pinned_edges":
         # pin edges of actuator
-        b = np.eye(100) #
-        bmcdm_basis_list = np.array( [pin_outer_actuators_to_inner_diameter(bb) for bb in b.T] )
+        b = np.eye(100)  #
+        bmcdm_basis_list = np.array(
+            [pin_outer_actuators_to_inner_diameter(bb) for bb in b.T]
+        )
         # <M|M> = 1
-        control_basis = np.array( [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in bmcdm_basis_list] )
+        control_basis = np.array(
+            [np.sqrt(1 / np.nansum(cb**2)) * cb.reshape(-1) for cb in bmcdm_basis_list]
+        )
 
-        M2C = np.array( control_basis ).T
+        M2C = np.array(control_basis).T
 
     else:
-        raise TypeError( ' input basis name invalid. Try: "Zonal", "Zonal_pinned_edges", "Zernike", "Zernike_pinned_edges", "fourier", "fourier_pinned_edges"  etc ')
-    
-    
-    return(M2C)
+        raise TypeError(
+            ' input basis name invalid. Try: "Zonal", "Zonal_pinned_edges", "Zernike", "Zernike_pinned_edges", "fourier", "fourier_pinned_edges"  etc '
+        )
+
+    return M2C
 
 
-def get_tip_tilt_vectors( dm_model='bmc_multi3.5' ,nact_len=12):
-    tip = np.array([[n for n in np.linspace(-1,1,nact_len)] for _ in range(nact_len)])
+def get_tip_tilt_vectors(dm_model="bmc_multi3.5", nact_len=12):
+    tip = np.array([[n for n in np.linspace(-1, 1, nact_len)] for _ in range(nact_len)])
     tilt = tip.T
-    if dm_model == 'bmc_multi3.5':
+    if dm_model == "bmc_multi3.5":
         # Define the indices of the corners to be removed
-        corners = [(0, 0), (0, nact_len-1), (nact_len-1, 0), (nact_len-1, nact_len-1)]
+        corners = [
+            (0, 0),
+            (0, nact_len - 1),
+            (nact_len - 1, 0),
+            (nact_len - 1, nact_len - 1),
+        ]
         # Convert 2D corner indices to 1D
         corner_indices = [i * 12 + j for i, j in corners]
 
         # remove corners
         tip_tilt_list = []
-        for i,B in enumerate([tip,tilt]):
+        for i, B in enumerate([tip, tilt]):
             B = B.reshape(-1)
             B[corner_indices] = np.nan
-            tip_tilt_list.append( B[np.isfinite(B)] )
-        
-        tip_tilt = np.array( [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in tip_tilt_list] ).T
+            tip_tilt_list.append(B[np.isfinite(B)])
+
+        tip_tilt = np.array(
+            [np.sqrt(1 / np.nansum(cb**2)) * cb.reshape(-1) for cb in tip_tilt_list]
+        ).T
 
     else:
-        tip_tilt = np.array( [np.sqrt( 1/np.nansum( cb**2 ) ) * cb.reshape(-1) for cb in [tip.reshape(-1),tilt.reshape(-1)]] ).T
+        tip_tilt = np.array(
+            [
+                np.sqrt(1 / np.nansum(cb**2)) * cb.reshape(-1)
+                for cb in [tip.reshape(-1), tilt.reshape(-1)]
+            ]
+        ).T
 
-    return( tip_tilt ) 
+    return tip_tilt
 
 
-def fourier_vector(n, m, P = 2*12, Nx = 12, Ny = 12):
+def fourier_vector(n, m, P=2 * 12, Nx=12, Ny=12):
     """
-    OR we can do it with complex exponetial, in-quadrature is real part, out of quadrature is imaginary 
+    OR we can do it with complex exponetial, in-quadrature is real part, out of quadrature is imaginary
     Normalized <Bx|Bx>=1 , <By|By>=1
 
     Parameters
@@ -340,24 +434,24 @@ def fourier_vector(n, m, P = 2*12, Nx = 12, Ny = 12):
     None.
 
     """
-    x = np.linspace(-6,6,Nx)
-    y = np.linspace(-6,6,Ny)
-    X,Y = np.meshgrid(x,y)
-    
-    
-    Bx = np.exp( 1J * 2 * np.pi * n/P * X )
-    if np.sum( abs(Bx) ):
-        Bx *= 1/np.sum( abs(Bx)**2 )**0.5
+    x = np.linspace(-6, 6, Nx)
+    y = np.linspace(-6, 6, Ny)
+    X, Y = np.meshgrid(x, y)
 
-    By = np.exp( 1J * 2 * np.pi * m/P * Y )
-    if np.sum( abs(By) ):
-        By *= 1/np.sum( abs(By)**2 )**0.5
-    
-    return( Bx, By )
+    Bx = np.exp(1j * 2 * np.pi * n / P * X)
+    if np.sum(abs(Bx)):
+        Bx *= 1 / np.sum(abs(Bx) ** 2) ** 0.5
 
-def develop_Fourier_basis( n,m ,P = 2*12, Nx = 12, Ny = 12):
+    By = np.exp(1j * 2 * np.pi * m / P * Y)
+    if np.sum(abs(By)):
+        By *= 1 / np.sum(abs(By) ** 2) ** 0.5
+
+    return (Bx, By)
+
+
+def develop_Fourier_basis(n, m, P=2 * 12, Nx=12, Ny=12):
     """
-    
+
 
     Parameters
     ----------
@@ -369,70 +463,64 @@ def develop_Fourier_basis( n,m ,P = 2*12, Nx = 12, Ny = 12):
     Returns
     -------
     basis_dict - a dictionary indexed by mode order tuple (n,m) with corresponding 2D Fourier basis
-    
-    
-    # what is logical indexing? 
+
+
+    # what is logical indexing?
     basis naturally forms 2 NxN squares, one square corresponding to odd components (sin) in x,y other to even (cos)
 
     for each axis dimension cnt, with even numbers corresponding to even functions (cos), odd numbers to odd functions (sin)
     therefore to recover cos or sin order we simply divide by 2 and round (//2)
 
-    we do not count piston  
+    we do not count piston
     e.g. indexing for x dimension:
-    0 = np.real(F_basis_x[0] )  
-    1 = np.imag(F_basis_x[0] )  
-    2 = np.iamg(F_basis_x[1] ) 
-    3 = np.real(F_basis_x[1] ) 
+    0 = np.real(F_basis_x[0] )
+    1 = np.imag(F_basis_x[0] )
+    2 = np.iamg(F_basis_x[1] )
+    3 = np.real(F_basis_x[1] )
 
     therefore for example index (3,2)
     B_(3,2) = np.real(F_basis_x[1] ) * np.imag(F_basis_y[1] )
-    first index corresponds to variation across columns (x), 
+    first index corresponds to variation across columns (x),
     second index corresponds to variation across rows (y)
 
     """
     basis_dict = {}
 
-    for x_idx in range(0,n):
-        for y_idx in range(0,m):            
+    for x_idx in range(0, n):
+        for y_idx in range(0, m):
             #
-            x_order = x_idx//2
-            y_order = y_idx//2
-            
-            if not ((x_idx==0) | (y_idx==0)): # otherwise we get lots of pistons 
-                Bx, By = fourier_vector(x_order, y_order, P , Nx , Ny )
-                    
-                if not np.mod(x_idx,2): #odd number take imaginary (odd) part
-                    Bx_q = np.imag( Bx )
-    
-                else: # even number take real (even) part
-                    Bx_q = np.real( Bx )
-    
-                    
-                if not np.mod(y_idx,2): #odd number take imaginary (odd) part
-                    By_q = np.imag( By )
-                    
-                else: # even number take real (even) part
-                    By_q = np.real( By )
-            
-                #if x_idx > 1:
+            x_order = x_idx // 2
+            y_order = y_idx // 2
+
+            if not ((x_idx == 0) | (y_idx == 0)):  # otherwise we get lots of pistons
+                Bx, By = fourier_vector(x_order, y_order, P, Nx, Ny)
+
+                if not np.mod(x_idx, 2):  # odd number take imaginary (odd) part
+                    Bx_q = np.imag(Bx)
+
+                else:  # even number take real (even) part
+                    Bx_q = np.real(Bx)
+
+                if not np.mod(y_idx, 2):  # odd number take imaginary (odd) part
+                    By_q = np.imag(By)
+
+                else:  # even number take real (even) part
+                    By_q = np.real(By)
+
+                # if x_idx > 1:
                 mode_tmp = Bx_q * By_q - np.mean(Bx_q * By_q)
-                if np.sum( mode_tmp**2):
-                    mode_tmp *= 1/np.sum( mode_tmp**2)**0.5 #normalized <M|M>=1
-                basis_dict[(x_idx-1,y_idx-1)] =  mode_tmp
+                if np.sum(mode_tmp**2):
+                    mode_tmp *= 1 / np.sum(mode_tmp**2) ** 0.5  # normalized <M|M>=1
+                basis_dict[(x_idx - 1, y_idx - 1)] = mode_tmp
 
-
-    return(basis_dict)
-
-
-
-
+    return basis_dict
 
 
 def noll_indices(j):
     """
-    copied from taken from pyzelda (2024) 
+    copied from taken from pyzelda (2024)
     # https://github.com/avigan/pyZELDA/blob/master/pyzelda/utils/zernike.py
-    
+
     Convert from 1-D to 2-D indexing for Zernikes or Hexikes.
 
     Parameters
@@ -471,7 +559,7 @@ def noll_indices(j):
         else:
             row_m = [0]
 
-        for i in range(int(np.floor(n / 2.))):
+        for i in range(int(np.floor(n / 2.0))):
             row_m.append(row_m[-1] + 2)
             row_m.append(row_m[-1])
 
@@ -479,15 +567,17 @@ def noll_indices(j):
 
     return n, m
 
+
 def _is_odd(integer):
     """Helper for testing if an integer is odd by bitwise & with 1."""
     return integer & 1
 
+
 def zernike_basis(nterms=15, npix=512, rho=None, theta=None, **kwargs):
     """
-    copied from taken from pyzelda (2024) 
+    copied from taken from pyzelda (2024)
     # https://github.com/avigan/pyZELDA/blob/master/pyzelda/utils/zernike.py
-    
+
     Return a cube of Zernike terms from 1 to N each as a 2D array
     showing the value at each point. (Regions outside the unit circle on which
     the Zernike is defined are initialized to zero.)
@@ -514,8 +604,10 @@ def zernike_basis(nterms=15, npix=512, rho=None, theta=None, **kwargs):
         shape = rho.shape
         use_polar = True
     elif (theta is None and rho is not None) or (theta is not None and rho is None):
-        raise ValueError("If you provide either the `theta` or `rho` input array, you must "
-                             "provide both of them.")
+        raise ValueError(
+            "If you provide either the `theta` or `rho` input array, you must "
+            "provide both of them."
+        )
 
     else:
         shape = (npix, npix)
@@ -532,13 +624,12 @@ def zernike_basis(nterms=15, npix=512, rho=None, theta=None, **kwargs):
     return zern_output
 
 
-
 def zernike1(j, **kwargs):
-    """ 
-    copied from taken from pyzelda (2024) 
+    """
+    copied from taken from pyzelda (2024)
     # https://github.com/avigan/pyZELDA/blob/master/pyzelda/utils/zernike.py
-    
-    
+
+
     Return the Zernike polynomial Z_j for pupil points {r,theta}.
 
     For this function the desired Zernike is specified by a single index j.
@@ -567,9 +658,9 @@ def zernike1(j, **kwargs):
 
 def R(n, m, rho):
     """
-    copied from taken from pyzelda (2024) 
+    copied from taken from pyzelda (2024)
     # https://github.com/avigan/pyZELDA/blob/master/pyzelda/utils/zernike.py
-    
+
     Compute R[n, m], the Zernike radial polynomial
 
     Parameters
@@ -588,18 +679,24 @@ def R(n, m, rho):
         return 0
     else:
         for k in range(int((n - m) / 2) + 1):
-            coef = ((-1) ** k * factorial(round( n - k)) /
-                    (factorial(k) * factorial( round( (n + m) / 2. - k) ) * factorial( round( (n - m) / 2. - k))) )
+            coef = (
+                (-1) ** k
+                * factorial(round(n - k))
+                / (
+                    factorial(k)
+                    * factorial(round((n + m) / 2.0 - k))
+                    * factorial(round((n - m) / 2.0 - k))
+                )
+            )
             output += coef * rho ** (n - 2 * k)
         return output
 
 
-def zernike(n, m, npix=100, rho=None, theta=None, outside=np.nan,
-            noll_normalize=True):
+def zernike(n, m, npix=100, rho=None, theta=None, outside=np.nan, noll_normalize=True):
     """
-    copied from taken from pyzelda (2024) 
+    copied from taken from pyzelda (2024)
     # https://github.com/avigan/pyZELDA/blob/master/pyzelda/utils/zernike.py
-    
+
     Return the Zernike polynomial Z[m,n] for a given pupil.
 
     For this function the desired Zernike is specified by 2 indices m and n.
@@ -646,22 +743,26 @@ def zernike(n, m, npix=100, rho=None, theta=None, outside=np.nan,
     if not n >= m:
         raise ValueError("Zernike index m must be >= index n")
     if (n - m) % 2 != 0:
-        print("Radial polynomial is zero for these inputs: m={}, n={} "
-                  "(are you sure you wanted this Zernike?)".format(m, n))
+        print(
+            "Radial polynomial is zero for these inputs: m={}, n={} "
+            "(are you sure you wanted this Zernike?)".format(m, n)
+        )
 
     if theta is None and rho is None:
-        x = (np.arange(npix, dtype=np.float64) - (npix - 1) / 2.) / ((npix - 1) / 2.)
+        x = (np.arange(npix, dtype=np.float64) - (npix - 1) / 2.0) / ((npix - 1) / 2.0)
         y = x
         xx, yy = np.meshgrid(x, y)
 
-        rho = np.sqrt(xx ** 2 + yy ** 2)
+        rho = np.sqrt(xx**2 + yy**2)
         theta = np.arctan2(yy, xx)
     elif (theta is None and rho is not None) or (theta is not None and rho is None):
-        raise ValueError("If you provide either the `theta` or `rho` input array, you must "
-                             "provide both of them.")
+        raise ValueError(
+            "If you provide either the `theta` or `rho` input array, you must "
+            "provide both of them."
+        )
 
     if not np.all(rho.shape == theta.shape):
-        raise ValueError('The rho and theta arrays do not have consistent shape.')
+        raise ValueError("The rho and theta arrays do not have consistent shape.")
 
     aperture = np.ones(rho.shape)
     aperture[np.where(rho > 1)] = 0.0  # this is the aperture mask
@@ -674,16 +775,17 @@ def zernike(n, m, npix=100, rho=None, theta=None, outside=np.nan,
             zernike_result = norm_coeff * R(n, m, rho) * aperture
     elif m > 0:
         norm_coeff = np.sqrt(2) * np.sqrt(n + 1) if noll_normalize else 1
-        zernike_result = norm_coeff * R(n, m, rho) * np.cos(np.abs(m) * theta) * aperture
+        zernike_result = (
+            norm_coeff * R(n, m, rho) * np.cos(np.abs(m) * theta) * aperture
+        )
     else:
         norm_coeff = np.sqrt(2) * np.sqrt(n + 1) if noll_normalize else 1
-        zernike_result = norm_coeff * R(n, m, rho) * np.sin(np.abs(m) * theta) * aperture
+        zernike_result = (
+            norm_coeff * R(n, m, rho) * np.sin(np.abs(m) * theta) * aperture
+        )
 
     zernike_result[np.where(rho > 1)] = outside
     return zernike_result
-
-
-
 
 
 def pin_outer_actuators_to_inner_diameter(inner_command):
@@ -696,7 +798,7 @@ def pin_outer_actuators_to_inner_diameter(inner_command):
         raise ValueError("Input command must be of length 100")
 
     inner_command = np.array(inner_command).reshape(10, 10)
-    
+
     # Initialize a 12x12 grid with zeros
     command_140 = np.zeros((12, 12))
 
@@ -726,7 +828,10 @@ def pin_outer_actuators_to_inner_diameter(inner_command):
 
     return command_140_flat.tolist()
 
-def pin_to_nearest_registered_with_missing_corners(dm_shape, missing_corners, registered_indices):
+
+def pin_to_nearest_registered_with_missing_corners(
+    dm_shape, missing_corners, registered_indices
+):
     """
     Pins non-registered actuators to the closest registered actuator, excluding missing corners.
 
@@ -741,20 +846,20 @@ def pin_to_nearest_registered_with_missing_corners(dm_shape, missing_corners, re
     """
     # Create the full DM grid with flattened indices
     flattened_size = dm_shape[0] * dm_shape[1]
-    
+
     # Generate 2D coordinates for each point on the grid
     grid_coords = np.array(np.unravel_index(np.arange(flattened_size), dm_shape)).T
-    
+
     # Remove missing corners from the grid and flatten the remaining actuators
     valid_indices = np.setdiff1d(np.arange(flattened_size), missing_corners)
     valid_coords = grid_coords[valid_indices]
 
     # Extract coordinates of the registered actuators
     registered_coords = grid_coords[registered_indices]
-    
+
     # Initialize the basis matrix for valid actuators
     basis = np.zeros((len(valid_indices), len(registered_indices)))
-    
+
     # For each valid actuator, find the closest registered actuator
     for idx, valid_idx in enumerate(valid_indices):
         if valid_idx in registered_indices:
@@ -766,46 +871,42 @@ def pin_to_nearest_registered_with_missing_corners(dm_shape, missing_corners, re
             nearest_idx = np.argmin(distances)
             # Pin to the nearest registered actuator
             basis[idx, nearest_idx] = 1.0
-    
-    #<m|m>=1
-    basis_norm = np.array( [b/np.sum(b**2)**0.5 for b in basis.T] ).T
-    
-    
+
+    # <m|m>=1
+    basis_norm = np.array([b / np.sum(b**2) ** 0.5 for b in basis.T]).T
+
     return basis_norm
-
-
 
 
 # Frantz Zernike definitions on DM
 def fill_mode(dmmap):
-    ''' Extrapolate the modes outside the aperture to ensure edge continuity
+    """Extrapolate the modes outside the aperture to ensure edge continuity
 
     Parameter:
     ---------
     - a single 2D DM map
-    '''
+    """
 
-
-    dms = 12 
+    dms = 12
     aps = 10  # the aperture grid size
     dd = dist(dms, dms, between_pix=True)  # auxilliary array
     tprad = 5.5  # the taper function radius
-    taper = np.exp(-(dd/tprad)**20)  # power to be adjusted ?
+    taper = np.exp(-((dd / tprad) ** 20))  # power to be adjusted ?
     amask = taper > 0.4  # seems to work well
-    #circ = dd < 4
+    # circ = dd < 4
 
     out = True ^ amask  # outside the aperture
     gx, gy = np.mgrid[0:dms, 0:dms]
     points = np.array([gx[amask], gy[amask]]).T
     values = np.array(dmmap[amask])
-    grid_z0 = griddata(points, values, (gx[out], gy[out]), method='nearest')
+    grid_z0 = griddata(points, values, (gx[out], gy[out]), method="nearest")
     res = dmmap.copy()
     res[out] = grid_z0
     return res
 
 
 def zer_bank(i0, i1, extrapolate=True, tapered=False):
-    ''' ------------------------------------------
+    """------------------------------------------
     Returns a 3D array containing 2D (dms x dms)
     maps of Zernike modes for Noll index going
     from i0 to i1 included.
@@ -815,20 +916,20 @@ def zer_bank(i0, i1, extrapolate=True, tapered=False):
     - i0: the first Zernike index to be used
     - i1: the last Zernike index to be used
     - tapered: boolean (tapers the Zernike)
-    ------------------------------------------ '''
+    ------------------------------------------"""
 
-    dms = 12 
+    dms = 12
     aps = 10  # the aperture grid size
     dd = dist(dms, dms, between_pix=True)  # auxilliary array
     tprad = 5.5  # the taper function radius
-    taper = np.exp(-(dd/tprad)**20)  # power to be adjusted ?
+    taper = np.exp(-((dd / tprad) ** 20))  # power to be adjusted ?
     amask = taper > 0.4  # seems to work well
-    #circ = dd < 4
+    # circ = dd < 4
 
     dZ = i1 - i0 + 1
     res = np.zeros((dZ, dms, dms))
-    for ii in range(i0, i1+1):
-        test = mkzer1(ii, dms, aps//2, limit=False)
+    for ii in range(i0, i1 + 1):
+        test = mkzer1(ii, dms, aps // 2, limit=False)
         # if ii == 1:
         #     test *= circ
         if ii != 1:
@@ -839,7 +940,6 @@ def zer_bank(i0, i1, extrapolate=True, tapered=False):
             test = fill_mode(test)
         if tapered is True:
             test *= taper * amask
-        res[ii-i0] = test
+        res[ii - i0] = test
 
-    return(res)
-
+    return res
