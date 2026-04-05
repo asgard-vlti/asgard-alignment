@@ -11,7 +11,7 @@ import numpy as np
 import astropy.units as u
 from astropy.coordinates import SkyCoord, EarthLocation, AltAz
 from astropy.time import Time
-import adc_fns as af
+import asgard_alignment.adc_fns as af
 
 try:
     import tomllib
@@ -19,9 +19,6 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for older Python
     import tomli as tomllib
 
 
-def send_and_recv(socket, message):
-    socket.send_string(message)
-    return socket.recv_string().strip()
 
 
 def load_config(config_path):
@@ -41,14 +38,14 @@ def load_config(config_path):
 
 
 def wait_until_reached(
-    socket, adc_name, abs_target, timeout_s=120, poll_interval_s=0.5
+    client, adc_name, abs_target, timeout_s=120, poll_interval_s=0.5
 ):
     print(f"Waiting for {adc_name} to reach {abs_target}...")
     total_time = 0.0
 
     while total_time < timeout_s:
         time.sleep(poll_interval_s)
-        response = send_and_recv(socket, f"read {adc_name}")
+        response = client.send_and_recv(f"read {adc_name}")
         try:
             current = float(response)
         except ValueError:
@@ -82,12 +79,10 @@ def main():
 
     adc_zeropos = load_config(args.config)
 
-    context = zmq.Context()
-    socket = context.socket(zmq.REQ)
-    socket.connect("tcp://mimir:5555")
+    context, client = af.connect_socket()
 
-    relpos_upper = af.read_relative_positions(socket, af.ADC_UPPER_INDICES, adc_zeropos)
-    relpos_lower = af.read_relative_positions(socket, af.ADC_LOWER_INDICES, adc_zeropos)
+    relpos_upper = af.read_relative_positions(client, af.ADC_UPPER_INDICES, adc_zeropos)
+    relpos_lower = af.read_relative_positions(client, af.ADC_LOWER_INDICES, adc_zeropos)
 
     # measure the average relative offset for each group
     avg_relpos_upper = np.mean(relpos_upper)
@@ -112,23 +107,31 @@ def main():
     group_label = "adc_upper"
     message = f"rotm_slew {group_label} {-relmove_upper}"
     print(f"Relmoving {group_label} by {-relmove_upper} steps...")
-    response = send_and_recv(socket, message)
+    response = client.send_and_recv(message)
     print(f"Response: {response}")
 
+    beam_1U_target_abspos = adc_zeropos[af.ADC_UPPER_INDICES[0]] + relpos_upper[0] - relmove_upper
+    print(beam_1U_target_abspos)
+    wait_until_reached(client, "BACU1", beam_1U_target_abspos)
+    
     group_label = "adc_lower"
     message = f"rotm_slew {group_label} {-relmove_lower}"
     print(f"Relmoving {group_label} by {-relmove_lower} steps...")
-    response = send_and_recv(socket, message)
+    response = client.send_and_recv(message)
     print(f"Response: {response}")
+
+    beam_1L_target_abspos = adc_zeropos[af.ADC_LOWER_INDICES[0]] + relpos_lower[0] - relmove_lower
+    print(beam_1L_target_abspos)
+    wait_until_reached(client, "BACL1", beam_1L_target_abspos)
 
     for i, zeropos in enumerate(adc_zeropos):
         upper_or_lower = "upper" if i % 2 == 0 else "lower"
         adc_num = (i // 2) + 1
         adc_name = f"BAC{upper_or_lower[0].upper()}{adc_num}"
         print(f"Moving {adc_name} to zero position: {zeropos}")
-        response = send_and_recv(socket, f"moveabs {adc_name} {zeropos}")
+        response = client.send_and_recv(f"moveabs {adc_name} {zeropos}")
         print(f"Response: {response}")
-        wait_until_reached(socket, adc_name, zeropos)
+        wait_until_reached(client, adc_name, zeropos)
 
 
 if __name__ == "__main__":
