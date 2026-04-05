@@ -7,10 +7,13 @@ import os
 import argparse
 import datetime
 
+from bcam import Bcam
+
 from xaosim.shmlib import shm
 from asgard_alignment.DM_shm_ctrl import dmclass
 from asgard_alignment import FLI_Cameras as FLI
 import matplotlib.pyplot as plt
+
 beam = 3
 
 
@@ -19,7 +22,7 @@ def mds_connect(host: str, port: int = 5555, timeout_ms: int = 5000):
     ctx = zmq.Context()
     sock = ctx.socket(zmq.REQ)
     sock.setsockopt(zmq.RCVTIMEO, timeout_ms)
-    sock.connect(f"tcp://{host}:{port}")    
+    sock.connect(f"tcp://{host}:{port}")
     return ctx, sock
 
 
@@ -27,51 +30,11 @@ def mds_send(sock, msg: str) -> str:
     sock.send_string(msg)
     return sock.recv_string().strip()
 
+
 ctx, sock = mds_connect("mimir")
 
 # %%
 dm = dmclass(3)
-
-
-class Bcam:
-    def __init__(self, beam):
-        self.shm = shm(f"/dev/shm/baldr{beam}.im.shm", nosem=False)
-        self.imsize = (self.shm.mtdata['x'],self.shm.mtdata['y'])
-        self.dark = np.zeros((self.shm.mtdata['x'],self.shm.mtdata['y']))
-
-        self.nsem = 4
-        self.shm.catch_up_with_sem(self.nsem)
-
-        self.last_cnt = self.shm.get_counter()
-    
-    def get_img(self, subtract_dark=True):
-
-        img = self.shm.get_data(check=self.last_cnt)
-        self.last_cnt =self.shm.get_counter()
-
-        if subtract_dark:
-            return  img- self.dark
-        return img
-    
-    def take_stack(self, nframes, subtract_dark=True):
-        if nframes == 1:
-            return self.get_img(subtract_dark)[None,:,:]
-        
-        imgs = np.zeros((nframes, *self.imsize))
-        for i in range(nframes):
-            imgs[i] = cam.get_img(subtract_dark=False)
-        if subtract_dark:
-            imgs = imgs - self.dark[None,:,:]
-        return imgs
-
-    def take_dark(self, nframes):
-        self.dark = self.take_stack(nframes, subtract_dark=False).mean(0)
-
-    
-    def normalise(self, stack):
-        if stack.ndim == 2:
-            return stack/np.sum(stack)
-        return stack / np.sum(stack, axis=(-1,-2))[:, None, None]
 
 cam = Bcam(3)
 
@@ -87,7 +50,7 @@ mds_send(sock, "on SBB")
 time.sleep(1)
 # %%
 # %%
-vals =  np.random.randn(144)*0.1
+vals = np.random.randn(144) * 0.1
 dm.set_data(vals)
 
 # %%
@@ -102,8 +65,7 @@ ref = imgs.mean(0)
 # %%
 diffs = np.diff(imgs, axis=0)
 # plt.imshow(diffs.std(0))
-plt.plot(diffs[:,15,15])
-
+plt.plot(diffs[:, 15, 15])
 
 
 # %%
@@ -128,18 +90,18 @@ basis.transformation_matrix.shape
 hc_fourier = basis.transformation_matrix
 
 # if odd number of modes, remove piston
-if n_modes%2 == 1:
-    hc_fourier = hc_fourier[:,1:]
+if n_modes % 2 == 1:
+    hc_fourier = hc_fourier[:, 1:]
 
 
 hc_fourier.shape
 
 # %%
-plt.imshow(hc_fourier[:, 0].reshape(12,12))
+plt.imshow(hc_fourier[:, 0].reshape(12, 12))
 
 
 # %%
-def compute_IM(dm, cam, basis, amp, sleep=0.01, n_im=1, n_pokes=5,n_discard=2):
+def compute_IM(dm, cam, basis, amp, sleep=0.01, n_im=1, n_pokes=5, n_discard=2):
     n_modes = basis.shape[-1]
     responses = []
 
@@ -147,10 +109,10 @@ def compute_IM(dm, cam, basis, amp, sleep=0.01, n_im=1, n_pokes=5,n_discard=2):
         res = 0.0
         for pk_idx in range(n_pokes):
             imgs = []
-            for sp in [-1,1]:
-                cmd = np.zeros((n_modes,1))
-                cmd[mode_idx] = sp*amp
-                cmd = basis@cmd
+            for sp in [-1, 1]:
+                cmd = np.zeros((n_modes, 1))
+                cmd[mode_idx] = sp * amp
+                cmd = basis @ cmd
                 dm.set_data(cmd.flatten())
 
                 time.sleep(sleep)
@@ -159,11 +121,12 @@ def compute_IM(dm, cam, basis, amp, sleep=0.01, n_im=1, n_pokes=5,n_discard=2):
                 ims = cam.take_stack(n_im)
 
                 imgs.append(cam.normalise(ims).mean(0))
-            res += (imgs[1]-imgs[0])/(2*amp*n_pokes)
+            res += (imgs[1] - imgs[0]) / (2 * amp * n_pokes)
         responses.append(res)
 
     dm.set_data(np.zeros(144))
     return np.array(responses)
+
 
 start = time.time()
 im = compute_IM(dm, cam, hc_fourier, amp=0.1, sleep=0.02, n_im=10)
@@ -173,9 +136,10 @@ print(f"interaction matrix took {time.time() - start:.2f}s")
 im.shape
 # %%
 import matplotlib.colors as mcolor
+
 idx = -1
 plt.subplot(121)
-plt.imshow(hc_fourier[:,idx].reshape(12,12), norm=mcolor.CenteredNorm(), cmap="bwr")
+plt.imshow(hc_fourier[:, idx].reshape(12, 12), norm=mcolor.CenteredNorm(), cmap="bwr")
 plt.subplot(122)
 plt.imshow(im[idx], norm=mcolor.CenteredNorm(), cmap="bwr")
 plt.colorbar()
@@ -183,11 +147,11 @@ plt.colorbar()
 # %%
 im = im.reshape(im.shape[0], -1)
 # %%
-xcor = im@im.T
+xcor = im @ im.T
 plt.imshow(xcor, norm=mcolor.CenteredNorm(), cmap="bwr")
 plt.colorbar()
 # %%
-FIM =(im/ref.flatten())@im.T
+FIM = (im / ref.flatten()) @ im.T
 Cov = np.linalg.inv(FIM)
 
 plt.imshow(Cov, norm=mcolor.CenteredNorm(), cmap="bwr")
@@ -196,6 +160,7 @@ plt.colorbar()
 metric = np.trace(Cov)
 metric
 
+
 # %%
 def im_FIM_metric(dm, basis, ref, metric_type="avg_cov_ph"):
     start = time.time()
@@ -203,13 +168,14 @@ def im_FIM_metric(dm, basis, ref, metric_type="avg_cov_ph"):
     print(f"interaction matrix took {time.time() - start:.2f}s")
 
     im = im.reshape(im.shape[0], -1)
-    FIM =(im/ref.flatten())@im.T
+    FIM = (im / ref.flatten()) @ im.T
 
     if metric_type == "avg_cov_ph":
         Cov = np.linalg.inv(FIM)
         return np.trace(Cov), im, Cov
     else:
         raise ValueError()
+
 
 covs = []
 n_runs = 5
@@ -219,15 +185,17 @@ for i in range(n_runs):
     covs.append(cov)
 
 for i in range(n_runs):
-    plt.subplot(1,n_runs,i+1)
+    plt.subplot(1, n_runs, i + 1)
     plt.imshow(covs[i], norm=mcolor.CenteredNorm(), cmap="bwr")
 
 # %%
 
 offset_ch = 1
 
-def write_offset(dm:dmclass, offset_cmd):
+
+def write_offset(dm: dmclass, offset_cmd):
     dm.shms[offset_ch].set_data(offset_cmd)
+
 
 n_act = 12
 n_beam = 10
@@ -248,18 +216,18 @@ basis.transformation_matrix.shape
 fourier_small = basis.transformation_matrix
 
 # if odd number of modes, remove piston
-if n_modes%2 == 1:
-    fourier_small = fourier_small[:,1:]
+if n_modes % 2 == 1:
+    fourier_small = fourier_small[:, 1:]
 
 # %%
-plt.imshow(fourier_small[:,1].reshape(12,12))
+plt.imshow(fourier_small[:, 1].reshape(12, 12))
 
 # %%
 # offsets = np.array([0.05,0.0,0.0,0.0])
 offsets = np.zeros(fourier_small.shape[1])
 offsets[1] = 0.01
 
-write_offset(dm, fourier_small@(offsets[:, None]))
+write_offset(dm, fourier_small @ (offsets[:, None]))
 time.sleep(0.03)
 ref = cam.take_stack(1000).mean(0)
 
@@ -270,9 +238,10 @@ print(f"{res:.3e}")
 # %%
 import scipy.optimize
 
+
 def loss(offsets, args):
-    fourier_small,hc_fourier = args
-    write_offset(dm, fourier_small@(offsets[:, None]))
+    fourier_small, hc_fourier = args
+    write_offset(dm, fourier_small @ (offsets[:, None]))
     time.sleep(0.03)
     ref = cam.take_stack(1000).mean(0)
 
@@ -283,6 +252,12 @@ def loss(offsets, args):
 offsets = np.zeros(fourier_small.shape[1])
 offsets[1] = 0.01
 
-res = scipy.optimize.minimize(loss, offsets, args=((fourier_small,hc_fourier),), method="Nelder-Mead", options={"disp":True,"maxfev":120})
+res = scipy.optimize.minimize(
+    loss,
+    offsets,
+    args=((fourier_small, hc_fourier),),
+    method="Nelder-Mead",
+    options={"disp": True, "maxfev": 120},
+)
 # %%
 res.x
