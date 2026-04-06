@@ -19,6 +19,7 @@
 !config_files/default_cred1_config.json
 
 *.npy
+*.npz
 
 *.log
 

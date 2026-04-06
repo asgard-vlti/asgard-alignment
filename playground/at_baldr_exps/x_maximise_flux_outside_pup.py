@@ -116,6 +116,7 @@ pupil_center = (res.x[1], res.x[2])
 plt.imshow(pupil_only)
 plt.contour(pupil_mask, levels=[0.5], color="r")
 
+
 # %%
 # pupil_mask =
 scattered_flux_mask_r_outer = 12
@@ -143,7 +144,6 @@ act_reg_mask /= act_reg_mask.sum()
 hcipy.imshow_field(act_reg_mask, grid=act_grid)
 plt.colorbar()
 
-# %%
 
 
 # %%
@@ -160,7 +160,7 @@ def uniformity_in_pupil(img, pupil_mask):
     img_in_pupil = img * pupil_mask
     mean_in_pupil = np.sum(img_in_pupil) / np.sum(pupil_mask)
     # want a uniform distribution in the pupil, so penalise the variance
-    return np.sum(pupil_mask * (img_in_pupil - mean_in_pupil) ** 2)
+    return np.sqrt(np.sum(pupil_mask * (img_in_pupil - mean_in_pupil) ** 2))
 
 
 def loss(cmd, lamb_unif, lamb_reg, scatter_mask, act_mask):
@@ -180,7 +180,13 @@ init_cmd = np.zeros(144)
 scattered_flux_mask /= scattered_flux_mask.sum()
 act_reg_mask /= act_reg_mask.sum()
 
-flux_outside_pupil(init_cmd, scatter_mask=scattered_flux_mask), L1_masked_reg(
+dm.set_data(init_cmd)
+time.sleep(0.01)
+img = cam.take_stack(64).mean(0)
+
+pupil_hard_mask = pupil_mask>0.6
+
+flux_outside_pupil(img, scatter_mask=scattered_flux_mask), uniformity_in_pupil(img, pupil_hard_mask), L1_masked_reg(
     init_cmd, act_reg_mask
 )
 
@@ -188,9 +194,9 @@ flux_outside_pupil(init_cmd, scatter_mask=scattered_flux_mask), L1_masked_reg(
 # while True:
 #     print(loss(init_cmd, 10.0, scattered_flux_mask, act_reg_mask),end="\r")
 #     time.sleep(0.01)
-print(loss(init_cmd, 10.0, scattered_flux_mask, act_reg_mask))
+print(loss(init_cmd, 0.1, 10.0, scattered_flux_mask, act_reg_mask))
 # %%
-loss(np.random.randn(144) * 0.02, 0.0, scattered_flux_mask, act_reg_mask)
+loss(np.random.randn(144) * 0.02, 0.1, 0.0, scattered_flux_mask, act_reg_mask)
 
 # %%
 res = opt.minimize(
@@ -237,16 +243,16 @@ hcipy.imshow_field(fourier_small[0])
 
 
 # %%
-def basis_loss(coeffs, basis, lamb_reg, scatter_mask, act_mask, scale=0.05):
+def basis_loss(coeffs, basis, lamb_unif, scatter_mask, act_mask, scale=0.05):
     coeffs_scaled = coeffs * scale
     cmd = basis.linear_combination(coeffs_scaled)
-    return loss(cmd, lamb_reg, scatter_mask, act_mask)
+    return loss(cmd, lamb_unif, 0.0, scatter_mask, act_mask)
 
 # %%
 res = opt.minimize(
     basis_loss,
     np.zeros(n_offset_modes),
-    (fourier_small, 0.0, scattered_flux_mask, act_reg_mask),
+    (fourier_small, 0.5, scattered_flux_mask, act_reg_mask),
     method="COBYLA",
     options={"disp": True, "maxiter": 50},
     # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
@@ -288,13 +294,50 @@ basis_loss(
 res = opt.minimize(
     basis_loss,
     init_coeffs * 5,
-    (fourier_middle, 0.0, scattered_flux_mask, act_reg_mask, 0.01),
+    (fourier_middle, 0.2, scattered_flux_mask, act_reg_mask, 0.01),
     method="COBYLA",
-    options={"disp": True, "maxiter": 60},
+    options={"disp": True, "maxiter": 120},
     # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
 )
 # %%
-basis_loss(res.x, fourier_middle, 0.0, scattered_flux_mask, act_reg_mask, 0.01)
+basis_loss(res.x, fourier_middle, 0.2, scattered_flux_mask, act_reg_mask, 0.01)
+# %%
+basis_loss(np.zeros(len(res.x)), fourier_middle, 0.2, scattered_flux_mask, act_reg_mask, 0.01)
+
+
+# %%
+sol = res.x.copy()
+fourier_large = fourier_basis(8)
+
+n_terms = fourier_large.num_modes
+init_coeffs = fourier_large.coefficients_for(fourier_middle.linear_combination(sol))
+
+# %%
+
+res = opt.minimize(
+    basis_loss,
+    init_coeffs,
+    (fourier_large, 0.3, scattered_flux_mask, act_reg_mask, 0.01),
+    method="COBYLA",
+    options={"disp": True, "maxiter": 320},
+    # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
+)
+# %%
+basis_loss(res.x, fourier_large, 0.2, scattered_flux_mask, act_reg_mask, 0.01)
+
+# %%
+flat_img = cam.take_stack(256).mean(0)
+# %%
+np.savez("beam3_good_flat2.npz",
+         flat=fourier_large.linear_combination(res.x),
+         flat_img=flat_img,
+         n_fourier_modes=8,
+         lamb_unif=0.3)
+
+# %%
+
+img = cam.take_stack(256).mean(0)
+plt.imshow(img*(pupil_mask>0.5))
 
 # %%
 dm.set_data(np.zeros(144))
@@ -363,7 +406,7 @@ for n, max_it in zip(n_squares, n_max_iters):
     res = opt.minimize(
         basis_loss,
         init_coeffs,
-        (square_basis, 0.0, scattered_flux_mask, act_reg_mask, 0.01),
+        (square_basis, 0.1, scattered_flux_mask, act_reg_mask, 0.01),
         method="COBYLA",
         options={"disp": True, "maxiter": max_it},
         # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],

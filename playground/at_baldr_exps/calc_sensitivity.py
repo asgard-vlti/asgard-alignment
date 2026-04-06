@@ -57,6 +57,13 @@ dm.set_data(vals)
 dm.set_data(np.zeros(144))
 time.sleep(0.01)
 
+# %%
+zero_point_file = np.load("beam3_good_flat.npz")
+zero_point = zero_point_file["flat"]*0.01
+
+dm.shms[1].set_data(zero_point)
+dm.shm0.post_sems(1)
+
 imgs = cam.take_stack(1000)
 plt.imshow(imgs.mean(0))
 plt.colorbar()
@@ -67,7 +74,6 @@ diffs = np.diff(imgs, axis=0)
 # plt.imshow(diffs.std(0))
 plt.plot(diffs[:, 15, 15])
 
-
 # %%
 import hcipy
 
@@ -75,7 +81,7 @@ n_act = 12
 n_beam = 10
 
 grid = hcipy.make_pupil_grid(n_act, diameter=n_act / n_beam)
-n_modes = 7
+n_modes = 8
 max_freq = n_modes  # lambda/D
 probe_max_freq = max_freq
 
@@ -129,7 +135,7 @@ def compute_IM(dm, cam, basis, amp, sleep=0.01, n_im=1, n_pokes=5, n_discard=2):
 
 
 start = time.time()
-im = compute_IM(dm, cam, hc_fourier, amp=0.1, sleep=0.02, n_im=10)
+im = compute_IM(dm, cam, hc_fourier, amp=0.005, sleep=0.02, n_im=10)
 print(f"interaction matrix took {time.time() - start:.2f}s")
 
 # %%
@@ -137,7 +143,8 @@ im.shape
 # %%
 import matplotlib.colors as mcolor
 
-idx = -1
+im = im.reshape(im.shape[0], 32,32)
+idx = 0
 plt.subplot(121)
 plt.imshow(hc_fourier[:, idx].reshape(12, 12), norm=mcolor.CenteredNorm(), cmap="bwr")
 plt.subplot(122)
@@ -151,6 +158,7 @@ xcor = im @ im.T
 plt.imshow(xcor, norm=mcolor.CenteredNorm(), cmap="bwr")
 plt.colorbar()
 # %%
+# FIM = (im) @ im.T
 FIM = (im / ref.flatten()) @ im.T
 Cov = np.linalg.inv(FIM)
 
@@ -160,6 +168,10 @@ plt.colorbar()
 metric = np.trace(Cov)
 metric
 
+# %%
+plt.plot(np.diag(Cov),'x')
+ax2 = plt.twinx()
+ax2.plot(np.diag(FIM), 'x', c="r")
 
 # %%
 def im_FIM_metric(dm, basis, ref, metric_type="avg_cov_ph"):
