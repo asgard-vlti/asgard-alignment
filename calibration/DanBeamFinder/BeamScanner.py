@@ -5,11 +5,18 @@ import matplotlib.pyplot as plt
 import libs.GeneralCameraClass as CamForm
 import libs.GeneralStageClass as StageForm
 import libs.plotingFunction as pltfunc
+import datetime
+import pathlib
 
 # import AlignmentRoutine as AlignForm
 
 # if server is stuck
 # sudo lsof -i :5555 then kill the PID
+
+save_pth = (
+    pathlib.Path("Data") / f"Scan_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+)
+save_pth.mkdir(parents=True, exist_ok=True)
 
 
 # make objs that deal with the actual hardware of stuff
@@ -163,10 +170,17 @@ print(
 )
 
 
-np.save("Data/Allframes.npy", AllFrames)
-np.save("Data/MetrixMatrix_flux.npy", MetricMatrix_flux)
-np.save("Data/MetrixMatrix_Corr.npy", MetricMatrix_corr)
-np.save("Data/MetrixMatrix_Corr_weighted.npy", MetricMatrix_weighted)
+# np.save("Data/Allframes.npy", AllFrames)
+# np.save("Data/MetrixMatrix_flux.npy", MetricMatrix_flux)
+# np.save("Data/MetrixMatrix_Corr.npy", MetricMatrix_corr)
+# np.save("Data/MetrixMatrix_Corr_weighted.npy", MetricMatrix_weighted)
+np.savez(
+    save_pth / "scan_data.npz",
+    AllFrames=AllFrames,
+    MetricMatrix_flux=MetricMatrix_flux,
+    MetricMatrix_corr=MetricMatrix_corr,
+    MetricMatrix_weighted=MetricMatrix_weighted,
+)
 
 
 # AlignObj=AlignForm.AlginmentObj([StageObj], [CamObj])
