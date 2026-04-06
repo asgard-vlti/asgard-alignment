@@ -235,7 +235,7 @@ def basis_loss(coeffs, basis, lamb_reg, scatter_mask, act_mask, scale=0.05):
     cmd = basis.linear_combination(coeffs_scaled)
     return loss(cmd, lamb_reg, scatter_mask, act_mask)
 
-
+# %%
 res = opt.minimize(
     basis_loss,
     np.zeros(n_offset_modes),
@@ -332,7 +332,7 @@ hcipy.imshow_field(square_basis_2[0])
 
 # %%
 
-n_squares = [2, 3, 4]
+n_squares = [2, 3, 4, 6]
 init_coeffs = None
 for n in n_squares:
     square_basis = block_basis(n, act_grid)
@@ -345,6 +345,9 @@ for n in n_squares:
             prev_square_basis.linear_combination(res.x)
         )
 
+    basis_loss(init_coeffs,square_basis, 0.0, scattered_flux_mask, act_reg_mask, 0.01)
+
+    time.sleep(5)
     res = opt.minimize(
         basis_loss,
         init_coeffs,
@@ -355,3 +358,5 @@ for n in n_squares:
     )
 
     prev_square_basis = square_basis
+
+# %%
