@@ -490,7 +490,7 @@ for beam_id in args.beam_id:
     message = f"moverel BMX{beam_id} {rel_offset}"
     res = send_and_get_response(message)
     print(res)
-    time.sleep(1)
+    time.sleep(0.1)
     message = f"moverel BMY{beam_id} {rel_offset}"
     res = send_and_get_response(message)
     print(res)
