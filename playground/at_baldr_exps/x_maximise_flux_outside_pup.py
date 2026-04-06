@@ -87,12 +87,14 @@ def xcor_sum_model(params, args):
     model = smooth_circle(
         grid, radius=params[0], softening=softening, centre=(params[1], params[2])
     ).reshape(grid.shape)
-    model/=model.sum()
+    model /= model.sum()
     return -np.sum(img * model)
 
+
 def xcor_sum(params, args):
-    img, = args
+    (img,) = args
     img /= np.sum(img)
+
 
 ideal_pupil = smooth_circle(cam_grid, radius=10, softening=0.5)
 
@@ -102,12 +104,12 @@ res = opt.minimize(
     xcor_sum_model,
     x0=[8, 0, 0],
     args=((pupil_only, cam_grid, 0.5),),
-    bounds=((8,8), (-10, 10), (-10, 10)),
+    bounds=((8, 8), (-10, 10), (-10, 10)),
 )
 
 pupil_mask = smooth_circle(
     cam_grid, radius=res.x[0], softening=0.5, centre=(res.x[1], res.x[2])
-).reshape(32,32)
+).reshape(32, 32)
 pupil_center = (res.x[1], res.x[2])
 
 # %%
@@ -115,7 +117,7 @@ plt.imshow(pupil_only)
 plt.contour(pupil_mask, levels=[0.5], color="r")
 
 # %%
-# pupil_mask = 
+# pupil_mask =
 scattered_flux_mask_r_outer = 14
 scattered_flux_mask_r_inner = 9
 scattered_flux_mask = (
@@ -123,7 +125,7 @@ scattered_flux_mask = (
     - smooth_circle(cam_grid, scattered_flux_mask_r_inner, centre=pupil_center)
 ).reshape(cam_grid.shape)
 
-zern_in_img=  cam.take_stack(256).mean(0)
+zern_in_img = cam.take_stack(256).mean(0)
 
 # plt.imshow(scattered_flux_mask*zern_in_img)
 plt.imshow(scattered_flux_mask)
@@ -150,20 +152,24 @@ def flux_outside_pupil(cmd, scatter_mask):
 
     img = cam.take_stack(64).mean(0)
 
-    return np.sum(img*scatter_mask)
+    return np.sum(img * scatter_mask)
+
 
 def loss(cmd, lamb_reg, scatter_mask, act_mask):
     f = flux_outside_pupil(cmd, scatter_mask=scatter_mask)
     l1 = L1_masked_reg(cmd, act_mask)
-    l = float(-f + lamb_reg*l1)
+    l = float(-f + lamb_reg * l1)
     print(np.sqrt(np.mean(cmd**2)), f"{l:.3f}")
-    return l 
+    return l
+
 
 init_cmd = np.zeros(144)
 scattered_flux_mask /= scattered_flux_mask.sum()
 act_reg_mask /= act_reg_mask.sum()
 
-flux_outside_pupil(init_cmd, scatter_mask=scattered_flux_mask), L1_masked_reg(init_cmd, act_reg_mask)
+flux_outside_pupil(init_cmd, scatter_mask=scattered_flux_mask), L1_masked_reg(
+    init_cmd, act_reg_mask
+)
 
 # %%
 # while True:
@@ -171,7 +177,7 @@ flux_outside_pupil(init_cmd, scatter_mask=scattered_flux_mask), L1_masked_reg(in
 #     time.sleep(0.01)
 print(loss(init_cmd, 10.0, scattered_flux_mask, act_reg_mask))
 # %%
-loss(np.random.randn(144)*0.02, 0.0, scattered_flux_mask, act_reg_mask)
+loss(np.random.randn(144) * 0.02, 0.0, scattered_flux_mask, act_reg_mask)
 
 # %%
 res = opt.minimize(
@@ -179,8 +185,30 @@ res = opt.minimize(
     init_cmd,
     (10.0, scattered_flux_mask, act_reg_mask),
     method="Powell",
-    options={"disp":True},
-    bounds=[[-0.25,0.25] for _ in range(144)]
+    options={"disp": True},
+    bounds=[[-0.25, 0.25] for _ in range(144)],
 )
 # %%
-plt.imshow(res.x.reshape(12,12))
+plt.imshow(res.x.reshape(12, 12))
+
+# %%
+zern = hcipy.make_zernike_basis(3, 1.5, act_grid, starting_mode=2)
+
+# hcipy.imshow_field(zern[2])
+hcipy.imshow_field(zern.linear_combination(np.random.randn(3) * 0.01), act_grid)
+
+
+# %%
+def basis_loss(coeffs, basis, lamb_reg, scatter_mask, act_mask):
+    cmd = basis.linear_combination(coeffs)
+    return loss(cmd, lamb_reg, scatter_mask, act_mask)
+
+
+res = opt.minimize(
+    basis_loss,
+    np.zeros(3),
+    (zern, 10.0, scattered_flux_mask, act_reg_mask),
+    method="Powell",
+    options={"disp": True},
+    bounds=[[-0.25, 0.25] for _ in range(3)],
+)
