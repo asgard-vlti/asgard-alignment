@@ -121,8 +121,12 @@ plt.contour(pupil_mask, levels=[0.5], color="r")
 scattered_flux_mask_r_outer = 12
 scattered_flux_mask_r_inner = 9.5
 scattered_flux_mask = (
-    smooth_circle(cam_grid, scattered_flux_mask_r_outer, centre=pupil_center, softening=0.01)
-    - smooth_circle(cam_grid, scattered_flux_mask_r_inner, centre=pupil_center, softening=0.01)
+    smooth_circle(
+        cam_grid, scattered_flux_mask_r_outer, centre=pupil_center, softening=0.01
+    )
+    - smooth_circle(
+        cam_grid, scattered_flux_mask_r_inner, centre=pupil_center, softening=0.01
+    )
 ).reshape(cam_grid.shape)
 
 zern_in_img = cam.take_stack(256).mean(0)
@@ -131,7 +135,7 @@ zern_in_img = cam.take_stack(256).mean(0)
 plt.figure()
 plt.imshow(pupil_only)
 plt.contour(scattered_flux_mask, levels=[0.5], colors="r")
-plt.contour(scattered_flux_mask,":", levels=[0.1], colors="w")
+plt.contour(scattered_flux_mask, ":", levels=[0.1], colors="w")
 # %%
 act_reg_mask = 1 - smooth_circle(act_grid, radius=0.5, softening=0.03)
 act_reg_mask /= act_reg_mask.sum()
@@ -200,6 +204,7 @@ plt.imshow(res.x.reshape(12, 12))
 # # hcipy.imshow_field(zern[2])
 # hcipy.imshow_field(zern.linear_combination(np.random.randn(n_zern) * 0.01), act_grid)
 
+
 def fourier_basis(n_modes):
     max_freq = n_modes  # lambda/D
     freqs = hcipy.make_pupil_grid(
@@ -209,13 +214,13 @@ def fourier_basis(n_modes):
 
     basis = hcipy.make_fourier_basis(act_grid, freqs.scaled(2 * np.pi))
 
-
     fourier = basis
 
     # if odd number of modes, remove piston
     if n_modes % 2 == 1:
-        fourier = hcipy.ModeBasis(fourier.transformation_matrix[:,1:], act_grid)
+        fourier = hcipy.ModeBasis(fourier.transformation_matrix[:, 1:], act_grid)
     return fourier
+
 
 fourier_small = fourier_basis(2)
 
@@ -223,9 +228,10 @@ n_offset_modes = fourier_small.num_modes
 # %%
 hcipy.imshow_field(fourier_small[0])
 
+
 # %%
 def basis_loss(coeffs, basis, lamb_reg, scatter_mask, act_mask, scale=0.05):
-    coeffs_scaled =coeffs* scale
+    coeffs_scaled = coeffs * scale
     cmd = basis.linear_combination(coeffs_scaled)
     return loss(cmd, lamb_reg, scatter_mask, act_mask)
 
@@ -235,7 +241,7 @@ res = opt.minimize(
     np.zeros(n_offset_modes),
     (fourier_small, 0.0, scattered_flux_mask, act_reg_mask),
     method="COBYLA",
-    options={"disp": True, "maxiter":50},
+    options={"disp": True, "maxiter": 50},
     # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
 )
 # res = opt.minimize(
@@ -248,7 +254,7 @@ res = opt.minimize(
 # )
 # %%
 sol = res.x.copy()
-basis_loss(sol,fourier_small, 0.0, scattered_flux_mask, act_reg_mask)
+basis_loss(sol, fourier_small, 0.0, scattered_flux_mask, act_reg_mask)
 len(sol)
 
 
@@ -267,15 +273,17 @@ hcipy.imshow_field(fourier_middle.linear_combination(init_coeffs))
 plt.colorbar()
 
 # %%
-basis_loss(init_coeffs*5, fourier_middle, 0.0, scattered_flux_mask, act_reg_mask, 0.01)
+basis_loss(
+    init_coeffs * 5, fourier_middle, 0.0, scattered_flux_mask, act_reg_mask, 0.01
+)
 # %%
 
 res = opt.minimize(
     basis_loss,
-    init_coeffs*5,
+    init_coeffs * 5,
     (fourier_middle, 0.0, scattered_flux_mask, act_reg_mask, 0.01),
     method="COBYLA",
-    options={"disp": True, "maxiter":60},
+    options={"disp": True, "maxiter": 60},
     # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
 )
 # %%
@@ -285,4 +293,65 @@ basis_loss(res.x, fourier_middle, 0.0, scattered_flux_mask, act_reg_mask, 0.01)
 dm.set_data(np.zeros(144))
 
 # %%
+# basis of cutting the pupil grid into sub squares, starting from 4 squares total
+n_squares_accross = 2
 
+
+def block_basis(n_squares_accross, act_grid):
+    n = int(n_squares_accross)
+    if n < 1:
+        raise ValueError("n_squares_accross must be >= 1")
+
+    x = np.asarray(act_grid.x)
+    y = np.asarray(act_grid.y)
+
+    x_edges = np.linspace(np.min(x), np.max(x), n + 1)
+    y_edges = np.linspace(np.min(y), np.max(y), n + 1)
+
+    modes = []
+    for iy in range(n):
+        y_in = (y >= y_edges[iy]) & (
+            y <= y_edges[iy + 1] if iy == n - 1 else y < y_edges[iy + 1]
+        )
+
+        for ix in range(n):
+            x_in = (x >= x_edges[ix]) & (
+                x <= x_edges[ix + 1] if ix == n - 1 else x < x_edges[ix + 1]
+            )
+            mode = (x_in & y_in).astype(float)
+            modes.append(mode)
+
+    return hcipy.ModeBasis(np.column_stack(modes), act_grid)
+
+
+square_basis_2 = block_basis(2, act_grid)
+hcipy.imshow_field(square_basis_2[3])
+
+square_basis_2 = block_basis(4, act_grid)
+hcipy.imshow_field(square_basis_2[0])
+
+# %%
+
+n_squares = [2, 3, 4]
+init_coeffs = None
+for n in n_squares:
+    square_basis = block_basis(n, act_grid)
+    n_modes = square_basis.num_modes
+
+    if init_coeffs is None:
+        init_coeffs = np.zeros(n_modes)
+    else:
+        init_coeffs = square_basis.coefficients_for(
+            prev_square_basis.linear_combination(res.x)
+        )
+
+    res = opt.minimize(
+        basis_loss,
+        init_coeffs,
+        (square_basis, 0.0, scattered_flux_mask, act_reg_mask, 0.01),
+        method="COBYLA",
+        options={"disp": True, "maxiter": 60},
+        # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
+    )
+
+    prev_square_basis = square_basis
