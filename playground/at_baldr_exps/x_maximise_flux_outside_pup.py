@@ -152,19 +152,26 @@ def L1_masked_reg(cmd, mask):
     return np.sum(mask * np.abs(cmd))
 
 
-def flux_outside_pupil(cmd, scatter_mask):
-    dm.set_data(cmd)
-    time.sleep(0.01)
-
-    img = cam.take_stack(64).mean(0)
-
+def flux_outside_pupil(img, scatter_mask):
     return np.sum(img * scatter_mask)
 
 
-def loss(cmd, lamb_reg, scatter_mask, act_mask):
-    f = flux_outside_pupil(cmd, scatter_mask=scatter_mask)
+def uniformity_in_pupil(img, pupil_mask):
+    img_in_pupil = img * pupil_mask
+    mean_in_pupil = np.sum(img_in_pupil) / np.sum(pupil_mask)
+    # want a uniform distribution in the pupil, so penalise the variance
+    return np.sum(pupil_mask * (img_in_pupil - mean_in_pupil) ** 2)
+
+
+def loss(cmd, lamb_unif, lamb_reg, scatter_mask, act_mask):
+    dm.set_data(cmd)
+    time.sleep(0.01)
+    img = cam.take_stack(64).mean(0)
+
+    f = flux_outside_pupil(img, scatter_mask=scatter_mask)
+    u = uniformity_in_pupil(img, pupil_mask=pupil_mask)
     l1 = L1_masked_reg(cmd, act_mask)
-    l = float(-f + lamb_reg * l1)
+    l = float(-f + lamb_unif * u + lamb_reg * l1)
     print(np.sqrt(np.mean(cmd**2)), f"{l:.3f}")
     return l
 
@@ -327,14 +334,19 @@ def block_basis(n_squares_accross, act_grid):
 square_basis_2 = block_basis(2, act_grid)
 hcipy.imshow_field(square_basis_2[3])
 
+plt.figure()
 square_basis_2 = block_basis(4, act_grid)
+hcipy.imshow_field(square_basis_2[0])
+plt.figure()
+square_basis_2 = block_basis(6, act_grid)
 hcipy.imshow_field(square_basis_2[0])
 
 # %%
 
 n_squares = [2, 3, 4]
+n_max_iters = [60, 120, 480]
 init_coeffs = None
-for n in n_squares:
+for n, max_it in zip(n_squares, n_max_iters):
     square_basis = block_basis(n, act_grid)
     n_modes = square_basis.num_modes
 
@@ -350,7 +362,7 @@ for n in n_squares:
         init_coeffs,
         (square_basis, 0.0, scattered_flux_mask, act_reg_mask, 0.01),
         method="COBYLA",
-        options={"disp": True, "maxiter": 60},
+        options={"disp": True, "maxiter": max_it},
         # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
     )
 
