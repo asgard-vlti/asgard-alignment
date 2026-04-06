@@ -41,15 +41,15 @@ for ibeam in beamNum_arr:
 # frame4=CamObj.GetFrame(4)
 
 # These are the parameter to change for the scan function
-ibeam = 1
+ibeam = 3
 StartX = StageObj.Get_pos(stage="BMX", beam=ibeam)
 StartY = StageObj.Get_pos(stage="BMY", beam=ibeam)
 StepAwayFromStartX = 200
 StepAwayFromStartY = 200
 StepCountX = 10
 StepCountY = 10
-MountPosNoFeatureY = 4700.2
-MountPosNoFeaturex = 4498.2
+MountPosNoFeatureX = 1010.0
+MountPosNoFeatureY = 4010.0
 
 # make a snake like grid pattern
 grid_points = StageObj.rasterScanSnakePattern(
@@ -58,7 +58,7 @@ grid_points = StageObj.rasterScanSnakePattern(
 
 # get a frame that you know the beam is not on a masks
 StageObj.Set_pos(stage="BMY", beam=ibeam, pos=MountPosNoFeatureY)
-StageObj.Set_pos(stage="BMX", beam=ibeam, pos=MountPosNoFeaturex)
+StageObj.Set_pos(stage="BMX", beam=ibeam, pos=MountPosNoFeatureX)
 Ref_frame = CamObj.GetFrame(ibeam)
 appxcenters_Ref_frame = CamObj.FindMaxValueOnFrame(Ref_frame)
 ref_flux = CamObj.GetRelativePower(
