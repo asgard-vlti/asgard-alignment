@@ -118,18 +118,20 @@ plt.contour(pupil_mask, levels=[0.5], color="r")
 
 # %%
 # pupil_mask =
-scattered_flux_mask_r_outer = 14
-scattered_flux_mask_r_inner = 9
+scattered_flux_mask_r_outer = 12
+scattered_flux_mask_r_inner = 9.5
 scattered_flux_mask = (
-    smooth_circle(cam_grid, scattered_flux_mask_r_outer, centre=pupil_center)
-    - smooth_circle(cam_grid, scattered_flux_mask_r_inner, centre=pupil_center)
+    smooth_circle(cam_grid, scattered_flux_mask_r_outer, centre=pupil_center, softening=0.01)
+    - smooth_circle(cam_grid, scattered_flux_mask_r_inner, centre=pupil_center, softening=0.01)
 ).reshape(cam_grid.shape)
 
 zern_in_img = cam.take_stack(256).mean(0)
 
-# plt.imshow(scattered_flux_mask*zern_in_img)
-plt.imshow(scattered_flux_mask)
-
+# plt.imshow(scattered_flux_mask)
+plt.figure()
+plt.imshow(pupil_only)
+plt.contour(scattered_flux_mask, levels=[0.5], colors="r")
+plt.contour(scattered_flux_mask,":", levels=[0.1], colors="w")
 # %%
 act_reg_mask = 1 - smooth_circle(act_grid, radius=0.5, softening=0.03)
 act_reg_mask /= act_reg_mask.sum()
@@ -192,23 +194,95 @@ res = opt.minimize(
 plt.imshow(res.x.reshape(12, 12))
 
 # %%
-zern = hcipy.make_zernike_basis(3, 1.5, act_grid, starting_mode=2)
+# n_zern = 9
+# zern = hcipy.make_zernike_basis(n_zern, 1.5, act_grid, starting_mode=2)
 
-# hcipy.imshow_field(zern[2])
-hcipy.imshow_field(zern.linear_combination(np.random.randn(3) * 0.01), act_grid)
+# # hcipy.imshow_field(zern[2])
+# hcipy.imshow_field(zern.linear_combination(np.random.randn(n_zern) * 0.01), act_grid)
 
+def fourier_basis(n_modes):
+    max_freq = n_modes  # lambda/D
+    freqs = hcipy.make_pupil_grid(
+        n_modes,
+        max_freq,
+    )
+
+    basis = hcipy.make_fourier_basis(act_grid, freqs.scaled(2 * np.pi))
+
+
+    fourier = basis
+
+    # if odd number of modes, remove piston
+    if n_modes % 2 == 1:
+        fourier = hcipy.ModeBasis(fourier.transformation_matrix[:,1:], act_grid)
+    return fourier
+
+fourier_small = fourier_basis(2)
+
+n_offset_modes = fourier_small.num_modes
+# %%
+hcipy.imshow_field(fourier_small[0])
 
 # %%
-def basis_loss(coeffs, basis, lamb_reg, scatter_mask, act_mask):
-    cmd = basis.linear_combination(coeffs)
+def basis_loss(coeffs, basis, lamb_reg, scatter_mask, act_mask, scale=0.05):
+    coeffs_scaled =coeffs* scale
+    cmd = basis.linear_combination(coeffs_scaled)
     return loss(cmd, lamb_reg, scatter_mask, act_mask)
 
 
 res = opt.minimize(
     basis_loss,
-    np.zeros(3),
-    (zern, 10.0, scattered_flux_mask, act_reg_mask),
-    method="Powell",
-    options={"disp": True},
-    bounds=[[-0.25, 0.25] for _ in range(3)],
+    np.zeros(n_offset_modes),
+    (fourier_small, 0.0, scattered_flux_mask, act_reg_mask),
+    method="COBYLA",
+    options={"disp": True, "maxiter":50},
+    # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
 )
+# res = opt.minimize(
+#     basis_loss,
+#     np.zeros(n_offset_modes),
+#     (fourier_small, 0.0, scattered_flux_mask, act_reg_mask),
+#     method="Powell",
+#     options={"disp": True, "maxiter":10},
+#     bounds=[[-0.15, 0.15] for _ in range(n_offset_modes)],
+# )
+# %%
+sol = res.x.copy()
+basis_loss(sol,fourier_small, 0.0, scattered_flux_mask, act_reg_mask)
+len(sol)
+
+
+# %%
+fourier_middle = fourier_basis(4)
+
+n_terms = fourier_middle.num_modes
+init_coeffs = fourier_middle.coefficients_for(fourier_small.linear_combination(sol))
+init_coeffs
+
+# %%
+hcipy.imshow_field(fourier_small.linear_combination(sol))
+plt.colorbar()
+# %%
+hcipy.imshow_field(fourier_middle.linear_combination(init_coeffs))
+plt.colorbar()
+
+# %%
+basis_loss(init_coeffs*5, fourier_middle, 0.0, scattered_flux_mask, act_reg_mask, 0.01)
+# %%
+
+res = opt.minimize(
+    basis_loss,
+    init_coeffs*5,
+    (fourier_middle, 0.0, scattered_flux_mask, act_reg_mask, 0.01),
+    method="COBYLA",
+    options={"disp": True, "maxiter":60},
+    # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
+)
+# %%
+basis_loss(res.x, fourier_middle, 0.0, scattered_flux_mask, act_reg_mask, 0.01)
+
+# %%
+dm.set_data(np.zeros(144))
+
+# %%
+
