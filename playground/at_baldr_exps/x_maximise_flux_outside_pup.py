@@ -242,7 +242,7 @@ def basis_loss(coeffs, basis, lamb_reg, scatter_mask, act_mask, scale=0.05):
     cmd = basis.linear_combination(coeffs_scaled)
     return loss(cmd, lamb_reg, scatter_mask, act_mask)
 
-
+# %%
 res = opt.minimize(
     basis_loss,
     np.zeros(n_offset_modes),
@@ -357,6 +357,9 @@ for n, max_it in zip(n_squares, n_max_iters):
             prev_square_basis.linear_combination(res.x)
         )
 
+    basis_loss(init_coeffs,square_basis, 0.0, scattered_flux_mask, act_reg_mask, 0.01)
+
+    time.sleep(5)
     res = opt.minimize(
         basis_loss,
         init_coeffs,
@@ -367,3 +370,5 @@ for n, max_it in zip(n_squares, n_max_iters):
     )
 
     prev_square_basis = square_basis
+
+# %%
