@@ -66,6 +66,8 @@ mds_send(sock, f"moverel BMX{beam} {-offset}")
 mds_send(sock, f"moverel BMY{beam} {-offset}")
 time.sleep(1)
 # %%
+plt.imshow(pupil_only)
+# %%
 # make a pupil mask. Need to find the pixels in the circle
 n_act = 12
 n_beam = 10
@@ -79,38 +81,58 @@ def smooth_circle(grid, radius, softening=0.1, centre=(0, 0)):
     return 1 / (1 + np.exp((r - radius) / softening))
 
 
-def xcor_sum(params, args):
+def xcor_sum_model(params, args):
     img, grid, softening = args
     img /= np.sum(img)
     model = smooth_circle(
         grid, radius=params[0], softening=softening, centre=(params[1], params[2])
-    )
+    ).reshape(grid.shape)
+    model/=model.sum()
     return -np.sum(img * model)
 
+def xcor_sum(params, args):
+    img, = args
+    img /= np.sum(img)
 
 ideal_pupil = smooth_circle(cam_grid, radius=10, softening=0.5)
 
 hcipy.imshow_field(ideal_pupil, cam_grid)
 # %%
 res = opt.minimize(
-    xcor_sum,
-    x0=[10, 0, 0],
-    args=(pupil_only, cam_grid, 0.5),
-    bounds=((5, 15), (-10, 10), (-10, 10)),
+    xcor_sum_model,
+    x0=[8, 0, 0],
+    args=((pupil_only, cam_grid, 0.5),),
+    bounds=((8,8), (-10, 10), (-10, 10)),
 )
 
 pupil_mask = smooth_circle(
     cam_grid, radius=res.x[0], softening=0.5, centre=(res.x[1], res.x[2])
-)
+).reshape(32,32)
 pupil_center = (res.x[1], res.x[2])
 
+# %%
+plt.imshow(pupil_only)
+plt.contour(pupil_mask, levels=[0.5], color="r")
 
 # %%
+# pupil_mask = 
+scattered_flux_mask_r_outer = 14
+scattered_flux_mask_r_inner = 9
+scattered_flux_mask = (
+    smooth_circle(cam_grid, scattered_flux_mask_r_outer, centre=pupil_center)
+    - smooth_circle(cam_grid, scattered_flux_mask_r_inner, centre=pupil_center)
+).reshape(cam_grid.shape)
 
+zern_in_img=  cam.take_stack(256).mean(0)
 
-mask = 1 - smooth_circle(act_grid, radius=0.5, softening=0.03)
+# plt.imshow(scattered_flux_mask*zern_in_img)
+plt.imshow(scattered_flux_mask)
 
-hcipy.imshow_field(mask, grid=act_grid)
+# %%
+act_reg_mask = 1 - smooth_circle(act_grid, radius=0.5, softening=0.03)
+act_reg_mask /= act_reg_mask.sum()
+
+hcipy.imshow_field(act_reg_mask, grid=act_grid)
 plt.colorbar()
 
 # %%
@@ -122,5 +144,43 @@ def L1_masked_reg(cmd, mask):
     return np.sum(mask * np.abs(cmd))
 
 
-def flux_outside_pupil(cmd):
-    pass
+def flux_outside_pupil(cmd, scatter_mask):
+    dm.set_data(cmd)
+    time.sleep(0.01)
+
+    img = cam.take_stack(64).mean(0)
+
+    return np.sum(img*scatter_mask)
+
+def loss(cmd, lamb_reg, scatter_mask, act_mask):
+    f = flux_outside_pupil(cmd, scatter_mask=scatter_mask)
+    l1 = L1_masked_reg(cmd, act_mask)
+    l = float(-f + lamb_reg*l1)
+    print(np.sqrt(np.mean(cmd**2)), f"{l:.3f}")
+    return l 
+
+init_cmd = np.zeros(144)
+scattered_flux_mask /= scattered_flux_mask.sum()
+act_reg_mask /= act_reg_mask.sum()
+
+flux_outside_pupil(init_cmd, scatter_mask=scattered_flux_mask), L1_masked_reg(init_cmd, act_reg_mask)
+
+# %%
+# while True:
+#     print(loss(init_cmd, 10.0, scattered_flux_mask, act_reg_mask),end="\r")
+#     time.sleep(0.01)
+print(loss(init_cmd, 10.0, scattered_flux_mask, act_reg_mask))
+# %%
+loss(np.random.randn(144)*0.02, 0.0, scattered_flux_mask, act_reg_mask)
+
+# %%
+res = opt.minimize(
+    loss,
+    init_cmd,
+    (10.0, scattered_flux_mask, act_reg_mask),
+    method="Powell",
+    options={"disp":True},
+    bounds=[[-0.25,0.25] for _ in range(144)]
+)
+# %%
+plt.imshow(res.x.reshape(12,12))

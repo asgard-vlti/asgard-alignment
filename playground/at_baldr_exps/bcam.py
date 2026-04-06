@@ -38,7 +38,7 @@ class Bcam:
 
         imgs = np.zeros((nframes, *self.imsize))
         for i in range(nframes):
-            imgs[i] = cam.get_img(subtract_dark=False)
+            imgs[i] = self.get_img(subtract_dark=False)
         if subtract_dark:
             imgs = imgs - self.dark[None, :, :]
         return imgs
