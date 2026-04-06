@@ -84,6 +84,7 @@ quick_data_path = (
     f"/home/asg/Progs/repos/asgard-alignment/calibration/reports/{tstamp_rough}/"
 )
 
+
 def _apply_tab_title(title):
     safe_title = json.dumps(title)
     components.html(
@@ -91,11 +92,14 @@ def _apply_tab_title(title):
         height=0,
     )
 
+
 DEFAULT_TAB_TITLE = "Asgard alignment engineering GUI"
+
 
 def set_tab_title(title):
     st.session_state["tab_title"] = title
     _apply_tab_title(title)
+
 
 os.makedirs(quick_data_path, exist_ok=True)
 
@@ -105,7 +109,6 @@ if "tab_title" not in st.session_state:
 
 # make GUI wide
 st.set_page_config(page_title=st.session_state["tab_title"], layout="wide")
-
 
 
 # Re-apply the most recent title on each rerun so button interactions do not reset it.
@@ -731,17 +734,19 @@ def handle_kaya():
             else:
                 st.success(f"Kaya powered off successfully.")
 
+
 def handle_linear_stage():
     # linear stage interface
     st.subheader("Linear Stage Interface")
 
     if component == "BDS":
-        valid_pos = ["BIF_H", "BIF_YJ", "empty"]
+        valid_pos = ["BIF_H", "BIF_YJ", "align", "empty"]
 
         if f"BDS{beam_number}_fixed_mapping" not in st.session_state:
             st.session_state[f"BDS{beam_number}_fixed_mapping"] = {
                 "BIF_H": 133.07,  # (white target)
                 "BIF_YJ": 63.07,  # (mirror)
+                "align": 38.5,  # (alignment)
                 "empty": 0.0,
             }
             st.session_state[f"BDS{beam_number}_offset"] = 0.0
@@ -1328,7 +1333,7 @@ with col_main:
                 handle_linear_actuator()
 
             elif component in ["DM"]:
-                #handle_deformable_mirror()
+                # handle_deformable_mirror()
                 print("WARNING: tried to use a DM. This is not implemented here.")
 
             elif component in ["phasemask"]:
@@ -1357,7 +1362,7 @@ with col_main:
                 "Rotation stages",
                 "Save state",
                 "Load state",
-                #"See All States",
+                # "See All States",
                 "Health",
                 "Scan Mirror",
                 "Phasemask Alignment",
@@ -2554,8 +2559,6 @@ with col_main:
                 res = send_and_get_response(msg)
                 st.text(res)
 
-            
-
         if routine_options == "Save state":
             instruments = ["Heimdallr", "Baldr", "Solarstein", "All"]
             # grid of 3 rows, 2 cols, with first col being the save location
@@ -3177,13 +3180,10 @@ with col_main:
                                 print("passing on BLF")
                                 pass
                             else:
-                                message = (
-                                    f"moveabs {state['name']} {state['position']}"
-                                )
+                                message = f"moveabs {state['name']} {state['position']}"
                                 send_and_get_response(message)
 
             st.subheader("Load subset")
-            
 
             st.subheader("Module/Beam Selection")
             modules = ["Heimdallr", "Baldr"]
@@ -3231,12 +3231,12 @@ with col_main:
                                 pass
                             else:
                                 for tick in all_ticks:
-                                    if tick[0] == starting_letter and tick[1] == beam_idx:
-                                        message = (
-                                            f"moveabs {state['name']} {state['position']}"
-                                        )
+                                    if (
+                                        tick[0] == starting_letter
+                                        and tick[1] == beam_idx
+                                    ):
+                                        message = f"moveabs {state['name']} {state['position']}"
                                         send_and_get_response(message)
-
 
         if routine_options == "See All States":
 
@@ -3477,5 +3477,3 @@ with col_main:
                                 send_and_get_response(message)
                     else:
                         col.write(data[i][keys[j]])
-
-

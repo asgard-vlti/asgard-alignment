@@ -223,6 +223,7 @@
         "named_pos" : {
             "BIF_H": 133.07,
             "BIF_YJ": 63.07,
+            "align": 38.5,
             "CLEAR": 0.0
         },
         "semaphore_id": 13
@@ -234,6 +235,7 @@
         "named_pos" : {
             "BIF_H": 133.07,
             "BIF_YJ": 63.07,
+            "align": 38.5,
             "CLEAR": 0.0
         },
         "semaphore_id": 14
@@ -245,6 +247,7 @@
         "named_pos" : {
             "BIF_H": 133.07,
             "BIF_YJ": 63.07,
+            "align": 38.5,
             "CLEAR": 0.0
         },
         "semaphore_id": 15
@@ -256,6 +259,7 @@
         "named_pos" : {
             "BIF_H": 133.07,
             "BIF_YJ": 63.07,
+            "align": 38.5,
             "CLEAR": 0.0
         },
         "semaphore_id": 16
