@@ -21,7 +21,7 @@ save_pth.mkdir(parents=True, exist_ok=True)
 
 # make objs that deal with the actual hardware of stuff
 CamObj = CamForm.GeneralCameraObject()
-StageObj = StageForm.GeneralStageObject(host="192.168.100.2", port=5555)
+StageObj = StageForm.GeneralStageObject(host="mimir", port=5555)
 beamNum_arr = np.array([1, 2, 3, 4])  # which beams to do the search on (1-4)
 
 # show the current positions of the stages
