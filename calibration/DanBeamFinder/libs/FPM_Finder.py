@@ -201,16 +201,23 @@ class FPM_Finder:
         self.StageObj = StageForm.GeneralStageObject(host=host, port=port)
 
     def _get_frame(self, beam: int) -> np.ndarray:
-        try:
-            return self.CamObj.GetFrame(ibeam=beam)
-        except TypeError:
-            return self.CamObj.GetFrame(beam)
+        return self.CamObj.GetFrame(ibeam=beam)
 
     def _get_stage_position(self, stage: str, beam: int) -> float:
-        try:
-            return float(self.StageObj.Get_pos(stage=stage, beam=beam))
-        except TypeError:
-            return float(self.StageObj.Get_pos(stage, beam))
+        return float(self.StageObj.Get_pos(stage=stage, beam=beam))
+
+    def get_positions(self, beam: int) -> np.ndarray:
+        return np.array(
+            [
+                self._get_stage_position("BMX", beam),
+                self._get_stage_position("BMY", beam),
+            ],
+            dtype=float,
+        )
+
+    def set_positions(self, beam: int, position: np.ndarray) -> None:
+        self._set_stage_position("BMX", beam, float(position[0]))
+        self._set_stage_position("BMY", beam, float(position[1]))
 
     def _set_stage_position(self, stage: str, beam: int, pos: float) -> None:
         try:

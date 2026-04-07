@@ -54,8 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  - For --detection-threshold, no-mask is typically ~1.0, so choose <1.0.\n"
             "  - --start-center accepts either 'current' or a string like '[x, y]'.\n\n"
             "Examples:\n"
-            "  python find_focal_masks.py --beam 2 --line-direction +x\n"
-            "  python find_focal_masks.py --beam 3 --line-direction -y "
+            "  python find_focal_masks.py --beam 2 --line-direction=+x\n"
+            "  python find_focal_masks.py --beam 3 --line-direction=-y "
             "--start-center '[1020, 3980]' --n-dots 7"
         ),
         formatter_class=argparse.RawTextHelpFormatter,
@@ -152,18 +152,30 @@ def main() -> None:
         save_path = pathlib.Path(args.save_path).expanduser()
 
     finder = FPM_Finder()
-    result = finder.run(
-        beam=args.beam,
-        line_direction=args.line_direction,
-        start_center=args.start_center,
-        step_size=args.step_size,
-        search_width=args.search_width,
-        dot_spacing=args.dot_spacing,
-        n_dots=args.n_dots,
-        detection_threshold=args.detection_threshold,
-        save_path=save_path,
-        out_file=args.out_file,
-    )
+    init_pos = finder.get_positions(args.beam)
+    try:
+        result = finder.run(
+            beam=args.beam,
+            line_direction=args.line_direction,
+            start_center=args.start_center,
+            step_size=args.step_size,
+            search_width=args.search_width,
+            dot_spacing=args.dot_spacing,
+            n_dots=args.n_dots,
+            detection_threshold=args.detection_threshold,
+            save_path=save_path,
+            out_file=args.out_file,
+        )
+    except RuntimeError as e:
+        print(f"Error during focal mask finding: {e}")
+        print(f"resetting back to original position ")
+        finder.set_positions(args.beam, init_pos)
+
+        return
+    except KeyboardInterrupt:
+        print("Process interrupted by user. Resetting to original position.")
+        finder.set_positions(args.beam, init_pos)
+        return
 
     print(json.dumps(result, indent=2))
 
