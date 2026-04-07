@@ -1,12 +1,19 @@
-import argparse
 import ast
-import datetime
 import json
 import pathlib
 from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+try:
+    from tqdm.auto import tqdm
+except ImportError:
+
+    def tqdm(iterable, **_kwargs):
+        _ = _kwargs
+        return iterable
+
 
 import libs.GeneralCameraClass as CamForm
 import libs.GeneralStageClass as StageForm
@@ -259,23 +266,32 @@ class FPM_Finder:
         raw_flux = np.zeros((count_y, count_x), dtype=float)
         frames = None
 
-        for iy in range(count_y):
-            for ix in range(count_x):
-                scan_x_idx = ix if iy % 2 == 0 else count_x - 1 - ix
-                xpos = grid_points[iy, scan_x_idx, 0]
-                ypos = grid_points[iy, scan_x_idx, 1]
-                self._set_stage_position("BMX", beam, xpos)
-                self._set_stage_position("BMY", beam, ypos)
-                frame = self._get_frame(beam)
-                if frames is None:
-                    frames = np.zeros(
-                        (count_y, count_x, frame.shape[0], frame.shape[1]),
-                        dtype=frame.dtype,
-                    )
-                frames[iy, scan_x_idx] = frame
-                raw_flux[iy, scan_x_idx] = self._frame_score(
-                    frame, np.array([xpos, ypos], dtype=float)
+        scan_sequence = (
+            (iy, ix if iy % 2 == 0 else count_x - 1 - ix)
+            for iy in range(count_y)
+            for ix in range(count_x)
+        )
+        progress = tqdm(
+            scan_sequence,
+            total=count_y * count_x,
+            desc=f"Beam {beam} local scan",
+            unit="pt",
+        )
+        for iy, scan_x_idx in progress:
+            xpos = grid_points[iy, scan_x_idx, 0]
+            ypos = grid_points[iy, scan_x_idx, 1]
+            self._set_stage_position("BMX", beam, xpos)
+            self._set_stage_position("BMY", beam, ypos)
+            frame = self._get_frame(beam)
+            if frames is None:
+                frames = np.zeros(
+                    (count_y, count_x, frame.shape[0], frame.shape[1]),
+                    dtype=frame.dtype,
                 )
+            frames[iy, scan_x_idx] = frame
+            raw_flux[iy, scan_x_idx] = self._frame_score(
+                frame, np.array([xpos, ypos], dtype=float)
+            )
 
         normalized_score = _normalize_matrix(raw_flux)
         best_flat = int(np.argmin(normalized_score))

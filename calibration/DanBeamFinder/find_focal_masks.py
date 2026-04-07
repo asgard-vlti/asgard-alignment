@@ -33,35 +33,111 @@ Finally, the positions of all the found dots are saved to a file.
 from __future__ import annotations
 
 import argparse
-import ast
 import datetime
 import json
 import pathlib
-from dataclasses import dataclass
-
-import matplotlib.pyplot as plt
-import numpy as np
 
 from libs.FPM_Finder import FPM_Finder, LINE_DIRECTION_OPTIONS
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Find the focal plane mask.")
-    parser.add_argument("--beam", type=int, required=True, choices=[1, 2, 3, 4])
+    parser = argparse.ArgumentParser(
+        description=(
+            "Find a line of focal-plane mask dots by repeated local raster scans."
+        ),
+        epilog=(
+            "Behavior:\n"
+            "  1) Scan around --start-center to find the first dot.\n"
+            "  2) Move along --line-direction and repeat until --n-dots are found.\n"
+            "  3) Save found positions to --out-file under --save-path.\n\n"
+            "Notes:\n"
+            "  - For --detection-threshold, no-mask is typically ~1.0, so choose <1.0.\n"
+            "  - --start-center accepts either 'current' or a string like '[x, y]'.\n\n"
+            "Examples:\n"
+            "  python find_focal_masks.py --beam 2 --line-direction +x\n"
+            "  python find_focal_masks.py --beam 3 --line-direction -y "
+            "--start-center '[1020, 3980]' --n-dots 7"
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    parser.add_argument(
+        "--beam",
+        type=int,
+        required=True,
+        choices=[1, 2, 3, 4],
+        help="Beam index to search (valid values: 1, 2, 3, 4).",
+    )
     parser.add_argument(
         "--line-direction",
         type=str,
         required=True,
         choices=sorted(LINE_DIRECTION_OPTIONS),
+        help=(
+            "Direction of the line of dots on the focal-plane mask. "
+            "Choices: +x, -x, +y, -y."
+        ),
     )
-    parser.add_argument("--start-center", type=str, default="current")
-    parser.add_argument("--step-size", type=float, default=20.0)
-    parser.add_argument("--search-width", type=float, default=200.0)
-    parser.add_argument("--dot-spacing", type=float, default=1000.0)
-    parser.add_argument("--save-path", type=str, default=None)
-    parser.add_argument("--n-dots", type=int, default=5)
-    parser.add_argument("--detection-threshold", type=float, default=0.9)
-    parser.add_argument("--out-file", type=str, default="focal_mask_positions.json")
+    parser.add_argument(
+        "--start-center",
+        type=str,
+        default="current",
+        help=(
+            "Center of the local search area. Use 'current' to start from the "
+            "current stage position, or pass '[x, y]' in microns. "
+            "Default: current."
+        ),
+    )
+    parser.add_argument(
+        "--step-size",
+        type=float,
+        default=20.0,
+        help="Grid step size in microns for each local raster scan. Default: 20.0.",
+    )
+    parser.add_argument(
+        "--search-width",
+        type=float,
+        default=200.0,
+        help=(
+            "Width of the square local search area in microns "
+            "(height equals width). Default: 200.0."
+        ),
+    )
+    parser.add_argument(
+        "--dot-spacing",
+        type=float,
+        default=1000.0,
+        help="Expected spacing between neighboring mask dots in microns. Default: 1000.0.",
+    )
+    parser.add_argument(
+        "--save-path",
+        type=str,
+        default=None,
+        help=("Directory for outputs. Default: Data/Scan_{beam}_{current_datetime}."),
+    )
+    parser.add_argument(
+        "--n-dots",
+        type=int,
+        default=5,
+        help="Number of dots to find before stopping. Default: 5.",
+    )
+    parser.add_argument(
+        "--detection-threshold",
+        type=float,
+        default=0.9,
+        help=(
+            "Detection threshold for mask match. Lower is stricter; "
+            "use values below ~1.0. Default: 0.9."
+        ),
+    )
+    parser.add_argument(
+        "--out-file",
+        type=str,
+        default="focal_mask_positions.json",
+        help=(
+            "Output JSON filename for found dot positions and run metadata. "
+            "Default: focal_mask_positions.json."
+        ),
+    )
     return parser
 
 
