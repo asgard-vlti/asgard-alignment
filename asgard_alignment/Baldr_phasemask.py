@@ -31,18 +31,19 @@ class BaldrPhaseMask:
         self.phase_positions = self._load_phase_positions(phase_positions_json)
 
         # self._load_phasemask_parameters("phasemask_parameters_beam_3.json"):
-        self.phasemask_parameters = {
-            "J1": {"depth": 0.474, "diameter": 54},
-            "J2": {"depth": 0.474, "diameter": 44},
-            "J3": {"depth": 0.474, "diameter": 36},
-            "J4": {"depth": 0.474, "diameter": 32},
-            "J5": {"depth": 0.474, "diameter": 65},
-            "H1": {"depth": 0.654, "diameter": 68},
-            "H2": {"depth": 0.654, "diameter": 53},
-            "H3": {"depth": 0.654, "diameter": 44},
-            "H4": {"depth": 0.654, "diameter": 37},
-            "H5": {"depth": 0.654, "diameter": 31},
-        }
+        # Note: these are old and the wrong way around numbering to diam wise
+        # self.phasemask_parameters = {
+        #     "J1": {"depth": 0.474, "diameter": 54},
+        #     "J2": {"depth": 0.474, "diameter": 44},
+        #     "J3": {"depth": 0.474, "diameter": 36},
+        #     "J4": {"depth": 0.474, "diameter": 32},
+        #     "J5": {"depth": 0.474, "diameter": 65},
+        #     "H1": {"depth": 0.654, "diameter": 68},
+        #     "H2": {"depth": 0.654, "diameter": 53},
+        #     "H3": {"depth": 0.654, "diameter": 44},
+        #     "H4": {"depth": 0.654, "diameter": 37},
+        #     "H5": {"depth": 0.654, "diameter": 31},
+        # }
 
     @staticmethod
     def _load_phase_positions(phase_positions_json):
@@ -63,7 +64,7 @@ class BaldrPhaseMask:
 
         return config
 
-    def update_position_file(self, phase_positions_json ):
+    def update_position_file(self, phase_positions_json):
         self.phase_positions = self._load_phase_positions(phase_positions_json)
 
     def move_relative(self, new_pos):
@@ -114,8 +115,6 @@ class BaldrPhaseMask:
         for mask in self.phase_positions:
             self.phase_positions[mask][0] += float(rel_offset_x)
             self.phase_positions[mask][1] += float(rel_offset_y)
-        
-
 
     def update_all_mask_positions_relative_to_current(
         self, current_mask_name, reference_mask_position_file, write_file=False
