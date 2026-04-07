@@ -340,7 +340,7 @@ class FPM_Finder:
             int(best_flat % metric_corr.shape[1]),
         )
         best_point = grid_points[best_index]
-        best_score = float(metric_corr[best_index])
+        best_score = float(metric_weighted[best_index])
 
         if frames is None:
             frames = np.empty((0, 0, 0, 0))
