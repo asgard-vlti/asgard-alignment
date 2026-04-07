@@ -19,6 +19,8 @@ import libs.GeneralCameraClass as CamForm
 import libs.GeneralStageClass as StageForm
 
 LINE_DIRECTION_OPTIONS = {"+x", "-x", "+y", "-y"}
+MOUNT_POS_NO_FEATURE_X = 1010.0
+MOUNT_POS_NO_FEATURE_Y = 4010.0
 
 
 def _as_float_pair(value: object) -> np.ndarray:
@@ -59,13 +61,6 @@ def _build_offsets(search_width: float, step_size: float) -> np.ndarray:
         count += 1
     half_width = search_width / 2.0
     return np.linspace(-half_width, half_width, count)
-
-
-def _normalize_matrix(score_matrix: np.ndarray) -> np.ndarray:
-    max_value = float(np.max(score_matrix))
-    if max_value <= 0:
-        return np.ones_like(score_matrix, dtype=float)
-    return score_matrix / max_value
 
 
 @dataclass(frozen=True)
@@ -160,7 +155,7 @@ def _plot_scan_heatmap(
         cmap="viridis",
     )
     ax_map.scatter(best_index[1], best_index[0], c="red", s=60, marker="x")
-    fig.colorbar(image, ax=ax_map, label="normalized score")
+    fig.colorbar(image, ax=ax_map, label="metric (lower is better)")
     ax_map.set_title(title)
     ax_map.set_xlabel("scan x index")
     ax_map.set_ylabel("scan y index")
@@ -187,8 +182,9 @@ def _plot_scan_heatmap(
 class ScanResult:
     center: np.ndarray
     grid_points: np.ndarray
-    raw_flux: np.ndarray
-    normalized_score: np.ndarray
+    metric_flux: np.ndarray
+    metric_corr: np.ndarray
+    metric_weighted: np.ndarray
     frames: np.ndarray
     best_index: tuple[int, int]
     best_point: np.ndarray
@@ -237,6 +233,28 @@ class FPM_Finder:
             )
         )
 
+    def _build_reference_metrics(
+        self, beam: int
+    ) -> tuple[np.ndarray, float, np.ndarray]:
+        self._set_stage_position("BMY", beam, MOUNT_POS_NO_FEATURE_Y)
+        self._set_stage_position("BMX", beam, MOUNT_POS_NO_FEATURE_X)
+
+        ref_frame = self._get_frame(beam)
+        ref_center = np.asarray(self.CamObj.FindMaxValueOnFrame(ref_frame), dtype=float)
+        ref_flux = float(
+            self.CamObj.GetRelativePower(
+                frame=ref_frame,
+                centre=[float(ref_center[0]), float(ref_center[1])],
+                x_half_width=5,
+                y_half_width=5,
+                show_plot=False,
+            )
+        )
+
+        ref_corr_temp = ref_frame.astype(float).ravel()
+        ref_corr_temp = ref_corr_temp - np.mean(ref_corr_temp)
+        return ref_center, ref_flux, ref_corr_temp
+
     def _resolve_start_center(self, start_center: str, beam: int) -> np.ndarray:
         if start_center.strip().lower() == "current":
             return np.array(
@@ -254,6 +272,9 @@ class FPM_Finder:
         center: np.ndarray,
         search_width: float,
         step_size: float,
+        ref_center: np.ndarray,
+        ref_flux: float,
+        ref_corr_temp: np.ndarray,
     ) -> ScanResult:
         offsets = _build_offsets(search_width, step_size)
         half_width = search_width / 2.0
@@ -269,7 +290,9 @@ class FPM_Finder:
             dtype=float,
         )
         count_y, count_x, _ = grid_points.shape
-        raw_flux = np.zeros((count_y, count_x), dtype=float)
+        metric_flux = np.zeros((count_y, count_x), dtype=float)
+        metric_corr = np.zeros((count_y, count_x), dtype=float)
+        metric_weighted = np.zeros((count_y, count_x), dtype=float)
         frames = None
 
         scan_sequence = ((iy, ix) for iy in range(count_y) for ix in range(count_x))
@@ -291,18 +314,34 @@ class FPM_Finder:
                     dtype=frame.dtype,
                 )
             frames[iy, scan_x_idx] = frame
-            raw_flux[iy, scan_x_idx] = self._frame_score(
-                frame, np.array([xpos, ypos], dtype=float)
-            )
 
-        normalized_score = _normalize_matrix(raw_flux)
-        best_flat = int(np.argmin(normalized_score))
+            flux = self._frame_score(frame, ref_center)
+            frame_corr_temp = frame.astype(float).ravel()
+            frame_corr_temp = frame_corr_temp - np.mean(frame_corr_temp)
+
+            denom = np.sqrt(np.sum(frame_corr_temp**2) * np.sum(ref_corr_temp**2))
+            if denom == 0:
+                corr = 1.0
+            else:
+                corr = float(np.sum(frame_corr_temp * ref_corr_temp) / denom)
+
+            flux_norm = flux / (ref_flux + 1e-12)
+            flux_floor = 0.5
+            lam = 5.0
+            penalty = lam * max(0.0, flux_floor - flux_norm) ** 2
+            weighted = corr + penalty
+
+            metric_flux[iy, scan_x_idx] = flux
+            metric_corr[iy, scan_x_idx] = corr
+            metric_weighted[iy, scan_x_idx] = weighted
+
+        best_flat = int(np.argmin(metric_corr))
         best_index: tuple[int, int] = (
-            int(best_flat // normalized_score.shape[1]),
-            int(best_flat % normalized_score.shape[1]),
+            int(best_flat // metric_corr.shape[1]),
+            int(best_flat % metric_corr.shape[1]),
         )
         best_point = grid_points[best_index]
-        best_score = float(normalized_score[best_index])
+        best_score = float(metric_corr[best_index])
 
         if frames is None:
             frames = np.empty((0, 0, 0, 0))
@@ -310,8 +349,9 @@ class FPM_Finder:
         return ScanResult(
             center=center,
             grid_points=grid_points,
-            raw_flux=raw_flux,
-            normalized_score=normalized_score,
+            metric_flux=metric_flux,
+            metric_corr=metric_corr,
+            metric_weighted=metric_weighted,
             frames=frames,
             best_index=best_index,
             best_point=best_point,
@@ -377,11 +417,14 @@ class FPM_Finder:
         found_points: list[np.ndarray] = []
         found_scores: list[float] = []
         scan_records: list[dict] = []
-        normalized_matrices: list[np.ndarray] = []
-        raw_matrices: list[np.ndarray] = []
+        corr_matrices: list[np.ndarray] = []
+        flux_matrices: list[np.ndarray] = []
+        weighted_matrices: list[np.ndarray] = []
 
         current_center = start_center_xy
         local_search_tag = "coarse"
+
+        ref_center, ref_flux, ref_corr_temp = self._build_reference_metrics(beam)
 
         failure_reason = None
         failure_dot_index = None
@@ -392,10 +435,14 @@ class FPM_Finder:
                 center=current_center,
                 search_width=search_width,
                 step_size=step_size,
+                ref_center=ref_center,
+                ref_flux=ref_flux,
+                ref_corr_temp=ref_corr_temp,
             )
 
-            normalized_matrices.append(scan_result.normalized_score)
-            raw_matrices.append(scan_result.raw_flux)
+            corr_matrices.append(scan_result.metric_corr)
+            flux_matrices.append(scan_result.metric_flux)
+            weighted_matrices.append(scan_result.metric_weighted)
             scan_records.append(
                 {
                     "index": dot_index + 1,
@@ -404,16 +451,23 @@ class FPM_Finder:
                     "best_index": list(scan_result.best_index),
                     "best_point": scan_result.best_point.tolist(),
                     "best_score": scan_result.best_score,
+                    "best_flux": float(scan_result.metric_flux[scan_result.best_index]),
+                    "best_weighted": float(
+                        scan_result.metric_weighted[scan_result.best_index]
+                    ),
                     "threshold": detection_threshold,
-                    "grid_shape": list(scan_result.normalized_score.shape),
+                    "grid_shape": list(scan_result.metric_corr.shape),
                 }
             )
 
             _plot_scan_heatmap(
-                score_matrix=scan_result.normalized_score,
+                score_matrix=scan_result.metric_corr,
                 grid_points=scan_result.grid_points,
                 best_index=scan_result.best_index,
-                title=f"{local_search_tag.title()} search for dot {dot_index + 1}",
+                title=(
+                    f"{local_search_tag.title()} search for dot {dot_index + 1} "
+                    "(corr metric)"
+                ),
                 save_path=save_path
                 / f"scan_{dot_index + 1:02d}_{local_search_tag}.png",
                 found_points=found_points + [scan_result.best_point],
@@ -492,10 +546,9 @@ class FPM_Finder:
                 else np.empty((0, 2))
             ),
             found_scores=np.asarray(found_scores, dtype=float),
-            coarse_and_local_raw_flux=np.asarray(raw_matrices, dtype=float),
-            coarse_and_local_normalized_score=np.asarray(
-                normalized_matrices, dtype=float
-            ),
+            coarse_and_local_metric_flux=np.asarray(flux_matrices, dtype=float),
+            coarse_and_local_metric_corr=np.asarray(corr_matrices, dtype=float),
+            coarse_and_local_metric_weighted=np.asarray(weighted_matrices, dtype=float),
         )
 
         self._plot_final_summary(
