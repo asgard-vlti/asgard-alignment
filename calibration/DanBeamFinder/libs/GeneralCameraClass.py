@@ -1,15 +1,18 @@
+import time
+
 import numpy as np
 import matplotlib
+
 # Use a non-Qt backend if your Linux machine is having Qt issues
 # Comment this out if you are in a normal desktop session and want interactive windows
-matplotlib.use("TkAgg")   # or use "Agg" if you only want to save figures
+matplotlib.use("TkAgg")  # or use "Agg" if you only want to save figures
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from xaosim.shmlib import shm
 
 
-class GeneralCameraObject():
+class GeneralCameraObject:
     def __init__(self):
         pass
         self.SharedMemoryFullFrame()
@@ -18,8 +21,18 @@ class GeneralCameraObject():
         self.SharedMemorybeam3()
         self.SharedMemorybeam4()
 
+    def sanity_check_stream(self):
+        beam = 1
+        frame = self.GetFrame(beam)
+        time.sleep(0.1)
+        frame2 = self.GetFrame(beam)
 
-    
+        if np.all(frame == frame2):
+            raise RuntimeError(
+                "Camera stream appears frozen: consecutive frames "
+                "are identical. Have you run split_mode 1?"
+            )
+
     def SharedMemoryFullFrame(self):
         self.shmFrame_beamFull = shm("/dev/shm/cred1.im.shm")
 
@@ -34,7 +47,7 @@ class GeneralCameraObject():
 
     def SharedMemorybeam4(self):
         self.shmFrame_beam4 = shm("/dev/shm/baldr4.im.shm")
-        
+
     def GetFrame(self, ibeam):
         if ibeam == 1:
             shmFrame = self.shmFrame_beam1
@@ -46,19 +59,19 @@ class GeneralCameraObject():
             shmFrame = self.shmFrame_beam4
         elif ibeam == 0:
             shmFrame = self.shmFrame_beamFull
-        
+
         img_tmp = shmFrame.get_data()
         if len(img_tmp.shape) > 2:
             img_tmp = np.mean(img_tmp, axis=0)
         return img_tmp
-    
+
     @staticmethod
     def apply_circular_aperture(array, center, radius, fill_value=0):
         rows, cols = array.shape
         y, x = np.ogrid[:rows, :cols]
         cy, cx = center
 
-        mask = (x - cx)**2 + (y - cy)**2 >= radius**2
+        mask = (x - cx) ** 2 + (y - cy) ** 2 >= radius**2
 
         masked_array = np.full_like(array, fill_value)
         masked_array[mask] = array[mask]
@@ -88,7 +101,7 @@ class GeneralCameraObject():
         x_half_width=None,
         y_half_width=None,
         show_plot=False,
-        avgCount=1
+        avgCount=1,
     ):
         if frame is None:
             raise ValueError("Need to pass a frame")
@@ -102,7 +115,7 @@ class GeneralCameraObject():
                     centre=centre,
                     x_half_width=x_half_width,
                     y_half_width=y_half_width,
-                    show_plot=show_plot
+                    show_plot=show_plot,
                 )
                 framePwr = np.nansum(roi - bg)
                 framePwrTotal += framePwr
@@ -114,7 +127,7 @@ class GeneralCameraObject():
                 centre=centre,
                 x_half_width=x_half_width,
                 y_half_width=y_half_width,
-                show_plot=show_plot
+                show_plot=show_plot,
             )
             framePwr = np.nansum(roi - bg)
 
@@ -130,7 +143,9 @@ class GeneralCameraObject():
         return (norm * 255).astype(np.uint8)
 
     @staticmethod
-    def ApatrureFrame(frame, centre=None, x_half_width=None, y_half_width=None, show_plot=False):
+    def ApatrureFrame(
+        frame, centre=None, x_half_width=None, y_half_width=None, show_plot=False
+    ):
         roi = frame
 
         if centre is not None and x_half_width is not None and y_half_width is not None:
@@ -138,9 +153,9 @@ class GeneralCameraObject():
             nrows, ncols = frame.shape
 
             y_start = max(int(cy - y_half_width), 0)
-            y_end   = min(int(cy + y_half_width), nrows)
+            y_end = min(int(cy + y_half_width), nrows)
             x_start = max(int(cx - x_half_width), 0)
-            x_end   = min(int(cx + x_half_width), ncols)
+            x_end = min(int(cx + x_half_width), ncols)
 
             roi = frame[y_start:y_end, x_start:x_end]
 
@@ -150,7 +165,7 @@ class GeneralCameraObject():
                     centre=centre,
                     x_half_width=x_half_width,
                     y_half_width=y_half_width,
-                    title="ROI"
+                    title="ROI",
                 )
 
         return roi, None
@@ -163,7 +178,7 @@ class GeneralCameraObject():
         y_half_width=None,
         title="Frame",
         cmap="gray",
-        draw_cross=True
+        draw_cross=True,
     ):
         fig, ax = plt.subplots()
         ax.imshow(frame, cmap=cmap, origin="upper")
@@ -183,23 +198,28 @@ class GeneralCameraObject():
                 height,
                 linewidth=1.5,
                 edgecolor="red",
-                facecolor="none"
+                facecolor="none",
             )
             ax.add_patch(rect)
 
             if draw_cross:
-                ax.plot(cx, cy, marker="+", color="red", markersize=10, markeredgewidth=1.5)
+                ax.plot(
+                    cx, cy, marker="+", color="red", markersize=10, markeredgewidth=1.5
+                )
 
         plt.show()
         # plt.close()
+
     @staticmethod
     def FindMaxValueOnFrame(frame):
-        Maxidx= np.unravel_index(np.argmax(frame),frame.shape)
+        Maxidx = np.unravel_index(np.argmax(frame), frame.shape)
         return Maxidx
+
     @staticmethod
     def FindMinValueOnFrame(frame):
-        Mindx= np.unravel_index(np.argmin(frame),frame.shape)
+        Mindx = np.unravel_index(np.argmin(frame), frame.shape)
         return Mindx
+
     @staticmethod
     def PlotFrames(iframe, Framebuffer):
         fig, ax1 = plt.subplots()
@@ -210,10 +230,7 @@ class GeneralCameraObject():
 
     @staticmethod
     def DisplayWindow_GraphWithText(
-        image: np.ndarray,
-        text: str,
-        cmap="gray",
-        figsize=(8, 8)
+        image: np.ndarray, text: str, cmap="gray", figsize=(8, 8)
     ):
         """
         Display an image with multi-line text underneath using matplotlib.
@@ -231,18 +248,19 @@ class GeneralCameraObject():
 
         ax_txt.axis("off")
         ax_txt.text(
-            0.01, 0.95,
+            0.01,
+            0.95,
             "\n".join(lines),
             va="top",
             ha="left",
             fontsize=10,
-            family="monospace"
+            family="monospace",
         )
 
         plt.show()
         # plt.show(block=False)
 
-        block=False
+        block = False
         return fig
 
     @staticmethod
@@ -257,7 +275,7 @@ class GeneralCameraObject():
         ROI_visual_arr,
         scale,
         pixelFormat,
-        opencvWindowName
+        opencvWindowName,
     ):
         Frame_intFordisplay = GeneralCameraObject.rescaleFrame_256(Frame_int)
 
@@ -267,7 +285,7 @@ class GeneralCameraObject():
                 centre=[ROI_visual_arr[0], ROI_visual_arr[1]],
                 x_half_width=ROI_visual_arr[2],
                 y_half_width=ROI_visual_arr[3],
-                show_plot=False
+                show_plot=False,
             )
             framePwr = np.mean(roi)
             framePwr_std = np.std(roi)
@@ -311,18 +329,19 @@ class GeneralCameraObject():
                 2 * y_half_width,
                 linewidth=1.5,
                 edgecolor="red",
-                facecolor="none"
+                facecolor="none",
             )
             ax_img.add_patch(rect)
 
         ax_txt.axis("off")
         ax_txt.text(
-            0.01, 0.95,
+            0.01,
+            0.95,
             WindowSting,
             va="top",
             ha="left",
             fontsize=max(8, int(10 * scale)),
-            family="monospace"
+            family="monospace",
         )
 
         plt.show()
