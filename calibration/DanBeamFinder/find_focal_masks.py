@@ -179,6 +179,7 @@ def main() -> None:
         finder.set_positions(args.beam, init_pos)
         return
 
+    finder.set_positions(args.beam, init_pos)
     print(json.dumps(result, indent=2))
 
 
