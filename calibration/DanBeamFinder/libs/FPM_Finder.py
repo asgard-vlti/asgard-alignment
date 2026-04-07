@@ -19,8 +19,6 @@ import libs.GeneralCameraClass as CamForm
 import libs.GeneralStageClass as StageForm
 
 LINE_DIRECTION_OPTIONS = {"+x", "-x", "+y", "-y"}
-MOUNT_POS_NO_FEATURE_X = 1010.0
-MOUNT_POS_NO_FEATURE_Y = 4010.0
 
 
 def _as_float_pair(value: object) -> np.ndarray:
@@ -236,8 +234,8 @@ class FPM_Finder:
     def _build_reference_metrics(
         self, beam: int
     ) -> tuple[np.ndarray, float, np.ndarray]:
-        self._set_stage_position("BMY", beam, MOUNT_POS_NO_FEATURE_Y)
-        self._set_stage_position("BMX", beam, MOUNT_POS_NO_FEATURE_X)
+        self._set_stage_position("BMY", beam, self.no_feature_pos[1])
+        self._set_stage_position("BMX", beam, self.no_feature_pos[0])
 
         ref_frame = self._get_frame(beam)
         ref_center = np.asarray(self.CamObj.FindMaxValueOnFrame(ref_frame), dtype=float)
@@ -276,6 +274,7 @@ class FPM_Finder:
         ref_flux: float,
         ref_corr_temp: np.ndarray,
     ) -> ScanResult:
+
         offsets = _build_offsets(search_width, step_size)
         half_width = search_width / 2.0
         grid_points = np.asarray(
@@ -412,6 +411,9 @@ class FPM_Finder:
 
         save_path = _ensure_directory(save_path)
         start_center_xy = self._resolve_start_center(start_center, beam)
+        self.no_feature_pos = np.array(
+            [start_center_xy[0], start_center_xy[1]], dtype=float
+        )
         line_model = LineModel(line_direction)
 
         found_points: list[np.ndarray] = []

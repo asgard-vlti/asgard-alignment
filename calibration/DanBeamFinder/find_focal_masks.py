@@ -51,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  2) Move along --line-direction and repeat until --n-dots are found.\n"
             "  3) Save found positions to --out-file under --save-path.\n\n"
             "Notes:\n"
+            "  - !! Note that the starting position must have no features !!\n"
             "  - For --detection-threshold, no-mask is typically ~1.0, so choose <1.0.\n"
             "  - --start-center accepts either 'current' or a string like '[x, y]'.\n\n"
             "Examples:\n"
@@ -84,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Center of the local search area. Use 'current' to start from the "
             "current stage position, or pass '[x, y]' in microns. "
-            "Default: current."
+            "Default: current. !! Note that this position must have no features !!"
         ),
     )
     parser.add_argument(
@@ -146,8 +147,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.save_path is None:
-        now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_path = pathlib.Path("Data") / f"Scan_{args.beam}_{now}"
+        now = datetime.datetime.now().strftime("%H%M%S")
+        date_str = datetime.datetime.now().strftime("%Y%m%d")
+        save_path = pathlib.Path("Data") / f"{date_str}" / f"Scan_{args.beam}_{now}"
     else:
         save_path = pathlib.Path(args.save_path).expanduser()
 
