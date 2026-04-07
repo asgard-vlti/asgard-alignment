@@ -61,19 +61,6 @@ def _build_offsets(search_width: float, step_size: float) -> np.ndarray:
     return np.linspace(-half_width, half_width, count)
 
 
-def _build_snake_grid(
-    center: np.ndarray, search_width: float, step_size: float
-) -> np.ndarray:
-    offsets = _build_offsets(search_width, step_size)
-    grid = np.zeros((offsets.size, offsets.size, 2), dtype=float)
-    for iy, y_offset in enumerate(offsets):
-        y_pos = center[1] + y_offset
-        for ix, x_offset in enumerate(offsets):
-            grid[iy, ix, 0] = center[0] + x_offset
-            grid[iy, ix, 1] = y_pos
-    return grid
-
-
 def _normalize_matrix(score_matrix: np.ndarray) -> np.ndarray:
     max_value = float(np.max(score_matrix))
     if max_value <= 0:
@@ -261,16 +248,24 @@ class FPM_Finder:
         search_width: float,
         step_size: float,
     ) -> ScanResult:
-        grid_points = _build_snake_grid(center, search_width, step_size)
+        offsets = _build_offsets(search_width, step_size)
+        half_width = search_width / 2.0
+        grid_points = np.asarray(
+            self.StageObj.rasterScanSnakePattern(
+                StartX=float(center[0]),
+                StartY=float(center[1]),
+                StepAwayFromStartX=float(half_width),
+                StepAwayFromStartY=float(half_width),
+                StepCountX=int(offsets.size),
+                StepCountY=int(offsets.size),
+            ),
+            dtype=float,
+        )
         count_y, count_x, _ = grid_points.shape
         raw_flux = np.zeros((count_y, count_x), dtype=float)
         frames = None
 
-        scan_sequence = (
-            (iy, ix if iy % 2 == 0 else count_x - 1 - ix)
-            for iy in range(count_y)
-            for ix in range(count_x)
-        )
+        scan_sequence = ((iy, ix) for iy in range(count_y) for ix in range(count_x))
         progress = tqdm(
             scan_sequence,
             total=count_y * count_x,
