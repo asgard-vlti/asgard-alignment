@@ -83,7 +83,9 @@ def construct_command_basis(
     without_piston=True,
 ):
     """
-    returns a change of basis matrix M2C to go from modes to DM commands, where columns are the DM command for a given modal basis. e.g. M2C @ [0,1,0,...] would return the DM command for tip on a Zernike basis. Modes are normalized on command space such that <M>=0, <M|M>=1. Therefore these should be added to a flat DM reference if being applied.
+    returns a change of basis matrix M2C to go from modes to DM commands, where columns are the DM command for a given modal basis. 
+    e.g. M2C @ [0,1,0,...] would return the DM command for tip on a Zernike basis. Modes are normalized on command space such 
+    that <M>=0, <M|M>=1. Therefore these should be added to a flat DM reference if being applied.
 
     basis = string of basis to use
     number_of_modes = int, number of modes to create
@@ -451,8 +453,6 @@ def fourier_vector(n, m, P=2 * 12, Nx=12, Ny=12):
 
 def develop_Fourier_basis(n, m, P=2 * 12, Nx=12, Ny=12):
     """
-
-
     Parameters
     ----------
     n : TYPE int
