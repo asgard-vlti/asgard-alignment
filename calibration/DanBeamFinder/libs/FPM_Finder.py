@@ -277,7 +277,7 @@ class FPM_Finder:
 
         offsets = _build_offsets(search_width, step_size)
         half_width = search_width / 2.0
-        grid_points = np.asarray(
+        grid_points_scan = np.asarray(
             self.StageObj.rasterScanSnakePattern(
                 StartX=float(center[0]),
                 StartY=float(center[1]),
@@ -288,7 +288,8 @@ class FPM_Finder:
             ),
             dtype=float,
         )
-        count_y, count_x, _ = grid_points.shape
+        count_y, count_x, _ = grid_points_scan.shape
+        grid_points = np.zeros_like(grid_points_scan)
         metric_flux = np.zeros((count_y, count_x), dtype=float)
         metric_corr = np.zeros((count_y, count_x), dtype=float)
         metric_weighted = np.zeros((count_y, count_x), dtype=float)
@@ -302,8 +303,10 @@ class FPM_Finder:
             unit="pt",
         )
         for iy, scan_x_idx in progress:
-            xpos = grid_points[iy, scan_x_idx, 0]
-            ypos = grid_points[iy, scan_x_idx, 1]
+            data_x_idx = scan_x_idx if (iy % 2 == 0) else (count_x - 1 - scan_x_idx)
+
+            xpos = grid_points_scan[iy, scan_x_idx, 0]
+            ypos = grid_points_scan[iy, scan_x_idx, 1]
             self._set_stage_position("BMX", beam, xpos)
             self._set_stage_position("BMY", beam, ypos)
             frame = self._get_frame(beam)
@@ -312,7 +315,8 @@ class FPM_Finder:
                     (count_y, count_x, frame.shape[0], frame.shape[1]),
                     dtype=frame.dtype,
                 )
-            frames[iy, scan_x_idx] = frame
+            frames[iy, data_x_idx] = frame
+            grid_points[iy, data_x_idx] = np.array([xpos, ypos], dtype=float)
 
             flux = self._frame_score(frame, ref_center)
             frame_corr_temp = frame.astype(float).ravel()
@@ -330,9 +334,9 @@ class FPM_Finder:
             penalty = lam * max(0.0, flux_floor - flux_norm) ** 2
             weighted = corr + penalty
 
-            metric_flux[iy, scan_x_idx] = flux
-            metric_corr[iy, scan_x_idx] = corr
-            metric_weighted[iy, scan_x_idx] = weighted
+            metric_flux[iy, data_x_idx] = flux
+            metric_corr[iy, data_x_idx] = corr
+            metric_weighted[iy, data_x_idx] = weighted
 
         best_flat = int(np.argmin(metric_corr))
         best_index: tuple[int, int] = (
