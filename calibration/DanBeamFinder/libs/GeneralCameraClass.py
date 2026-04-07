@@ -14,12 +14,13 @@ from xaosim.shmlib import shm
 
 class GeneralCameraObject:
     def __init__(self):
-        pass
         self.SharedMemoryFullFrame()
         self.SharedMemorybeam1()
         self.SharedMemorybeam2()
         self.SharedMemorybeam3()
         self.SharedMemorybeam4()
+
+        self.sanity_check_stream()
 
     def sanity_check_stream(self):
         beam = 1
