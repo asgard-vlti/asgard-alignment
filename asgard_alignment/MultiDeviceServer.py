@@ -1011,6 +1011,7 @@ class MultiDeviceServer:
         @dataclass
         class Command:
             """Metadata for a command"""
+
             info: str
             format_str: str
             func: Callable
@@ -1234,7 +1235,7 @@ class MultiDeviceServer:
             "command_names": Command(
                 info="command_names - list all available commands",
                 format_str="command_names",
-                func=lambda: f"{list(commands.keys())}",
+                func=lambda: f'"{list(commands.keys())}"',
             ),
         }
 
@@ -1255,7 +1256,7 @@ class MultiDeviceServer:
         except Exception as e:
             first_word = message.split(" ")[0]
             cmd = commands.get(first_word)
-            help_text = cmd.info if cmd else 'Unknown command'
+            help_text = cmd.info if cmd else "Unknown command"
             logging.error(f"Custom command error: {e}")
             return f"NACK: command usage is: {help_text} \n {e}"
 
