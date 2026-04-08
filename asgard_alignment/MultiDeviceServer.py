@@ -126,7 +126,7 @@ class MultiDeviceServer:
                     if data_disp[0] == "{":
                         data_disp = data[:-1]
 
-                    logging.info(f"Received message: {data_disp}")
+                    # logging.info(f"Received message: {data_disp}")
 
                     is_custom_msg, response = self.handle_message(data)
                     if response == -1:
@@ -175,7 +175,9 @@ class MultiDeviceServer:
         # if "!" in message:
         if message[0].islower():
             logging.info(f"Custom command: {message}")
-            return True, self._handle_custom_command(message)
+            resp = self._handle_custom_command(message)
+            logging.info(f"Custom command response: {resp}")
+            return True, resp
 
         if message[0] == "!":
             logging.info("Old custom command")
