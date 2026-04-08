@@ -1993,13 +1993,13 @@ with col_main:
 
             cols = st.columns(2)
             with cols[0]:
-                if st.button("Open All Shutters"):
+                if st.button("Open All Shutters", key="h_open_all"):
                     msg = "h_shut open all"
                     response = send_and_get_response(msg)
                     st.write(f"{response}")
 
             with cols[1]:
-                if st.button("Close All Shutters"):
+                if st.button("Close All Shutters", key="h_close_all"):
                     msg = "h_shut close all"
                     response = send_and_get_response(msg)
                     st.write(f"{response}")
@@ -2008,11 +2008,11 @@ with col_main:
 
             for i, col in enumerate(cols):
                 with col:
-                    if st.button(f"Open {i+1}"):
+                    if st.button(f"Open {i+1}", key=f"h_open_{i}"):
                         msg = f"h_shut open {i+1}"
                         response = send_and_get_response(msg)
                         st.write(f"{response}")
-                    if st.button(f"Close {i+1}"):
+                    if st.button(f"Close {i+1}", key=f"h_close_{i}"):
                         msg = f"h_shut close {i+1}"
                         response = send_and_get_response(msg)
                         st.write(f"{response}")
@@ -2036,13 +2036,13 @@ with col_main:
 
             cols = st.columns(2)
             with cols[0]:
-                if st.button("Open All Shutters"):
+                if st.button("Open All Shutters", key="b_open_all"):
                     msg = "b_shut open all"
                     response = send_and_get_response(msg)
                     st.write(f"{response}")
 
             with cols[1]:
-                if st.button("Close All Shutters"):
+                if st.button("Close All Shutters", key="b_close_all"):
                     msg = "b_shut close all"
                     response = send_and_get_response(msg)
                     st.write(f"{response}")
@@ -2051,11 +2051,11 @@ with col_main:
 
             for i, col in enumerate(cols):
                 with col:
-                    if st.button(f"Open {i+1}"):
+                    if st.button(f"Open {i+1}", key=f"b_open_{i}"):
                         msg = f"b_shut open {i+1}"
                         response = send_and_get_response(msg)
                         st.write(f"{response}")
-                    if st.button(f"Close {i+1}"):
+                    if st.button(f"Close {i+1}", key=f"b_close_{i}"):
                         msg = f"b_shut close {i+1}"
                         response = send_and_get_response(msg)
                         st.write(f"{response}")
