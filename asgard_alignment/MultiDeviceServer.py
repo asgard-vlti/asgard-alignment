@@ -1251,7 +1251,7 @@ class MultiDeviceServer:
             "command_names": Command(
                 info="command_names - list all available commands",
                 format_str="command_names",
-                func=lambda: f'"{list(commands.keys())}"',
+                func=lambda: f"{list(commands.keys())}",
             ),
         }
 
