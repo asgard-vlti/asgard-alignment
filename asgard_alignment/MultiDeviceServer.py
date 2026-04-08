@@ -143,10 +143,6 @@ class MultiDeviceServer:
 
     @staticmethod
     def get_time_stamp():
-        # time_now = datetime.datetime.now()
-        # time_now = time.gmtime()
-        # return time.strftime("%Y-%m-%dT%H:%M:%S", time_now)
-
         # Get the current UTC time
         current_utc_time = datetime.datetime.now(datetime.timezone.utc)
 
@@ -183,6 +179,9 @@ class MultiDeviceServer:
             logging.info("Old custom command")
             return True, "NACK: Are you using old custom commands?"
 
+        return self.handle_eso_msg(message)
+
+    def handle_eso_msg(self, message):
         try:
             # message = message.rstrip(message[-1])
             json_data = json.loads(message.rstrip(message[-1]))
@@ -198,7 +197,7 @@ class MultiDeviceServer:
             received_time = datetime.datetime.strptime(
                 time_stampIn, "%Y-%m-%dT%H:%M:%S"
             )
-            now_utc = datetime.datetime.utcnow()
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
             delta = abs((now_utc - received_time).total_seconds())
             if delta > 300:  # 5 minutes
                 logging.warning(
@@ -623,15 +622,12 @@ class MultiDeviceServer:
         # Convert reply JSON structure into a character string
         # terminated with null character (because ic0fb process on wag
         # in coded in C++ and needs null character to mark end of the string)
-
         repMsg = json.dumps(reply) + "\0"
         logging.info(json.dumps(reply))
-        # self.server.send_string(repMsg)
 
         return False, repMsg
 
     def _handle_custom_command(self, message):
-        # this is a custom command, acutally do useful things here lol
         def read_msg(axis):
             return str(self.instr.devices[axis].read_position())
 
@@ -640,6 +636,17 @@ class MultiDeviceServer:
 
         def moveabs_msg(axis, position):
             self.instr.devices[axis].move_abs(float(position))
+
+            eso_pos = self.instr.devices[axis].internal_to_ESO(float(position))
+            self.database_message["command"]["parameters"].clear()
+            self.database_message["command"]["parameters"].append(
+                {"attribute": f"<alias>{axis}.data.posEnc", "value": eso_pos}
+            )
+
+            logging.info(f"Sending database update for {axis} with position {eso_pos}")
+            logging.debug(f"Database message: {self.database_message}")
+            self.db_update_socket.send_string(json.dumps(self.database_message) + "\0")
+
             return "ACK"
 
         def connected_msg(axis):
