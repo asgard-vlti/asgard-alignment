@@ -433,7 +433,7 @@ class Instrument:
                 self.devices[name].is_shuttered = is_shuttered
 
     def b_shut(self, state, beam_numbers):
-        offest_mag = 0.25  # degrees
+        offest_mag = 0.35  # degrees
         possible_shutter_devs = ["BTT", "BTP"]
 
         if state == "close":
