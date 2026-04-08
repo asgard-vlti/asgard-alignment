@@ -817,6 +817,7 @@ class Instrument:
                 if dev in self.devices:
                     # park the axis
                     try:
+                        self.devices[dev].stop()
                         self.devices[dev].axis.park()
                     except:
                         logging.warning(
