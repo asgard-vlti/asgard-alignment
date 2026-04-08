@@ -419,8 +419,23 @@ class Instrument:
 
         return True
 
-    def _apply_shutter_state_to_beam(self, state, beam_number):
+    def _apply_shutter_state_to_beam_heimdallr(self, state, beam_number):
         dev_prefixes = ["HFO", "HTTP", "HTPP", "HTPI", "HTTI"]
+        if state not in ["open", "close"]:
+            raise ValueError("state must be 'open' or 'close'")
+
+        is_shuttered = state == "close"
+
+        for dev in dev_prefixes:
+            name = f"{dev}{beam_number}"
+            if name in self.devices:
+                logging.info(f"Shuttering {name} to {is_shuttered}")
+                self.devices[name].is_shuttered = is_shuttered
+
+    def _apply_shutter_state_to_beam_baldr(self, state, beam_number):
+        dev_prefixes = ["BTT", "BTP"]
+        if beam_number != 1:
+            dev_prefixes += ["BOTT", "BOTP"]
         if state not in ["open", "close"]:
             raise ValueError("state must be 'open' or 'close'")
 
@@ -473,7 +488,7 @@ class Instrument:
                 self.b_shutter_states[beam_n] = "closed"
                 logging.info(f"sending moverel {offset} to {numbered_dev}")
             for beam_n in beam_numbers:
-                self._apply_shutter_state_to_beam(state, beam_n)
+                self._apply_shutter_state_to_beam_baldr(state, beam_n)
 
         if state == "open":
             beams_to_open = []
@@ -482,7 +497,7 @@ class Instrument:
                     beams_to_open.append(beam_n)
             logging.info(f"beams to open{beams_to_open}")
             for beam_n in beam_numbers:
-                self._apply_shutter_state_to_beam(state, beam_n)
+                self._apply_shutter_state_to_beam_baldr(state, beam_n)
             # if we are opening the shutter, we need apply the opposite of the offsets and set the
             # offset variable back to 0.0
             for beam_n in beams_to_open:
@@ -571,7 +586,7 @@ class Instrument:
                 self.h_shutter_states[beam_n] = "closed"
                 logging.info(f"sending moverel {offset} to {numbered_dev}")
             for beam_n in beam_numbers:
-                self._apply_shutter_state_to_beam(state, beam_n)
+                self._apply_shutter_state_to_beam_heimdallr(state, beam_n)
 
         if state == "open":
             beams_to_open = []
@@ -580,7 +595,7 @@ class Instrument:
                     beams_to_open.append(beam_n)
             logging.info(f"beams to open{beams_to_open}")
             for beam_n in beam_numbers:
-                self._apply_shutter_state_to_beam(state, beam_n)
+                self._apply_shutter_state_to_beam_heimdallr(state, beam_n)
             # if we are opening the shutter, we need apply the opposite of the offsets and set the
             # offset variable back to 0.0
             for beam_n in beams_to_open:
