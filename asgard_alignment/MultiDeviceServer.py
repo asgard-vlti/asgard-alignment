@@ -499,6 +499,7 @@ class MultiDeviceServer:
                     reply["reply"]["parameters"].append(
                         {"attribute": attribute, "value": 3}
                     )
+                reply["reply"]["content"] = "OK"
 
             # standby is also a weird case, as standing by some devices shuts off others - need to iterate
             if command_name == "standby":
@@ -517,98 +518,102 @@ class MultiDeviceServer:
                         set(self.instr.devices.keys()).intersection(devs_to_standby)
                     )
 
-            # for all other commands, do them one device at a time...
-            for i in range(n_devs_commanded):
-                if is_all_devs:
-                    try:
-                        dev_name = dev_names[i]
-                    except Exception as e:
-                        logging.error(f"Error {e}")
-                        break
-                else:
-                    dev_name = json_data["command"]["parameters"][i]["device"].upper()
+                reply["reply"]["content"] = "OK"
+            else:
+                # for all other commands, do them one device at a time...
+                for i in range(n_devs_commanded):
+                    if is_all_devs:
+                        try:
+                            dev_name = dev_names[i]
+                        except Exception as e:
+                            logging.error(f"Error {e}")
+                            break
+                    else:
+                        dev_name = json_data["command"]["parameters"][i][
+                            "device"
+                        ].upper()
 
-                if command_name == "disable":
-                    logging.info(f"Power off device: {dev_name}")
+                    if command_name == "disable":
+                        logging.info(f"Power off device: {dev_name}")
 
-                    self.instr.devices[dev_name].disable()
+                        self.instr.devices[dev_name].disable()
 
-                elif command_name == "enable":
-                    logging.info(f"Power on device: {dev_name}")
+                    elif command_name == "enable":
+                        logging.info(f"Power on device: {dev_name}")
 
-                    self.instr.devices[dev_name].enable()
+                        self.instr.devices[dev_name].enable()
 
-                elif command_name == "off":
-                    logging.info(f"Turning off device: {dev_name}")
-                    # .........................................................
-                    # If needed, call controller-specific functions to power
-                    # down the device. It may require initialization
-                    # after a power up
-                    # .........................................................
+                    elif command_name == "off":
+                        logging.info(f"Turning off device: {dev_name}")
+                        # .........................................................
+                        # If needed, call controller-specific functions to power
+                        # down the device. It may require initialization
+                        # after a power up
+                        # .........................................................
 
-                    # Update the wagics database to show that the device is
-                    # in LOADED state (value of "state" attribute has to be
-                    # set to 3)
+                        # Update the wagics database to show that the device is
+                        # in LOADED state (value of "state" attribute has to be
+                        # set to 3)
 
-                    attribute = "<alias>" + dev_name + ".state"
-                    reply["reply"]["parameters"].append(
-                        {"attribute": attribute, "value": 1}
-                    )
+                        attribute = "<alias>" + dev_name + ".state"
+                        reply["reply"]["parameters"].append(
+                            {"attribute": attribute, "value": 1}
+                        )
 
-                elif command_name == "simulat":
-                    logging.info(f"Simulation of device {dev_name}")
-                    # Set the simulation flag of dev_name to 1
-                    # TODO: add code here that changes the device to simulation mode
-                    # for devIdx in range(nbCtrlDevs):
-                    #     if d[devIdx].name == dev_name:
-                    #         break
-                    # d[devIdx].simulated = 1
+                    elif command_name == "simulat":
+                        logging.info(f"Simulation of device {dev_name}")
+                        # Set the simulation flag of dev_name to 1
+                        # TODO: add code here that changes the device to simulation mode
+                        # for devIdx in range(nbCtrlDevs):
+                        #     if d[devIdx].name == dev_name:
+                        #         break
+                        # d[devIdx].simulated = 1
 
-                    # Update the wagics database  to show that the device
-                    # is in simulation and is in LOADED state
+                        # Update the wagics database  to show that the device
+                        # is in simulation and is in LOADED state
 
-                    attribute = "<alias>" + dev_name + ".simulation"
-                    reply["reply"]["parameters"].append(
-                        {"attribute": attribute, "value": 1}
-                    )
-                    attribute = "<alias>" + dev_name + ".state"
-                    reply["reply"]["parameters"].append(
-                        {"attribute": attribute, "value": 1}
-                    )
+                        attribute = "<alias>" + dev_name + ".simulation"
+                        reply["reply"]["parameters"].append(
+                            {"attribute": attribute, "value": 1}
+                        )
+                        attribute = "<alias>" + dev_name + ".state"
+                        reply["reply"]["parameters"].append(
+                            {"attribute": attribute, "value": 1}
+                        )
 
-                elif command_name == "stop":
-                    logging.info(f"Stop device: {dev_name}")
-                    logging.info("ignored")
-                    # self.instr.devices[dev_name].stop()
+                    elif command_name == "stop":
+                        logging.info(f"Stop device: {dev_name}")
+                        logging.info("ignored")
+                        # self.instr.devices[dev_name].stop()
 
-                    # If setup is in progress, consider it done
+                        # If setup is in progress, consider it done
 
-                    # Update of the device status (positions, etc...) will be
-                    # done by the next "poll" command sent by wag
+                        # Update of the device status (positions, etc...) will be
+                        # done by the next "poll" command sent by wag
 
-                elif command_name == "stopsim":
-                    logging.info(f"Normal mode for device {dev_name}")
-                    # Set the simulation flag of dev_name to 0
-                    # TODO: add code here that changes the device to normal mode
+                    elif command_name == "stopsim":
+                        logging.info(f"Normal mode for device {dev_name}")
+                        # Set the simulation flag of dev_name to 0
+                        # TODO: add code here that changes the device to normal mode
 
-                    # Update the wagics database  to show that the device
-                    # is not in simulation and is in LOADED state
-                    # (it may require an initialization when going to
-                    # ONLINE state)
+                        # Update the wagics database  to show that the device
+                        # is not in simulation and is in LOADED state
+                        # (it may require an initialization when going to
+                        # ONLINE state)
 
-                    attribute = "<alias>" + dev_name + ".simulation"
-                    reply["reply"]["parameters"].append(
-                        {"attribute": attribute, "value": 0}
-                    )
-                    attribute = "<alias>" + dev_name + ".state"
-                    reply["reply"]["parameters"].append(
-                        {"attribute": attribute, "value": 1}
-                    )
+                        attribute = "<alias>" + dev_name + ".simulation"
+                        reply["reply"]["parameters"].append(
+                            {"attribute": attribute, "value": 0}
+                        )
+                        attribute = "<alias>" + dev_name + ".state"
+                        reply["reply"]["parameters"].append(
+                            {"attribute": attribute, "value": 1}
+                        )
 
-            if command_name == "stop":
-                self.is_stopped = True
+                if command_name == "stop":
+                    self.is_stopped = True
 
-            reply["reply"]["content"] = "OK"
+                reply["reply"]["content"] = "OK"
 
         # Send back reply to ic0fb process (wag)
         reply["reply"]["time"] = self.get_time_stamp()
