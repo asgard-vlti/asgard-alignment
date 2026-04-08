@@ -1357,7 +1357,7 @@ with col_main:
             [
                 "Quick buttons",
                 "Illumination",
-                "Heimdallr shutters",
+                "Shutters",
                 "Move image/pupil",
                 "Rotation stages",
                 "Save state",
@@ -1984,22 +1984,25 @@ with col_main:
                             else:
                                 st.warning(f"Cannot find {fig_path}")
 
-        if routine_options == "Heimdallr shutters":
+        if routine_options == "Shutters":
             # all up and all down buttons
 
-            st.title("Heimdallr internal Control")
+            st.title("Shutters Control")
 
-            st.header("Shutters Control")
+            st.header("Heimdallr")
 
-            if st.button("Open All Shutters"):
-                msg = "h_shut open all"
-                response = send_and_get_response(msg)
-                st.write(f"{response}")
+            cols = st.columns(2)
+            with cols[0]:
+                if st.button("Open All Shutters"):
+                    msg = "h_shut open all"
+                    response = send_and_get_response(msg)
+                    st.write(f"{response}")
 
-            if st.button("Close All Shutters"):
-                msg = "h_shut close all"
-                response = send_and_get_response(msg)
-                st.write(f"{response}")
+            with cols[1]:
+                if st.button("Close All Shutters"):
+                    msg = "h_shut close all"
+                    response = send_and_get_response(msg)
+                    st.write(f"{response}")
 
             cols = st.columns(4)
 
@@ -2028,6 +2031,34 @@ with col_main:
                     msg = "h_splay off"
                     response = send_and_get_response(msg)
                     st.write(f"{response}")
+
+            st.header("Baldr")
+
+            cols = st.columns(2)
+            with cols[0]:
+                if st.button("Open All Shutters"):
+                    msg = "b_shut open all"
+                    response = send_and_get_response(msg)
+                    st.write(f"{response}")
+
+            with cols[1]:
+                if st.button("Close All Shutters"):
+                    msg = "b_shut close all"
+                    response = send_and_get_response(msg)
+                    st.write(f"{response}")
+
+            cols = st.columns(4)
+
+            for i, col in enumerate(cols):
+                with col:
+                    if st.button(f"Open {i+1}"):
+                        msg = f"b_shut open {i+1}"
+                        response = send_and_get_response(msg)
+                        st.write(f"{response}")
+                    if st.button(f"Close {i+1}"):
+                        msg = f"b_shut close {i+1}"
+                        response = send_and_get_response(msg)
+                        st.write(f"{response}")
 
         if routine_options == "Illumination":
             # a few options to control sources, source position and flipper states

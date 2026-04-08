@@ -136,6 +136,11 @@ class Instrument:
         }
         self.is_h_splay = "off"
 
+        self.b_shutter_states = {i: "open" for i in range(1, 5)}
+        self.b_shutter_offsets = {
+            i: {f"BTP{i}": 0.0, f"BTT{i}": 0.0} for i in range(1, 5)
+        }
+
     @property
     def devices(self):
         """
@@ -201,6 +206,8 @@ class Instrument:
             motor_names += ["SDLA", "SDL12", "SDL34", "SSS", "SSF"]
         if subset == "heimdallr" or subset == "all":
             self.h_shut("open", [1, 2, 3, 4])
+            time.sleep(2)
+            self.b_shut("open", [1, 2, 3, 4])
             time.sleep(2)
             motor_names_all_beams = [
                 "HFO",
@@ -424,6 +431,90 @@ class Instrument:
             if name in self.devices:
                 logging.info(f"Shuttering {name} to {is_shuttered}")
                 self.devices[name].is_shuttered = is_shuttered
+
+    def b_shut(self, state, beam_numbers):
+        offest_mag = 0.25  # degrees
+        possible_shutter_devs = ["BTT", "BTP"]
+
+        if state == "close":
+            beams_to_close = []
+            for beam_n in beam_numbers:
+                if not self.b_shutter_states[beam_n] == "close":
+                    beams_to_close.append(beam_n)
+            # if we are closing the shutter, we need to pick a direction for the offsets and apply them
+            # pick the direction by choosing the axis that has the largest current value (abs value sense)
+            for beam_n in beams_to_close:
+                axis_pos = {}
+                for dev in possible_shutter_devs:
+                    numbered_dev = f"{dev}{beam_n}"
+                    if numbered_dev in self.devices:
+                        axis_pos[numbered_dev] = self.devices[
+                            numbered_dev
+                        ].read_position()
+
+                # find the axis with the largest absolute value
+                max_dev = max(axis_pos, key=lambda x: abs(axis_pos[x]))
+
+                # apply the offset in the opposite direction
+                offset = offest_mag if axis_pos[max_dev] < 0 else -offest_mag
+                self.b_shutter_offsets[beam_n][max_dev] = offset
+
+                # wait in a blocking way for the device to stop moving
+                timeout = 3.0
+                start_time = time.time()
+                while self.devices[max_dev].is_moving():
+                    logging.info(f"waiting for {max_dev} to stop moving")
+                    if time.time() - start_time > timeout:
+                        logging.warning(f"Timeout waiting for {max_dev} to stop moving")
+                        break
+                    time.sleep(0.1)
+
+                self.devices[max_dev].move_relative(offset)
+                self.b_shutter_states[beam_n] = "closed"
+                logging.info(f"sending moverel {offset} to {numbered_dev}")
+            for beam_n in beam_numbers:
+                self._apply_shutter_state_to_beam(state, beam_n)
+
+        if state == "open":
+            beams_to_open = []
+            for beam_n in beam_numbers:
+                if not self.b_shutter_states[beam_n] == "open":
+                    beams_to_open.append(beam_n)
+            logging.info(f"beams to open{beams_to_open}")
+            for beam_n in beam_numbers:
+                self._apply_shutter_state_to_beam(state, beam_n)
+            # if we are opening the shutter, we need apply the opposite of the offsets and set the
+            # offset variable back to 0.0
+            for beam_n in beams_to_open:
+                for dev in possible_shutter_devs:
+                    numbered_dev = f"{dev}{beam_n}"
+                    print(f"{self.b_shutter_offsets[beam_n]}")
+                    print(
+                        f"{numbered_dev} {self.b_shutter_offsets[beam_n][numbered_dev]}"
+                    )
+                    if not np.isclose(
+                        self.b_shutter_offsets[beam_n][numbered_dev], 0.0
+                    ):
+                        timeout = 3.0
+                        start_time = time.time()
+                        while self.devices[numbered_dev].is_moving():
+                            logging.info(f"waiting for {numbered_dev} to stop moving")
+                            if time.time() - start_time > timeout:
+                                logging.warning(
+                                    f"Timeout waiting for {numbered_dev} to stop moving"
+                                )
+                                break
+                            time.sleep(0.1)
+                        self.devices[numbered_dev].move_relative(
+                            -self.b_shutter_offsets[beam_n][numbered_dev]
+                        )
+                        logging.info(
+                            f"sending moverel {-self.b_shutter_offsets[beam_n][numbered_dev]} to {numbered_dev}"
+                        )
+                        self.b_shutter_offsets[beam_n][numbered_dev] = 0.0
+                        self.b_shutter_states[beam_n] = "open"
+
+        logging.info(f"self.b_shutter_states: {self.b_shutter_states}")
 
     def h_shut(self, state, beam_numbers):
         """
@@ -1196,7 +1287,7 @@ class Instrument:
                 name,
                 self._motor_config[name]["semaphore_id"],
                 self._controllers["rotm_teensy"],
-                named_positions = {},
+                named_positions={},
             )
             return True
         elif self._motor_config[name]["motor_type"] in ["PR50PP"]:
@@ -1204,7 +1295,7 @@ class Instrument:
                 name,
                 self._motor_config[name]["semaphore_id"],
                 self._controllers["rotm_teensy"],
-                named_positions = {},
+                named_positions={},
             )
             return True
 

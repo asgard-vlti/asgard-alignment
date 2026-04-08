@@ -953,6 +953,17 @@ class MultiDeviceServer:
 
             return self.instr.h_shut(state, beam_numbers)
 
+        def b_shut_msg(state, beam_numbers):
+            if beam_numbers == "all":
+                beam_numbers = list(range(1, 5))
+            else:
+                beam_numbers = [int(b) for b in beam_numbers.split(",")]
+
+            if state not in ["open", "close"]:
+                return "NACK: Invalid state for b_shut, must be 'open' or 'close'"
+
+            return self.instr.b_shut(state, beam_numbers)
+
         def h_splay_msg(state):
             return self.instr.h_splay(state)
 
@@ -1201,6 +1212,11 @@ class MultiDeviceServer:
                 info="h_shut {state} {beam_numbers} - control heimdallr shutter (state: open/close, beam_numbers: comma-separated or 'all')",
                 format_str="h_shut {} {}",
                 func=h_shut_msg,
+            ),
+            "b_shut": Command(
+                info="b_shut {state} {beam_numbers} - control baldr shutter (state: open/close, beam_numbers: comma-separated or 'all')",
+                format_str="b_shut {} {}",
+                func=b_shut_msg,
             ),
             "h_splay": Command(
                 info="h_splay {state} - control heimdallr splay",
