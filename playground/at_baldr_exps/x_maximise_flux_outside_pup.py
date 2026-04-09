@@ -19,7 +19,7 @@ import hcipy
 from asgard_alignment import FLI_Cameras as FLI
 import scipy.optimize as opt
 
-beam = 3
+beam = 1
 
 
 # %%
@@ -39,21 +39,24 @@ def mds_send(sock, msg: str) -> str:
 ctx, sock = mds_connect("mimir")
 
 # %%
-dm = dmclass(3)
+dm = dmclass(beam)
 
-cam = Bcam(3)
+cam = Bcam(beam)
 
 
 # %%
 mds_send(sock, "off SBB")
+# mds_send(sock, "b_shut close all")
 time.sleep(3)
 # %%
 cam.take_dark(256)
 plt.imshow(cam.dark)
 plt.colorbar()
 # %%
+# mds_send(sock, "b_shut open all")
 mds_send(sock, "on SBB")
 
+# %%
 offset = 200.0
 mds_send(sock, f"moverel BMX{beam} {offset}")
 mds_send(sock, f"moverel BMY{beam} {offset}")
@@ -307,7 +310,7 @@ basis_loss(np.zeros(len(res.x)), fourier_middle, 0.2, scattered_flux_mask, act_r
 
 # %%
 sol = res.x.copy()
-fourier_large = fourier_basis(8)
+fourier_large = fourier_basis(6)
 
 n_terms = fourier_large.num_modes
 init_coeffs = fourier_large.coefficients_for(fourier_middle.linear_combination(sol))
@@ -328,11 +331,11 @@ basis_loss(res.x, fourier_large, 0.2, scattered_flux_mask, act_reg_mask, 0.01)
 # %%
 flat_img = cam.take_stack(256).mean(0)
 # %%
-np.savez("beam3_good_flat2.npz",
-         flat=fourier_large.linear_combination(res.x),
-         flat_img=flat_img,
-         n_fourier_modes=8,
-         lamb_unif=0.3)
+# np.savez("beam3_good_flat2.npz",
+#          flat=fourier_large.linear_combination(res.x),
+#          flat_img=flat_img,
+#          n_fourier_modes=8,
+#          lamb_unif=0.3)
 
 # %%
 
