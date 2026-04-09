@@ -14,7 +14,7 @@ from asgard_alignment.DM_shm_ctrl import dmclass
 from asgard_alignment import FLI_Cameras as FLI
 import matplotlib.pyplot as plt
 
-beam = 3
+beam = 2
 
 
 # %%
@@ -34,9 +34,9 @@ def mds_send(sock, msg: str) -> str:
 ctx, sock = mds_connect("mimir")
 
 # %%
-dm = dmclass(3)
+dm = dmclass(beam)
 
-cam = Bcam(3)
+cam = Bcam(beam)
 
 # %%
 mds_send(sock, "off SBB")
@@ -80,27 +80,43 @@ import hcipy
 n_act = 12
 n_beam = 10
 
-grid = hcipy.make_pupil_grid(n_act, diameter=n_act / n_beam)
-n_modes = 8
-max_freq = n_modes  # lambda/D
-probe_max_freq = max_freq
+import DM_modes2
+# grid = hcipy.make_pupil_grid(n_act, diameter=n_act / n_beam)
+# n_modes = 8
+# max_freq = n_modes  # lambda/D
+# probe_max_freq = max_freq
 
-freqs = hcipy.make_pupil_grid(
-    n_modes,
-    max_freq,
+# freqs = hcipy.make_pupil_grid(
+#     n_modes,
+#     max_freq,
+# )
+
+# basis = hcipy.make_fourier_basis(grid, freqs.scaled(2 * np.pi))
+# basis.transformation_matrix.shape
+
+# hc_fourier = basis.transformation_matrix
+
+# # if odd number of modes, remove piston
+# if n_modes % 2 == 1:
+#     hc_fourier = hc_fourier[:, 1:]
+
+
+# hc_fourier.shape
+
+
+
+act_grid = DM_modes2.make_hc_act_grid()
+fourier, freqs_used = DM_modes2.fourier_basis(
+    act_grid,
+    min_freq_HO=1.1,
+    max_freq_HO=5.01,
+    spacing_HO=1.0,
+    start_HO=0.0,
+    orthogonalise=False,
+    pin_edges=True,
 )
 
-basis = hcipy.make_fourier_basis(grid, freqs.scaled(2 * np.pi))
-basis.transformation_matrix.shape
-
-hc_fourier = basis.transformation_matrix
-
-# if odd number of modes, remove piston
-if n_modes % 2 == 1:
-    hc_fourier = hc_fourier[:, 1:]
-
-
-hc_fourier.shape
+hc_fourier = fourier.transformation_matrix
 
 # %%
 plt.imshow(hc_fourier[:, 0].reshape(12, 12))

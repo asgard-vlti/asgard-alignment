@@ -20,7 +20,7 @@ import hcipy
 from asgard_alignment import FLI_Cameras as FLI
 import scipy.optimize as opt
 
-beam = 1
+beam = 2
 
 
 # %%
@@ -212,17 +212,7 @@ print(loss(init_cmd, 0.1, 10.0, scattered_flux_mask, act_reg_mask))
 # %%
 loss(np.random.randn(144) * 0.02, 0.1, 0.0, scattered_flux_mask, act_reg_mask)
 
-# %%
-res = opt.minimize(
-    loss,
-    init_cmd,
-    (10.0, scattered_flux_mask, act_reg_mask),
-    method="Powell",
-    options={"disp": True},
-    bounds=[[-0.25, 0.25] for _ in range(144)],
-)
-# %%
-plt.imshow(res.x.reshape(12, 12))
+
 
 # %%
 # n_zern = 9
@@ -259,7 +249,7 @@ def basis_loss(coeffs, basis, lamb_unif, scatter_mask, act_mask, scale=0.05):
 res = opt.minimize(
     basis_loss,
     np.zeros(n_offset_modes),
-    (fourier_small, 0.5, scattered_flux_mask, act_reg_mask),
+    (fourier_small, 0.5, scattered_flux_mask, act_reg_mask,0.2),
     method="COBYLA",
     options={"disp": True, "maxiter": 50},
     # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
@@ -302,14 +292,14 @@ plt.colorbar()
 
 # %%
 basis_loss(
-    init_coeffs * 5, fourier_middle, 0.0, scattered_flux_mask, act_reg_mask, 0.01
+    init_coeffs * 4, fourier_middle, 0.0, scattered_flux_mask, act_reg_mask, 0.05
 )
 # %%
 
 res = opt.minimize(
     basis_loss,
-    init_coeffs * 5,
-    (fourier_middle, 0.2, scattered_flux_mask, act_reg_mask, 0.01),
+    init_coeffs * 4,
+    (fourier_middle, 0.2, scattered_flux_mask, act_reg_mask, 0.05),
     method="COBYLA",
     options={"disp": True, "maxiter": 120},
     # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
@@ -342,13 +332,16 @@ init_coeffs = fourier_large.coefficients_for(fourier_middle.linear_combination(s
 res = opt.minimize(
     basis_loss,
     init_coeffs,
-    (fourier_large, 0.3, scattered_flux_mask, act_reg_mask, 0.01),
+    (fourier_large, 0.3, scattered_flux_mask, act_reg_mask, 0.05),
     method="COBYLA",
     options={"disp": True, "maxiter": 320},
     # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
 )
 # %%
-basis_loss(res.x, fourier_large, 0.2, scattered_flux_mask, act_reg_mask, 0.01)
+basis_loss(np.zeros(len(res.x)), fourier_large, 0.2, scattered_flux_mask, act_reg_mask, 0.01)
+
+# %%
+basis_loss(res.x, fourier_large, 0.2, scattered_flux_mask, act_reg_mask, 0.05)
 
 # %%
 flat_img = cam.take_stack(256).mean(0)
