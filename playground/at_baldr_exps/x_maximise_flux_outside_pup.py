@@ -1,5 +1,6 @@
 # %%
 import numpy as np
+import DM_modes2
 import zmq
 import time
 import toml
@@ -72,10 +73,21 @@ time.sleep(1)
 plt.imshow(pupil_only)
 # %%
 # make a pupil mask. Need to find the pixels in the circle
-n_act = 12
-n_beam = 10
+n_beam = 10.0
 
-act_grid = hcipy.make_pupil_grid(n_act, diameter=n_act / n_beam)
+
+act_grid = DM_modes2.make_hc_act_grid()
+fourier, freqs_used = DM_modes2.fourier_basis(
+    act_grid,
+    min_freq_HO=1.1,
+    max_freq_HO=5.01,
+    spacing_HO=1.0,
+    start_HO=0.0,
+    orthogonalise=False,
+    pin_edges=True,
+)
+
+
 cam_grid = hcipy.make_pupil_grid(32, diameter=32)
 
 
@@ -148,7 +160,6 @@ hcipy.imshow_field(act_reg_mask, grid=act_grid)
 plt.colorbar()
 
 
-
 # %%
 def L1_masked_reg(cmd, mask):
     # the l1 regularisation term, evaluated with weights given by the mask
@@ -187,11 +198,11 @@ dm.set_data(init_cmd)
 time.sleep(0.01)
 img = cam.take_stack(64).mean(0)
 
-pupil_hard_mask = pupil_mask>0.6
+pupil_hard_mask = pupil_mask > 0.6
 
-flux_outside_pupil(img, scatter_mask=scattered_flux_mask), uniformity_in_pupil(img, pupil_hard_mask), L1_masked_reg(
-    init_cmd, act_reg_mask
-)
+flux_outside_pupil(img, scatter_mask=scattered_flux_mask), uniformity_in_pupil(
+    img, pupil_hard_mask
+), L1_masked_reg(init_cmd, act_reg_mask)
 
 # %%
 # while True:
@@ -221,24 +232,16 @@ plt.imshow(res.x.reshape(12, 12))
 # hcipy.imshow_field(zern.linear_combination(np.random.randn(n_zern) * 0.01), act_grid)
 
 
-def fourier_basis(n_modes):
-    max_freq = n_modes  # lambda/D
-    freqs = hcipy.make_pupil_grid(
-        n_modes,
-        max_freq,
-    )
+fourier_small, _ = DM_modes2.fourier_basis(
+    act_grid,
+    min_freq_HO=1.1,
+    max_freq_HO=2.01,
+    spacing_HO=1.0,
+    start_HO=0.0,
+    orthogonalise=False,
+    pin_edges=True,
+)
 
-    basis = hcipy.make_fourier_basis(act_grid, freqs.scaled(2 * np.pi))
-
-    fourier = basis
-
-    # if odd number of modes, remove piston
-    if n_modes % 2 == 1:
-        fourier = hcipy.ModeBasis(fourier.transformation_matrix[:, 1:], act_grid)
-    return fourier
-
-
-fourier_small = fourier_basis(2)
 
 n_offset_modes = fourier_small.num_modes
 # %%
@@ -250,6 +253,7 @@ def basis_loss(coeffs, basis, lamb_unif, scatter_mask, act_mask, scale=0.05):
     coeffs_scaled = coeffs * scale
     cmd = basis.linear_combination(coeffs_scaled)
     return loss(cmd, lamb_unif, 0.0, scatter_mask, act_mask)
+
 
 # %%
 res = opt.minimize(
@@ -275,7 +279,15 @@ len(sol)
 
 
 # %%
-fourier_middle = fourier_basis(4)
+fourier_middle, _ = DM_modes2.fourier_basis(
+    act_grid,
+    min_freq_HO=1.1,
+    max_freq_HO=3.51,
+    spacing_HO=1.0,
+    start_HO=0.0,
+    orthogonalise=True,
+    pin_edges=True,
+)
 
 n_terms = fourier_middle.num_modes
 init_coeffs = fourier_middle.coefficients_for(fourier_small.linear_combination(sol))
@@ -305,12 +317,22 @@ res = opt.minimize(
 # %%
 basis_loss(res.x, fourier_middle, 0.2, scattered_flux_mask, act_reg_mask, 0.01)
 # %%
-basis_loss(np.zeros(len(res.x)), fourier_middle, 0.2, scattered_flux_mask, act_reg_mask, 0.01)
+basis_loss(
+    np.zeros(len(res.x)), fourier_middle, 0.2, scattered_flux_mask, act_reg_mask, 0.01
+)
 
 
 # %%
 sol = res.x.copy()
-fourier_large = fourier_basis(6)
+fourier_large, _ = DM_modes2.fourier_basis(
+    act_grid,
+    min_freq_HO=1.1,
+    max_freq_HO=5.01,
+    spacing_HO=1.0,
+    start_HO=0.0,
+    orthogonalise=True,
+    pin_edges=True,
+)
 
 n_terms = fourier_large.num_modes
 init_coeffs = fourier_large.coefficients_for(fourier_middle.linear_combination(sol))
@@ -340,7 +362,7 @@ flat_img = cam.take_stack(256).mean(0)
 # %%
 
 img = cam.take_stack(256).mean(0)
-plt.imshow(img*(pupil_mask>0.5))
+plt.imshow(img * (pupil_mask > 0.5))
 
 # %%
 dm.set_data(np.zeros(144))
@@ -403,7 +425,7 @@ for n, max_it in zip(n_squares, n_max_iters):
             prev_square_basis.linear_combination(res.x)
         )
 
-    basis_loss(init_coeffs,square_basis, 0.0, scattered_flux_mask, act_reg_mask, 0.01)
+    basis_loss(init_coeffs, square_basis, 0.0, scattered_flux_mask, act_reg_mask, 0.01)
 
     time.sleep(5)
     res = opt.minimize(
