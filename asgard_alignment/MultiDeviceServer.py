@@ -766,10 +766,32 @@ class MultiDeviceServer:
 
         def on_msg(lamp_name):
             self.instr.devices[lamp_name].turn_on()
+
+            # update eso
+            self.database_message["command"]["parameters"].clear()
+            self.database_message["command"]["parameters"].append(
+                {"attribute": f"<alias>{lamp_name}.DATA.status0", "value": "ON"}
+            )
+            self.database_message["command"]["time"] = self.get_time_stamp()
+            logging.info(f"Sending database update for {lamp_name} with status ON")
+            logging.info(f"Database message: {self.database_message}")
+
+            self.db_update_socket.send_string(json.dumps(self.database_message) + "\0")
+
             return "ACK"
 
         def off_msg(lamp_name):
             self.instr.devices[lamp_name].turn_off()
+
+            # update eso
+            self.database_message["command"]["parameters"].clear()
+            self.database_message["command"]["parameters"].append(
+                {"attribute": f"<alias>{lamp_name}.DATA.status0", "value": "OFF"}
+            )
+            self.database_message["command"]["time"] = self.get_time_stamp()
+            logging.info(f"Sending database update for {lamp_name} with status OFF")
+            logging.info(f"Database message: {self.database_message}")
+            self.db_update_socket.send_string(json.dumps(self.database_message) + "\0")
             return "ACK"
 
         def is_on_msg(lamp_name):
