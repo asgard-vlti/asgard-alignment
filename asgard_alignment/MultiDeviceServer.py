@@ -646,7 +646,7 @@ class MultiDeviceServer:
             )
 
             logging.info(f"Sending database update for {axis} with position {eso_pos}")
-            logging.debug(f"Database message: {self.database_message}")
+            logging.info(f"Database message: {self.database_message}")
             self.db_update_socket.send_string(json.dumps(self.database_message) + "\0")
 
             return "ACK"
