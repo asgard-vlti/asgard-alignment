@@ -772,7 +772,7 @@ class MultiDeviceServer:
             # update eso
             self.database_message["command"]["parameters"].clear()
             self.database_message["command"]["parameters"].append(
-                {"attribute": f"<alias>{lamp_name}.DATA.status0", "value": "ON"}
+                {"attribute": f"<alias>{lamp_name}:DATA.status0", "value": "ON"}
             )
             self.database_message["command"]["time"] = self.get_time_stamp()
             logging.info(f"Sending database update for {lamp_name} with status ON")
@@ -788,7 +788,7 @@ class MultiDeviceServer:
             # update eso
             self.database_message["command"]["parameters"].clear()
             self.database_message["command"]["parameters"].append(
-                {"attribute": f"<alias>{lamp_name}.DATA.status0", "value": "OFF"}
+                {"attribute": f"<alias>{lamp_name}:DATA.status0", "value": "OFF"}
             )
             self.database_message["command"]["time"] = self.get_time_stamp()
             logging.info(f"Sending database update for {lamp_name} with status OFF")
