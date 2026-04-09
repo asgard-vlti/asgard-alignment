@@ -32,6 +32,7 @@ class BaldrPhaseMask:
 
         # self._load_phasemask_parameters("phasemask_parameters_beam_3.json"):
         # Note: these are old and the wrong way around numbering to diam wise
+        # lambda/D at mask is 35 microns in H
         # self.phasemask_parameters = {
         #     "J1": {"depth": 0.474, "diameter": 54},
         #     "J2": {"depth": 0.474, "diameter": 44},
