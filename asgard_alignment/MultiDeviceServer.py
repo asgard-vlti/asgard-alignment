@@ -648,7 +648,7 @@ class MultiDeviceServer:
             eso_pos = self.instr.devices[axis].internal_to_ESO(float(position))
             self.database_message["command"]["parameters"].clear()
             self.database_message["command"]["parameters"].append(
-                {"attribute": f"<alias>{axis}.DATA.posEnc", "value": eso_pos}
+                {"attribute": f"<alias>{axis}:DATA.posEnc", "value": eso_pos}
             )
 
             # update the time
