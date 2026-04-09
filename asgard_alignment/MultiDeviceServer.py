@@ -645,6 +645,9 @@ class MultiDeviceServer:
                 {"attribute": f"<alias>{axis}.data.posEnc", "value": eso_pos}
             )
 
+            # update the time
+            self.database_message["command"]["time"] = self.get_time_stamp()
+
             logging.info(f"Sending database update for {axis} with position {eso_pos}")
             logging.info(f"Database message: {self.database_message}")
             self.db_update_socket.send_string(json.dumps(self.database_message) + "\0")
