@@ -834,9 +834,9 @@ class Instrument:
                     try:
                         self.devices[dev].stop()
                         self.devices[dev].axis.park()
-                    except:
+                    except Exception as e:
                         logging.warning(
-                            f"WARN: Unable to park {dev}  - perhaps it is already switched off."
+                            f"WARN: Unable to park {dev}  - perhaps it is already switched off. {e}"
                         )
                 else:
                     logging.warning(f"WARN: {dev} not in devices dictionary")
