@@ -492,9 +492,10 @@ class MultiDeviceServer:
             ):
                 n_devs_commanded = len(self.instr.devices)  # total number of devices
                 is_all_devs = True
-                dev_names = list(self.instr._motor_config.keys()) + list(
-                    self.instr._lamps_config.keys()
-                )
+                dev_names = list(self.instr._motor_config.keys())
+                # + list(
+                #     self.instr._lamps_config.keys()
+                # )
             else:
                 dev_names = [
                     json_data["command"]["parameters"][i]["device"]
