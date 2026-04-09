@@ -197,6 +197,7 @@ class MultiDeviceServer:
             received_time = datetime.datetime.strptime(
                 time_stampIn, "%Y-%m-%dT%H:%M:%S"
             )
+            received_time = received_time.replace(tzinfo=datetime.timezone.utc)
             now_utc = datetime.datetime.now(datetime.timezone.utc)
             delta = abs((now_utc - received_time).total_seconds())
             if delta > 300:  # 5 minutes
