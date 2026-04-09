@@ -217,7 +217,6 @@ class MultiDeviceServer:
             }
         }
 
-        # Verification of received time-stamp (TODO)
         # If the time_stamp is invalid, set command_name to "none",
         # so no command will be processed but a reply will be sent
         # back to the client (set reply to "ERROR")
@@ -228,6 +227,8 @@ class MultiDeviceServer:
 
         # Case of "online" (sent by wag when bringing ICS online, to check
         # that MCUs are alive and ready)
+
+        logging.debug(f"Processing command: {command_name}")
 
         self.database_message["command"]["parameters"].clear()
 
