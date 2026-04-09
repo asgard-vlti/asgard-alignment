@@ -402,6 +402,9 @@ class MultiDeviceServer:
                         # Here (simulation), we simply use the target
                         # position (even if the motor is supposed to move)
                         pos_enc = self.instr.devices[s.device_name].read_position()
+                        pos_enc = self.instr.devices[s.device_name].internal_to_ESO(
+                            pos_enc
+                        )
                         attribute = "<alias>" + s.device_name + ":DATA.posEnc"
                         reply["reply"]["parameters"].append(
                             {"attribute": attribute, "value": pos_enc}
@@ -428,6 +431,9 @@ class MultiDeviceServer:
                         # Here (simulation), we simply use the target
                         # position (even if the motor is supposed to move)
                         pos_enc = self.instr.devices[s.device_name].read_position()
+                        pos_enc = self.instr.devices[s.device_name].internal_to_ESO(
+                            pos_enc
+                        )
                         attribute = "<alias>" + s.device_name + ":DATA.posEnc"
                         reply["reply"]["parameters"].append(
                             {"attribute": attribute, "value": pos_enc}
