@@ -3,7 +3,7 @@ import time
 
 
 def main():
-    cc = co.Controllino("192.168.100.10", init_motors=False)
+    cc = co.PowerControllino("192.168.100.10", init_motors=False)
 
     cc.turn_off("Kaya")
     time.sleep(2)

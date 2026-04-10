@@ -235,10 +235,6 @@ fourier_small, _ = DM_modes2.fourier_basis(
 
 n_offset_modes = fourier_small.num_modes
 # %%
-hcipy.imshow_field(fourier_small[0])
-
-
-# %%
 def basis_loss(coeffs, basis, lamb_unif, scatter_mask, act_mask, scale=0.05):
     coeffs_scaled = coeffs * scale
     cmd = basis.linear_combination(coeffs_scaled)
