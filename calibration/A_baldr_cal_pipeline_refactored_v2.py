@@ -127,7 +127,9 @@ class PlotManager:
         else:
             fig.tight_layout()
         if savefig is not None:
-            os.makedirs(os.path.dirname(savefig), exist_ok=True)
+            save_dir = os.path.dirname(savefig)
+            if save_dir:
+                os.makedirs(save_dir, exist_ok=True)
             fig.savefig(savefig, bbox_inches="tight", dpi=200)
             print(f"saving image {savefig}")
 
@@ -191,7 +193,9 @@ class PlotManager:
         ax_main.tick_params(labelsize=15)
         plt.tight_layout()
         if savefig is not None:
-            os.makedirs(os.path.dirname(savefig), exist_ok=True)
+            save_dir = os.path.dirname(savefig)
+            if save_dir:
+                os.makedirs(save_dir, exist_ok=True)
             plt.savefig(savefig, bbox_inches="tight", dpi=200)
             print(f"saving image {savefig}")
 
@@ -232,7 +236,9 @@ class PlotManager:
         if label:
             plt.legend()
         if savefig is not None:
-            os.makedirs(os.path.dirname(savefig), exist_ok=True)
+            save_dir = os.path.dirname(savefig)
+            if save_dir:
+                os.makedirs(save_dir, exist_ok=True)
             plt.savefig(savefig, bbox_inches="tight", dpi=200)
             print(f"saving image {savefig}")
 
