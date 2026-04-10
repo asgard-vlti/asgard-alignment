@@ -743,10 +743,21 @@ def handle_linear_stage():
         valid_pos = ["BIF_H", "BIF_YJ", "align", "empty"]
 
         if f"BDS{beam_number}_fixed_mapping" not in st.session_state:
+            if beam_number == 1:
+                align = 33.5
+            elif beam_number == 2:
+                align = 35.0
+            elif beam_number == 3:
+                align = 32.0
+            elif beam_number == 4:
+                align = 32.25
+            else:
+                align=0.0
+
             st.session_state[f"BDS{beam_number}_fixed_mapping"] = {
                 "BIF_H": 133.07,  # (white target)
                 "BIF_YJ": 63.07,  # (mirror)
-                "align": 38.5,  # (alignment)
+                "align": align,  # (alignment)
                 "empty": 0.0,
             }
             st.session_state[f"BDS{beam_number}_offset"] = 0.0

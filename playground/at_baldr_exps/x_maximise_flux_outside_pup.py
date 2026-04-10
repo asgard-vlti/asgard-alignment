@@ -125,11 +125,12 @@ res = opt.minimize(
 pupil_mask = smooth_circle(
     cam_grid, radius=res.x[0], softening=0.5, centre=(res.x[1], res.x[2])
 ).reshape(32, 32)
-pupil_center = (res.x[1], res.x[2])
+pupil_center = (res.x[1] + 16, res.x[2] + 16)
 
 # %%
 plt.imshow(pupil_only)
 plt.contour(pupil_mask, levels=[0.5], color="r")
+plt.scatter(pupil_center[0], pupil_center[1], color="r", marker="x")
 
 
 # %%
@@ -198,7 +199,18 @@ dm.set_data(init_cmd)
 time.sleep(0.01)
 img = cam.take_stack(64).mean(0)
 
+
+# in the pupil_hard mask, exclue the 4 pixels closest to the pupil_center
 pupil_hard_mask = pupil_mask > 0.6
+pupil_hard_mask[int(pupil_center[1]), int(pupil_center[0])] = False
+pupil_hard_mask[int(pupil_center[1]) - 1, int(pupil_center[0])] = False
+pupil_hard_mask[int(pupil_center[1]), int(pupil_center[0]) - 1] = False
+pupil_hard_mask[int(pupil_center[1]) - 1, int(pupil_center[0]) - 1] = False
+
+plt.imshow(pupil_only)
+plt.contour(pupil_hard_mask, levels=[0.5], colors="r")
+
+# pupil_hard_mask = pupil_mask > 0.6
 
 flux_outside_pupil(img, scatter_mask=scattered_flux_mask), uniformity_in_pupil(
     img, pupil_hard_mask
@@ -211,7 +223,6 @@ flux_outside_pupil(img, scatter_mask=scattered_flux_mask), uniformity_in_pupil(
 print(loss(init_cmd, 0.1, 10.0, scattered_flux_mask, act_reg_mask))
 # %%
 loss(np.random.randn(144) * 0.02, 0.1, 0.0, scattered_flux_mask, act_reg_mask)
-
 
 
 # %%
@@ -245,7 +256,7 @@ def basis_loss(coeffs, basis, lamb_unif, scatter_mask, act_mask, scale=0.05):
 res = opt.minimize(
     basis_loss,
     np.zeros(n_offset_modes),
-    (fourier_small, 0.5, scattered_flux_mask, act_reg_mask,0.2),
+    (fourier_small, 0.5, scattered_flux_mask, act_reg_mask, 0.2),
     method="COBYLA",
     options={"disp": True, "maxiter": 50},
     # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
@@ -334,7 +345,9 @@ res = opt.minimize(
     # bounds=[[-0.05, 0.05] for _ in range(n_offset_modes)],
 )
 # %%
-basis_loss(np.zeros(len(res.x)), fourier_large, 0.2, scattered_flux_mask, act_reg_mask, 0.01)
+basis_loss(
+    np.zeros(len(res.x)), fourier_large, 0.2, scattered_flux_mask, act_reg_mask, 0.01
+)
 
 # %%
 basis_loss(res.x, fourier_large, 0.2, scattered_flux_mask, act_reg_mask, 0.05)
