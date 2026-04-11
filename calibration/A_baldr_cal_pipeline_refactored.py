@@ -23,6 +23,20 @@ Notes:
 - This script keeps the original interactive checkpoints.
 - It assumes DM flats are already applied externally, matching the original script.
 - It was syntax-checked, but it cannot be hardware-verified in this environment.
+
+
+
+Traceback (most recent call last):
+  File "/home/asg/Progs/repos/asgard-alignment/calibration/A_baldr_cal_pipeline_refactored.py", line 827, in <module>
+    main()
+  File "/home/asg/Progs/repos/asgard-alignment/calibration/A_baldr_cal_pipeline_refactored.py", line 816, in main
+    build_opd_model(rt, dark_dict)
+  File "/home/asg/Progs/repos/asgard-alignment/calibration/A_baldr_cal_pipeline_refactored.py", line 536, in build_opd_model
+    N0_norm = np.mean(N0[inner_pupil_filt])
+IndexError: boolean index did not match indexed array along dimension 0; dimension is 32 but corresponding boolean dimension is 1024
+
+
+
 """
 
 import argparse
@@ -533,7 +547,7 @@ def build_opd_model(rt: RuntimeContext, dark_dict: Dict[int, np.ndarray]) -> Non
             ctrl_model = config_dict.get(f"beam{beam_id}", {}).get(f"{rt.args.phasemask}", {}).get("ctrl_model", {})
             inner_pupil_filt = np.array(ctrl_model.get("inner_pupil_filt", None)).astype(bool)
             N0 = np.array(ctrl_model.get("N0", None)).reshape(rt.cam_shm[beam_id].get_data().shape)
-            N0_norm = np.mean(N0[inner_pupil_filt])
+            N0_norm = np.mean(N0.flatten()[inner_pupil_filt.flatten()])
 
         telem = {"N0": N0, "N0_norm": N0_norm, "i": [], "s": [], "opd_rms_est": []}
         scrn_scaling_grid = np.logspace(-1, 0.2, 5)

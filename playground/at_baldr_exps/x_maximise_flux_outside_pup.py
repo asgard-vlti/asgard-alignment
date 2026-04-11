@@ -125,7 +125,11 @@ res = opt.minimize(
 pupil_mask = smooth_circle(
     cam_grid, radius=res.x[0], softening=0.5, centre=(res.x[1], res.x[2])
 ).reshape(32, 32)
-pupil_center = (res.x[1] + 16, res.x[2] + 16)
+img_center = np.array([15.5, 15.5])
+# pupil_center = (res.x[1] + 15.5, res.x[2] + 15.5)
+
+pupil_center = np.array([res.x[1], res.x[2]]) + img_center
+
 
 # %%
 plt.imshow(pupil_only)
@@ -139,10 +143,10 @@ scattered_flux_mask_r_outer = 12
 scattered_flux_mask_r_inner = 9.5
 scattered_flux_mask = (
     smooth_circle(
-        cam_grid, scattered_flux_mask_r_outer, centre=pupil_center, softening=0.01
+        cam_grid, scattered_flux_mask_r_outer, centre=pupil_center-img_center, softening=0.01
     )
     - smooth_circle(
-        cam_grid, scattered_flux_mask_r_inner, centre=pupil_center, softening=0.01
+        cam_grid, scattered_flux_mask_r_inner, centre=pupil_center-img_center, softening=0.01
     )
 ).reshape(cam_grid.shape)
 
@@ -202,13 +206,19 @@ img = cam.take_stack(64).mean(0)
 
 # in the pupil_hard mask, exclue the 4 pixels closest to the pupil_center
 pupil_hard_mask = pupil_mask > 0.6
-pupil_hard_mask[int(pupil_center[1]), int(pupil_center[0])] = False
-pupil_hard_mask[int(pupil_center[1]) - 1, int(pupil_center[0])] = False
-pupil_hard_mask[int(pupil_center[1]), int(pupil_center[0]) - 1] = False
-pupil_hard_mask[int(pupil_center[1]) - 1, int(pupil_center[0]) - 1] = False
+# pupil_hard_mask[int(pupil_center[1]), int(pupil_center[0])] = False
+# pupil_hard_mask[int(pupil_center[1]) - 1, int(pupil_center[0])] = False
+# pupil_hard_mask[int(pupil_center[1]), int(pupil_center[0]) - 1] = False
+# pupil_hard_mask[int(pupil_center[1]) - 1, int(pupil_center[0]) - 1] = False
+
+for i in np.unique([round(pupil_center[1]),round(pupil_center[1]+0.5),round(pupil_center[1]-0.5)]):
+    for j in np.unique([round(pupil_center[0]),round(pupil_center[0]+0.5),round(pupil_center[0]-0.5)]):
+        pupil_hard_mask[i,j] = False
+
 
 plt.imshow(pupil_only)
-plt.contour(pupil_hard_mask, levels=[0.5], colors="r")
+# plt.contour(pupil_hard_mask, levels=[0.5], colors="r")
+plt.imshow(pupil_hard_mask)
 
 # pupil_hard_mask = pupil_mask > 0.6
 
@@ -245,10 +255,6 @@ fourier_small, _ = DM_modes2.fourier_basis(
 
 
 n_offset_modes = fourier_small.num_modes
-# %%
-hcipy.imshow_field(fourier_small[0])
-
-
 # %%
 def basis_loss(coeffs, basis, lamb_unif, scatter_mask, act_mask, scale=0.05):
     coeffs_scaled = coeffs * scale

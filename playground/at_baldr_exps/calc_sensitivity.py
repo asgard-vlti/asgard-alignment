@@ -58,8 +58,10 @@ dm.set_data(np.zeros(144))
 time.sleep(0.01)
 
 # %%
-zero_point_file = np.load("beam3_good_flat.npz")
-zero_point = zero_point_file["flat"]*0.01
+# zero_point_file = np.load("beam3_good_flat.npz")
+# zero_point = zero_point_file["flat"]*0.01
+
+zero_point = np.zeros(144)
 
 dm.shms[1].set_data(zero_point)
 dm.shm0.post_sems(1)
@@ -151,7 +153,7 @@ def compute_IM(dm, cam, basis, amp, sleep=0.01, n_im=1, n_pokes=5, n_discard=2):
 
 
 start = time.time()
-im = compute_IM(dm, cam, hc_fourier, amp=0.005, sleep=0.02, n_im=10)
+im = compute_IM(dm, cam, hc_fourier, amp=0.01, sleep=0.01, n_im=10,)
 print(f"interaction matrix took {time.time() - start:.2f}s")
 
 # %%
@@ -186,8 +188,10 @@ metric
 
 # %%
 plt.plot(np.diag(Cov),'x')
+plt.ylabel("Cov", color="C0")
 ax2 = plt.twinx()
 ax2.plot(np.diag(FIM), 'x', c="r")
+ax2.set_ylabel("Fisher info", color="r")
 
 # %%
 def im_FIM_metric(dm, basis, ref, metric_type="avg_cov_ph"):

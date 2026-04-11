@@ -100,7 +100,7 @@ parser.add_argument(
 parser.add_argument(
     "--start_with_current_baldr_flat", 
     action="store_false",
-    default=True,
+    default=False,
     help="calibrate the Baldr flat starting with the current baldr flat. If False we beging with the BMC factory flat"
 )
 #--start_with_current_baldr_flat
