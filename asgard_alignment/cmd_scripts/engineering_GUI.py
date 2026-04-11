@@ -3262,7 +3262,6 @@ with col_main:
                         states = json.load(f)
 
                     for state in states:
-                        st.text(state["name"])
                         starting_letter = state["name"][0]
                         beam_idx = state["name"][-1]
 
