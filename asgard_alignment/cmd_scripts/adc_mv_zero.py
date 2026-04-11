@@ -26,14 +26,14 @@ def load_config(config_path):
         cfg = tomllib.load(f)
 
     return [
-        float(cfg["adcs_zeropos"]["BADCU1"]),
-        float(cfg["adcs_zeropos"]["BADCL1"]),
-        float(cfg["adcs_zeropos"]["BADCU2"]),
-        float(cfg["adcs_zeropos"]["BADCL2"]),
-        float(cfg["adcs_zeropos"]["BADCU3"]),
-        float(cfg["adcs_zeropos"]["BADCL3"]),
-        float(cfg["adcs_zeropos"]["BADCU4"]),
-        float(cfg["adcs_zeropos"]["BADCL4"]),
+        float(cfg["adcs_zeropos"]["BACU1"]),
+        float(cfg["adcs_zeropos"]["BACL1"]),
+        float(cfg["adcs_zeropos"]["BACU2"]),
+        float(cfg["adcs_zeropos"]["BACL2"]),
+        float(cfg["adcs_zeropos"]["BACU3"]),
+        float(cfg["adcs_zeropos"]["BACL3"]),
+        float(cfg["adcs_zeropos"]["BACU4"]),
+        float(cfg["adcs_zeropos"]["BACL4"]),
     ]
 
 

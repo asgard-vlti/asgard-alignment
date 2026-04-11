@@ -48,6 +48,7 @@ adc_names = [
     "BACL4",
 ]
 
+# note that these are indices of the list above, not the teensy power board!
 ADC_UPPER_INDICES = [0, 2, 4, 6]
 ADC_LOWER_INDICES = [1, 3, 5, 7]
 

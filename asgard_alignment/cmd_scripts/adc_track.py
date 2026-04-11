@@ -55,6 +55,53 @@ ADC_UPPER_INDICES = [0, 2, 4, 6]
 ADC_LOWER_INDICES = [1, 3, 5, 7]
 
 
+class LoggingDebugClient:
+    def __init__(self, socket):
+        self.socket = socket
+
+        self.motor_positions = {
+            "BACL1": 3800,
+            "BACU1": 13800,
+            "BACL2": -13500,
+            "BACU2": -11100,
+            "BACL3": -13400,
+            "BACU3": -13400,
+            "BACL4": 4500,
+            "BACU4": -4500,
+        }
+
+    def send_and_recv(self, msg: str) -> str:
+        print(f"Sending message to MDS: {msg}")
+
+        if msg.startswith("read "):
+            adc_name = msg.split()[1]
+            position = self.motor_positions.get(adc_name, 0)
+            print(f"Mock response for {adc_name}: {position}")
+            return str(position)
+        elif msg.startswith("move "):
+            parts = msg.split()
+            adc_name = parts[1]
+            target_position = int(parts[2])
+            print(f"Mock move command for {adc_name} to position {target_position}")
+            self.motor_positions[adc_name] = target_position
+            return "ACK"
+        elif msg.startswith("rotm_slew "):
+            parts = msg.split()
+            group_label = parts[1]
+            relmove = int(parts[2])
+            print(f"Mock rotm_slew command for {group_label} by {relmove} steps")
+            if group_label == "adc_upper":
+                for idx in ADC_UPPER_INDICES:
+                    adc_name = adc_names[idx]
+                    self.motor_positions[adc_name] += relmove
+            elif group_label == "adc_lower":
+                for idx in ADC_LOWER_INDICES:
+                    adc_name = adc_names[idx]
+                    self.motor_positions[adc_name] += relmove
+            return "ACK"
+        return "ACK"
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Slew/track ADCs from target RA/Dec")
     parser.add_argument("ra", help="Target RA as hhmmss.ssss")
@@ -115,7 +162,11 @@ def main():
 
     alt, az = af.ra_dec_to_altaz(ra, dec, constants)
 
-    context, client = af.connect_socket()
+    if args.dry_run:
+        context, client = None, LoggingDebugClient(None)
+    else:
+        context, client = af.connect_socket()
+
     try:
         print(f"Target Altitude: {alt:.2f} degrees, Azimuth: {az:.2f} degrees")
         if args.track:
@@ -127,25 +178,22 @@ def main():
                     print("ERROR: Target is below 20 degrees altitude.")
                     sys.exit(1)
                 af.perform_slew_cycle(client, constants, alt, az)
-                if args.dry_run:
-                    break
+
                 time.sleep(args.track_interval)
         else:
             if alt < 20:
                 print("ERROR: Target is below 20 degrees altitude.")
                 sys.exit(1)
 
-            if args.dry_run:
-                print("Dry run mode - not sending slew command")
-            else:
-                af.perform_slew_cycle(client, constants, alt, az)
+            af.perform_slew_cycle(client, constants, alt, az)
 
         if not args.dry_run:
             client.send_and_recv("adc_disable")
         print("ADC command sequence complete.")
     finally:
-        client.close()
-        context.term()
+        if not args.dry_run:
+            client.close()
+            context.term()
 
 
 if __name__ == "__main__":
