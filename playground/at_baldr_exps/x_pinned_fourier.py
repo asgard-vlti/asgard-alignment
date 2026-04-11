@@ -25,3 +25,26 @@ plt.figure()
 xcor = fourier.transformation_matrix.T @ fourier.transformation_matrix
 plt.imshow(xcor, norm=mcolors.CenteredNorm(), cmap="RdBu")
 plt.colorbar()
+
+# %%
+import hcipy
+
+hcipy.imshow_field(fourier[0])
+
+# %%
+basis = fourier.transformation_matrix
+
+
+def rms(x, aperture=None):
+    if aperture is not None:
+        x = x[aperture]
+    return np.sqrt(np.mean(x**2))
+
+
+rms(basis[:, 3])
+
+# aperture is circle of radius 5 actuators
+aperture = np.linalg.norm(act_grid.points, axis=1) < 0.5
+plt.imshow(aperture.reshape(act_grid.shape).T)
+
+rms(basis[:, 0], aperture=aperture), rms(basis[:, 3], aperture=aperture)
