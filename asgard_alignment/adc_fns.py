@@ -196,7 +196,7 @@ def ra_dec_to_altaz(ra_deg, dec_deg, constants, obstime=None):
     alt = altaz.alt.to_value(u.deg)
     az = altaz.az.to_value(u.deg)
 
-    az = (180 - az + 360) % 360 # crazy ESO defn of azimuth lol
+    az = (180 - az + 360) % 360  # crazy ESO defn of azimuth lol
 
     return alt, az
 
@@ -212,15 +212,15 @@ def read_relative_positions(client, indices, zeropos):
 def ensure_common_position(label, positions):
     print(f"Positions: {positions}")
     if not all(pos == positions[0] for pos in positions):
-         print(f"Positions: {positions}")
-         print(
-             f"ERROR: Not all '{label}' motors are at the same position. Need to zero."
-         )
+        print(f"Positions: {positions}")
+        print(
+            f"ERROR: Not all '{label}' motors are at the same position. Need to zero."
+        )
 
-         sys.exit(1)
+        sys.exit(1)
 
 
-def calculate_adc_targets(alt, az, constants):
+def calculate_adc_targets(alt, az, constants, tscope_type="UT"):
     dispersion = 1.0 / np.tan(np.radians(alt))
     asin_arg = constants.const_a * dispersion
     if asin_arg < -1 or asin_arg > 1:
@@ -230,8 +230,28 @@ def calculate_adc_targets(alt, az, constants):
         sys.exit(1)
 
     delta = np.degrees(np.arcsin(asin_arg))
-    adc_a_target = +constants.sign1 * (az - alt - 12.98 - 90) - constants.sign2 * delta
-    adc_b_target = -constants.sign1 * (az - alt - 12.98 - 90) - constants.sign2 * delta
+    if tscope_type == "UT":
+        adc_a_target = (
+            +constants.sign1 * (az - alt - 12.98 - 90) - constants.sign2 * delta
+        )
+        adc_b_target = (
+            -constants.sign1 * (az - alt - 12.98 - 90) - constants.sign2 * delta
+        )
+    elif tscope_type == "AT_North":
+        adc_a_target = (
+            +constants.sign1 * (-az + alt + 12.98 - 90) - constants.sign2 * delta
+        )
+        adc_b_target = (
+            -constants.sign1 * (-az + alt + 12.98 - 90) - constants.sign2 * delta
+        )
+    elif tscope_type == "AT_South":
+        adc_a_target = (
+            +constants.sign1 * (-az + alt - 167.02 - 90) - constants.sign2 * delta
+        )
+        adc_b_target = (
+            -constants.sign1 * (-az + alt - 167.02 - 90) - constants.sign2 * delta
+        )
+
     return int(adc_a_target * 100), int(adc_b_target * 100)
 
 
@@ -272,14 +292,14 @@ def slew_group(client, group_label, adc_target, current_positions, zeropos):
     print(f"current_reference: {current_reference}")
     print(f"relative_target before mod: {relative_target}")
 
-    relative_target = (relative_target+18000) % 36000 - 18000
+    relative_target = (relative_target + 18000) % 36000 - 18000
     print(f"relative_target after mod: {relative_target}")
 
     message = f"rotm_slew {group_label} {relative_target}"
 
     client.send_and_recv(message)
     for motor_index in group_indices:
-        abs_target = relative_target+current_reference + zeropos[motor_index]
+        abs_target = relative_target + current_reference + zeropos[motor_index]
         print(f"abs target: {abs_target}")
         wait_until_reached(client, motor_index, abs_target)
 
