@@ -30,8 +30,14 @@ plt.axis("equal")
 for i in range(len(radii) - 1):
     r_min = radii[i]
     r_max = radii[i + 1]
-    count = np.sum((freqs_used[:, 0] / (2 * np.pi)) ** 2 + (freqs_used[:, 1] / (2 * np.pi)) ** 2 >= r_min**2)
-    count -= np.sum((freqs_used[:, 0] / (2 * np.pi)) ** 2 + (freqs_used[:, 1] / (2 * np.pi)) ** 2 >= r_max**2)
+    count = np.sum(
+        (freqs_used[:, 0] / (2 * np.pi)) ** 2 + (freqs_used[:, 1] / (2 * np.pi)) ** 2
+        >= r_min**2
+    )
+    count -= np.sum(
+        (freqs_used[:, 0] / (2 * np.pi)) ** 2 + (freqs_used[:, 1] / (2 * np.pi)) ** 2
+        >= r_max**2
+    )
     print(f"Annulus {i}: {count} modes")
 
 # %%
@@ -46,7 +52,77 @@ plt.colorbar()
 # %%
 import hcipy
 
-hcipy.imshow_field(fourier[0])
+# hcipy.imshow_field(fourier[0])
+
+# coeffs = 0.02*np.random.randn(fourier.num_modes)
+coeffs = np.zeros(fourier.num_modes)
+coeffs[0] = 0.3
+coeffs[3] = 0.3
+hcipy.imshow_field(fourier.linear_combination(coeffs))
+plt.colorbar()
+
+"""
+Add an explicit slope limiter. Or if too difficult, a Laplacian limiter. i.e. a sparse matrix:
+
+    f_k,k is the value of the k,kth actuator.
+
+    Laplacian = -4*f_k,k  + f_k,k+1 + f_k,k-1 + f_k+1,k + f_k-1,k. If near an edge, replace f_k,k-1 with f_k,k+1.
+    If Laplacian > L_max, add (Laplacian - L_max)/4.
+
+"""
+# %%
+import matplotlib.colors as mcolors
+
+coeffs = 0.02 * np.random.randn(fourier.num_modes)
+
+coeffs = np.zeros(fourier.num_modes)
+coeffs[0] = -0.5
+coeffs[3] = -0.3
+
+
+def laplacian_limiter(surface, L_max, return_L=False):
+    # surface is a 2D array of actuator values
+    # we will modify surface in place
+    new_surface = surface.copy()
+
+    laplacian = (
+        -4 * surface[1:-1, 1:-1]
+        + surface[1:-1, 2:]
+        + surface[1:-1, :-2]
+        + surface[2:, 1:-1]
+        + surface[:-2, 1:-1]
+    )
+
+    new_surface[1:-1, 1:-1] += np.clip((laplacian - L_max) / 4, 0, None)
+    # and the opposite for negative Laplacian
+    new_surface[1:-1, 1:-1] += np.clip((laplacian + L_max) / 4, None, 0)
+
+    # retain pinning
+    new_surface[0, 1:-1] = new_surface[1, 1:-1]
+    new_surface[-1, 1:-1] = new_surface[-2, 1:-1]
+    new_surface[1:-1, 0] = new_surface[1:-1, 1]
+    new_surface[1:-1, -1] = new_surface[1:-1, -2]
+
+    if return_L:
+        L_values = np.zeros_like(surface)
+        L_values[1:-1, 1:-1] = laplacian
+        return new_surface, L_values
+    return new_surface
+
+
+original = fourier.linear_combination(coeffs).reshape(act_grid.shape)
+filtered, L = laplacian_limiter(original, L_max=0.1, return_L=True)
+
+plt.subplot(131)
+plt.imshow(original, norm=mcolors.CenteredNorm(), cmap="RdBu")
+plt.subplot(132)
+plt.imshow(filtered, norm=mcolors.CenteredNorm(), cmap="RdBu")
+plt.subplot(133)
+plt.imshow(original - filtered, norm=mcolors.CenteredNorm(), cmap="bwr")
+plt.colorbar()
+
+plt.figure()
+plt.imshow(L, norm=mcolors.CenteredNorm(), cmap="RdBu")
 
 # %%
 basis = fourier.transformation_matrix
