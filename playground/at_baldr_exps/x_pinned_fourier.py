@@ -18,6 +18,23 @@ fourier, freqs_used = DM_modes2.fourier_basis(
 plt.figure()
 plt.scatter(freqs_used[:, 0] / (2 * np.pi), freqs_used[:, 1] / (2 * np.pi))
 
+radii = [1.1, 2.1, 3.1, 4.1, 5.1]
+# circles of different radii to show the spacing
+for r in radii:
+    circle = plt.Circle((0, 0), r, color="k", fill=False, ls="--")
+    plt.gca().add_patch(circle)
+
+plt.axis("equal")
+
+# print the number of modes in each annulus
+for i in range(len(radii) - 1):
+    r_min = radii[i]
+    r_max = radii[i + 1]
+    count = np.sum((freqs_used[:, 0] / (2 * np.pi)) ** 2 + (freqs_used[:, 1] / (2 * np.pi)) ** 2 >= r_min**2)
+    count -= np.sum((freqs_used[:, 0] / (2 * np.pi)) ** 2 + (freqs_used[:, 1] / (2 * np.pi)) ** 2 >= r_max**2)
+    print(f"Annulus {i}: {count} modes")
+
+# %%
 plt.figure()
 DM_modes2.plot_basis_summary(fourier, -1)
 
