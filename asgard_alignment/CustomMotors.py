@@ -157,6 +157,14 @@ class Flip8893KM(asgard_alignment.ESOdevice.Motor):
     def standby(self):
         pass
 
+    @staticmethod
+    def internal_to_ESO(value):
+        return int(value)
+
+    @staticmethod
+    def ESO_to_internal(value):
+        return value
+
 
 class RotationStage(asgard_alignment.ESOdevice.Motor):
     """
@@ -242,6 +250,14 @@ class RotationStage(asgard_alignment.ESOdevice.Motor):
 
     def standby(self):
         self.home()
+
+    @staticmethod
+    def internal_to_ESO(value):
+        return int(value)
+
+    @staticmethod
+    def ESO_to_internal(value):
+        return value
 
 
 class PR50PP(RotationStage):
