@@ -1,4 +1,3 @@
-# %%
 import numpy as np
 import DM_modes2
 import zmq
@@ -38,7 +37,6 @@ def main():
     beam = args.beam
     show_plots = args.show_plots
 
-    # %%
     def mds_connect(host: str, port: int = 5555, timeout_ms: int = 5000):
         ctx = zmq.Context()
         sock = ctx.socket(zmq.REQ)
@@ -52,7 +50,6 @@ def main():
 
     ctx, sock = mds_connect("mimir")
 
-    # %%
     dm = dmclass(beam)
 
     cam = Bcam(beam)
@@ -80,12 +77,12 @@ def main():
     mds_send(sock, f"moverel BMX{beam} {-offset}")
     mds_send(sock, f"moverel BMY{beam} {-offset}")
     time.sleep(1)
-    # %%
+
     if show_plots:
         plt.imshow(pupil_only)
         plt.colorbar()
         plt.show()
-    # %%
+    
     # make a pupil mask. Need to find the pixels in the circle
     n_beam = 10.0
 
@@ -121,7 +118,6 @@ def main():
 
     ideal_pupil = smooth_circle(cam_grid, radius=10, softening=0.5)
 
-    # %%
     res = opt.minimize(
         xcor_sum_model,
         x0=[8, 0, 0],
@@ -134,13 +130,12 @@ def main():
     ).reshape(32, 32)
     pupil_center = (res.x[1], res.x[2])
 
-    # %%
+    
     if show_plots:
         plt.imshow(pupil_only)
         plt.contour(pupil_mask, levels=[0.5], colors="r")
         plt.show()
 
-    # %%
     # pupil_mask =
     scattered_flux_mask_r_outer = 12
     scattered_flux_mask_r_inner = 9.5
@@ -162,7 +157,6 @@ def main():
         plt.contour(scattered_flux_mask, ":", levels=[0.1], colors="w")
         plt.show()
 
-    # %%
 
     def flux_outside_pupil(img, scatter_mask):
         return np.sum(img * scatter_mask)
@@ -193,10 +187,6 @@ def main():
 
     pupil_hard_mask = pupil_mask > 0.6
 
-    # flux_outside_pupil(img, scatter_mask=scattered_flux_mask), uniformity_in_pupil(
-    #     img, pupil_hard_mask
-    # )
-
     print(loss(init_cmd, 0.1, scattered_flux_mask, pupil_mask))
     print(loss(np.random.randn(144) * 0.02, 0.1, scattered_flux_mask, pupil_mask))
 
@@ -208,10 +198,8 @@ def main():
         return loss(cmd, lamb_unif, scatter_mask, pupil_mask)
 
 
-freqs = [2.01, 3.51, 5.01]
-n_iters = [50, 120, 240]
     freqs = [2.01, 3.51, 5.01]
-    n_iters = [50, 120, 320]
+    n_iters = [50, 120, 240]
 
     init_coeffs = None
 
@@ -248,7 +236,6 @@ n_iters = [50, 120, 240]
 
         prev_fourier = fourier
 
-    # %%
     # Apply final optimization result to DM
     final_coeffs = res.x * 0.1  # Apply the final scale factor
     final_cmd = fourier.linear_combination(final_coeffs)
