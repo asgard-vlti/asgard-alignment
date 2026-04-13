@@ -153,9 +153,26 @@ def parse_args():
     return parser.parse_args()
 
 
+def kill_any_adc_processes():
+    import psutil
+
+    for proc in psutil.process_iter(attrs=["pid", "name", "cmdline"]):
+        try:
+            if "adc_track.py" in proc.info["cmdline"]:
+                print(f"Killing existing ADC tracking process: PID {proc.info['pid']}")
+                proc.kill()
+            if "adc_mvzero.py" in proc.info["cmdline"]:
+                print(f"Killing existing ADC zeroing process: PID {proc.info['pid']}")
+                proc.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess) as e:
+            print(f"Could not access process: PID {proc.info['pid']}")
+
+
 def main():
     args = parse_args()
     constants = af.resolve_constants(args)
+
+    kill_any_adc_processes()
 
     ra, dec = af.parse_ra_dec(args.ra, args.dec)
     print(f"Parsed RA: {ra:.2f} degrees, Dec: {dec:.2f} degrees")
