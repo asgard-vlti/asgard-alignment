@@ -20,7 +20,7 @@ import hcipy
 from asgard_alignment import FLI_Cameras as FLI
 import scipy.optimize as opt
 
-beam = 1
+beam = 3
 
 show_plots = True
 
@@ -48,8 +48,9 @@ cam = Bcam(beam)
 
 
 print(f"")
-mds_send(sock, "off SBB")
-# mds_send(sock, "b_shut close all")
+# mds_send(sock, "off SBB")
+cur_bmy = mds_send(sock, f"read BMY{beam}")
+mds_send(sock, f"moveabs BMY{beam} 500.0")
 time.sleep(3)
 cam.take_dark(256)
 if show_plots:
@@ -57,20 +58,22 @@ if show_plots:
     plt.colorbar()
     plt.show()
 # mds_send(sock, "b_shut open all")
-mds_send(sock, "on SBB")
+# mds_send(sock, "on SBB")
+mds_send(sock, f"moveabs BMY{beam} {cur_bmy}")
+time.sleep(3)
 
 
 print(f"Taking pupil only image for beam {beam}...")
 offset = 200.0
-mds_send(sock, f"moverel BMX{beam} {offset}")
-mds_send(sock, f"moverel BMY{beam} {offset}")
+# mds_send(sock, f"moverel BMX{beam} {offset}")
+mds_send(sock, f"moverel BMY{beam} {-offset}")
 time.sleep(1)
 
 
 pupil_only = cam.take_stack(1000).mean(0)
 
-mds_send(sock, f"moverel BMX{beam} {-offset}")
-mds_send(sock, f"moverel BMY{beam} {-offset}")
+# mds_send(sock, f"moverel BMX{beam} {-offset}")
+mds_send(sock, f"moverel BMY{beam} {offset}")
 time.sleep(1)
 # %%
 if show_plots:
@@ -214,7 +217,7 @@ def basis_loss(coeffs, basis, lamb_unif, scatter_mask, pupil_mask, scale=0.05):
 
 
 freqs = [2.01, 3.51, 5.01]
-n_iters = [50, 120, 320]
+n_iters = [50, 120, 240]
 
 init_coeffs = None
 
@@ -250,3 +253,9 @@ for freq, n_it in zip(freqs, n_iters):
     print(f"Loss at end of optimization with {n_modes} modes: {res.fun:.3f}")
 
     prev_fourier = fourier
+# %%
+print("final loss: ", basis_loss(res.x, fourier, 0.3, scattered_flux_mask, pupil_mask, 0.1))
+
+# %%
+dm.set_data(np.zeros(144))
+# %%

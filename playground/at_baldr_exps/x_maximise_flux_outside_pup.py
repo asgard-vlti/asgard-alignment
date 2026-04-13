@@ -217,8 +217,8 @@ for i in np.unique([round(pupil_center[1]),round(pupil_center[1]+0.5),round(pupi
 
 
 plt.imshow(pupil_only)
-# plt.contour(pupil_hard_mask, levels=[0.5], colors="r")
-plt.imshow(pupil_hard_mask)
+plt.contour(pupil_hard_mask, levels=[0.5], colors="r")
+# plt.imshow(pupil_hard_mask)
 
 # pupil_hard_mask = pupil_mask > 0.6
 

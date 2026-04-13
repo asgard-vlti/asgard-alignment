@@ -717,7 +717,7 @@ def build_opd_model(rt: RuntimeContext, dark_dict: Dict[int, np.ndarray]) -> Non
             ctrl_model = config_dict.get(f"beam{beam_id}", {}).get(f"{rt.args.phasemask}", {}).get("ctrl_model", {})
             inner_pupil_filt = np.array(ctrl_model.get("inner_pupil_filt", None)).astype(bool)
             N0 = np.array(ctrl_model.get("N0", None)).reshape(rt.cam_shm[beam_id].get_data().shape)
-            N0_norm = np.mean(N0[inner_pupil_filt])
+            N0_norm = np.mean(N0.flatten()[inner_pupil_filt.flatten()])
 
         telem = {"N0": N0, "N0_norm": N0_norm, "i": [], "s": [], "opd_rms_est": []}
         scrn_scaling_grid = np.logspace(-1, 0.2, 5)

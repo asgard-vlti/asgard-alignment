@@ -166,6 +166,16 @@ class dmclass:
         ##
         self.shm0.post_sems(1)
 
+    def set_data_chn(self, cmd, chn):
+        """
+        """
+        if len(cmd) == 140:
+            cmd = np.insert(cmd, [0,10,130,140], np.nan)
+            
+        self.shms[chn].set_data(cmd)
+        ##
+        self.shm0.post_sems(1)
+
     def set_data(self, cmd):
         """
         convention to apply any user specific commands on channel 2!

@@ -8,6 +8,7 @@ import argparse
 import datetime
 
 from bcam import Bcam
+from tqdm.auto import tqdm
 
 from xaosim.shmlib import shm
 from asgard_alignment.DM_shm_ctrl import dmclass
@@ -39,15 +40,17 @@ dm = dmclass(beam)
 cam = Bcam(beam)
 
 # %%
-mds_send(sock, "off SBB")
+# mds_send(sock, "off SBB")
+mds_send(sock, f"b_shut close {beam}")
 time.sleep(3)
 # %%
 cam.take_dark(256)
 plt.imshow(cam.dark)
 plt.colorbar()
 # %%
-mds_send(sock, "on SBB")
-time.sleep(1)
+mds_send(sock, f"b_shut open {beam}")
+# mds_send(sock, "on SBB")
+time.sleep(2)
 # %%
 # %%
 vals = np.random.randn(144) * 0.1
@@ -83,28 +86,6 @@ n_act = 12
 n_beam = 10
 
 import DM_modes2
-# grid = hcipy.make_pupil_grid(n_act, diameter=n_act / n_beam)
-# n_modes = 8
-# max_freq = n_modes  # lambda/D
-# probe_max_freq = max_freq
-
-# freqs = hcipy.make_pupil_grid(
-#     n_modes,
-#     max_freq,
-# )
-
-# basis = hcipy.make_fourier_basis(grid, freqs.scaled(2 * np.pi))
-# basis.transformation_matrix.shape
-
-# hc_fourier = basis.transformation_matrix
-
-# # if odd number of modes, remove piston
-# if n_modes % 2 == 1:
-#     hc_fourier = hc_fourier[:, 1:]
-
-
-# hc_fourier.shape
-
 
 
 act_grid = DM_modes2.make_hc_act_grid()
@@ -130,6 +111,7 @@ def compute_IM(dm, cam, basis, amp, sleep=0.01, n_im=1, n_pokes=5, n_discard=2):
     responses = []
 
     for mode_idx in range(n_modes):
+    # for mode_idx in tqdm(range(n_modes)):
         res = 0.0
         for pk_idx in range(n_pokes):
             imgs = []
@@ -153,7 +135,7 @@ def compute_IM(dm, cam, basis, amp, sleep=0.01, n_im=1, n_pokes=5, n_discard=2):
 
 
 start = time.time()
-im = compute_IM(dm, cam, hc_fourier, amp=0.01, sleep=0.01, n_im=10,)
+im = compute_IM(dm, cam, hc_fourier, amp=0.03, sleep=0.01, n_im=2,n_discard=1, n_pokes=10,)
 print(f"interaction matrix took {time.time() - start:.2f}s")
 
 # %%
@@ -162,7 +144,7 @@ im.shape
 import matplotlib.colors as mcolor
 
 im = im.reshape(im.shape[0], 32,32)
-idx = 0
+idx = 3
 plt.subplot(121)
 plt.imshow(hc_fourier[:, idx].reshape(12, 12), norm=mcolor.CenteredNorm(), cmap="bwr")
 plt.subplot(122)
@@ -185,6 +167,7 @@ plt.colorbar()
 
 metric = np.trace(Cov)
 metric
+print(f"metric: {metric:.3e}")
 
 # %%
 plt.plot(np.diag(Cov),'x')
@@ -221,75 +204,142 @@ for i in range(n_runs):
     plt.imshow(covs[i], norm=mcolor.CenteredNorm(), cmap="bwr")
 
 # %%
-
-offset_ch = 1
-
-
-def write_offset(dm: dmclass, offset_cmd):
-    dm.shms[offset_ch].set_data(offset_cmd)
-
-
-n_act = 12
-n_beam = 10
-
-grid = hcipy.make_pupil_grid(n_act, diameter=n_act / n_beam)
-n_modes = 3
-max_freq = n_modes  # lambda/D
-probe_max_freq = max_freq
-
-freqs = hcipy.make_pupil_grid(
-    n_modes,
-    max_freq,
-)
-
-basis = hcipy.make_fourier_basis(grid, freqs.scaled(2 * np.pi))
-basis.transformation_matrix.shape
-
-fourier_small = basis.transformation_matrix
-
-# if odd number of modes, remove piston
-if n_modes % 2 == 1:
-    fourier_small = fourier_small[:, 1:]
-
-# %%
-plt.imshow(fourier_small[:, 1].reshape(12, 12))
-
-# %%
-# offsets = np.array([0.05,0.0,0.0,0.0])
-offsets = np.zeros(fourier_small.shape[1])
-offsets[1] = 0.01
-
-write_offset(dm, fourier_small @ (offsets[:, None]))
+dm.set_data(np.zeros(144))
 time.sleep(0.03)
 ref = cam.take_stack(1000).mean(0)
 
-res, im, cov = im_FIM_metric(dm, hc_fourier, ref)
 
-print(f"{res:.3e}")
+#%%
+start = time.time()
+im = compute_IM(dm, cam, hc_fourier, amp=0.03, sleep=0.01, n_im=2,n_discard=1, n_pokes=10,)
+print(f"interaction matrix took {time.time() - start:.2f}s")
+
+im = im.reshape(im.shape[0], -1)
 
 # %%
-import scipy.optimize
-
-
-def loss(offsets, args):
-    fourier_small, hc_fourier = args
-    write_offset(dm, fourier_small @ (offsets[:, None]))
-    time.sleep(0.03)
-    ref = cam.take_stack(1000).mean(0)
-
-    res, im, cov = im_FIM_metric(dm, hc_fourier, ref)
-    return res
-
-
-offsets = np.zeros(fourier_small.shape[1])
-offsets[1] = 0.01
-
-res = scipy.optimize.minimize(
-    loss,
-    offsets,
-    args=((fourier_small, hc_fourier),),
-    method="Nelder-Mead",
-    options={"disp": True, "maxfev": 120},
+recon_matrix = hcipy.inverse_tikhonov(
+    im.T, rcond=1e-3
 )
+
+#%%
+t_start = time.time()
+dur = 5
+
+recons = []
+ref_flat = cam.normalise(ref).flatten()
+while time.time() - t_start < dur:
+    img = cam.get_img()
+    recon = recon_matrix.dot(cam.normalise(img).flatten()-ref_flat)
+    recons.append(recon)
+
+recons = np.array(recons)
 # %%
-res.x
+fps = 500.0
+times = np.arange(len(recons))/500.0
+plt.plot(times,recons[:,0])
+plt.plot(times,recons[:,1])
+plt.figure()
+plt.psd(recons[:,0], Fs=500.0)
+plt.psd(recons[:,1], Fs=500.0)
+
+
+
+# %%
+def rms(vec):
+    return np.sqrt(np.mean(vec**2))
+
+def run_cl(dur, gains=None, leakage = None, print_every=0.2):
+    if gains is None:
+        gains = 0.1*np.ones(len(recon_matrix))
+    if leakage is None:
+        leakage = 0.99*np.ones(len(recon_matrix))
+
+    t_start = time.time()
+    dm_acts = np.zeros(len(recon_matrix))
+    last_print = 0
+    recons = []
+    i = 0
+
+    cmds =[]
+
+    has_started = False
+
+    while True:
+        img = cam.get_img()
+        i += 1
+        recon = recon_matrix.dot(cam.normalise(img).flatten()-ref_flat)
+        recons.append(recon)
+
+        dm_acts = leakage*dm_acts - gains*recon
+        cmd = hc_fourier@dm_acts
+        # cmd -= np.mean(cmd)
+
+        if rms(cmd) > 0.4:
+            print("\nopening loop")
+            time.sleep(1)
+            dm.set_data(np.zeros(144))
+            break
+
+        dm.set_data(cmd)
+
+        cmds.append([cmd])
+
+        cur = time.time()
+        if cur - t_start > dur:
+            dm.set_data(np.zeros(144))
+            break
+        if cur - last_print > print_every:
+            print(f"\rRecon rms: {rms(recon):.3e}, FPS: {i/(cur - t_start):.2f}", end='')
+            last_print = cur
+    
+    return recons,cmds
+
+
+n_modes = len(recon_matrix)
+LO_cut = 2
+block_2 = 40
+
+# run_cl(5, 0.1*np.ones(n_modes),0.99*np.ones(n_modes))
+cl_recons,cmds = run_cl(
+    20, 
+    np.concatenate([0.2*np.ones(LO_cut),0.15*np.ones(block_2),0.05*np.ones(n_modes - (LO_cut+block_2))],),
+    np.concatenate([0.99*np.ones(LO_cut),0.998*np.ones(block_2),0.999*np.ones(n_modes - (LO_cut+block_2))],),
+)
+
+print("done")
+cl_recons = np.array(cl_recons)
+np.std(cl_recons[:,0]),np.std(recons[:,0])
+
+# %%
+cmds = np.array(cmds)
+cmds = cmds.reshape(-1, 144)
+
+# plt.plot(cmds[:,70])
+plt.plot(np.mean(cmds, axis=1))
+# %%
+dm.set_data(np.zeros(144))
+# %%
+fps = 500.0
+times = np.arange(len(recons))/500.0
+plt.plot(times,recons[:,0])
+plt.plot(times,recons[:,1])
+times = np.arange(len(cl_recons))/500.0
+plt.plot(times,cl_recons[:,0])
+plt.plot(times,cl_recons[:,1])
+plt.figure()
+plt.psd(recons[:,0], Fs=500.0)
+plt.psd(recons[:,1], Fs=500.0)
+plt.psd(cl_recons[:,0], Fs=500.0)
+plt.psd(cl_recons[:,1], Fs=500.0)
+plt.xscale("log")
+    
+# %%
+dm.set_data(np.zeros(144))
+
+# %%
+dm.shms[3].set_data(np.zeros(144))
+dm.shm0.post_sems(1)
+
+# %%
+
+hc_fourier.shape

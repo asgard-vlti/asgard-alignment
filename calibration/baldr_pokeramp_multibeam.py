@@ -146,6 +146,10 @@ def build_runtime(args: argparse.Namespace) -> RuntimeContext:
     cam_shm = {b: shm(f"/dev/shm/baldr{b}.im.shm") for b in args.beam_id}
     dm_shm_dict = {b: dmclass(beam_id=b) for b in args.beam_id}
 
+    # zero all channels
+    for k,v in dm_shm_dict.items():
+        v.set_data(np.zeros(144))
+
     return RuntimeContext(
         args=args,
         socket=socket,
