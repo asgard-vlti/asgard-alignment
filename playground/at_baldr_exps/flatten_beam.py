@@ -7,6 +7,7 @@ import toml
 import os
 import argparse
 import datetime
+import subprocess
 
 from bcam import Bcam
 
@@ -20,7 +21,12 @@ import hcipy
 from asgard_alignment import FLI_Cameras as FLI
 import scipy.optimize as opt
 
-beam = 1
+parser = argparse.ArgumentParser(
+    description="Flatten beam wavefront using DM optimization"
+)
+parser.add_argument("beam", type=int, help="Beam number")
+args = parser.parse_args()
+beam = args.beam
 
 show_plots = True
 
@@ -250,3 +256,40 @@ for freq, n_it in zip(freqs, n_iters):
     print(f"Loss at end of optimization with {n_modes} modes: {res.fun:.3f}")
 
     prev_fourier = fourier
+
+
+# %%
+# Apply final optimization result to DM
+final_coeffs = res.x * 0.1  # Apply the final scale factor
+final_cmd = fourier.linear_combination(final_coeffs)
+dm.set_data(final_cmd)
+time.sleep(0.5)
+
+print("\n" + "=" * 60)
+print(f"Optimization complete. Result set on DM{beam}.")
+print(f"RMS command: {np.sqrt(np.mean(final_cmd**2)):.6f}")
+print("=" * 60)
+print("\nVisually inspect the beam in the camera.")
+confirm = input("Does the beam look good? (yes/no): ").strip().lower()
+
+if confirm in ["yes", "y"]:
+    print(f"\nApplying optimization as night standard for beam {beam}...")
+
+    # Save current state
+    subprocess.run(["flat-save", str(beam), "night-standard"], check=True)
+    print(f"Saved flat to flat-save {beam} night-standard")
+
+    # Flatten the DM
+    dm.set_data(np.zeros(144))
+    time.sleep(0.5)
+    print("DM flattened")
+
+    # Load the standard
+    subprocess.run(["flat-load", str(beam), "night-standard"], check=True)
+    print(f"Loaded night standard for beam {beam}")
+
+    print("\nFlattening complete!")
+else:
+    print("Optimization not applied. Clearing DM...")
+    dm.set_data(np.zeros(144))
+    time.sleep(0.5)
