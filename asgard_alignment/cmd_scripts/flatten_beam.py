@@ -1,5 +1,5 @@
 import numpy as np
-import DM_modes2
+import asgard_alignment.DM_modes2 as DM_modes2
 import zmq
 import time
 import toml
@@ -8,7 +8,7 @@ import argparse
 import datetime
 import subprocess
 
-from bcam import Bcam
+from asgard_alignment.bcam import Bcam
 
 from astropy.io import fits
 from xaosim.shmlib import shm
@@ -55,8 +55,10 @@ def main():
     cam = Bcam(beam)
 
     print(f"")
-    mds_send(sock, "off SBB")
+    # mds_send(sock, "off SBB")
     # mds_send(sock, "b_shut close all")
+    cur_bmy = mds_send(sock,f"read BMY{beam}")
+    mds_send(sock,f"moveabs BMY{beam} 500.0")
     time.sleep(3)
     cam.take_dark(256)
     if show_plots:
@@ -64,7 +66,9 @@ def main():
         plt.colorbar()
         plt.show()
     # mds_send(sock, "b_shut open all")
-    mds_send(sock, "on SBB")
+    # mds_send(sock, "on SBB")
+    mds_send(sock, f"moveabs BMY{beam} {cur_bmy}")
+    time.sleep(3)
 
     print(f"Taking pupil only image for beam {beam}...")
     offset = 200.0
