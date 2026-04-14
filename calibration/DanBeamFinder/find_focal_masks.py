@@ -71,11 +71,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--line-direction",
         type=str,
-        required=True,
+        required=False,
+        default=None,
         choices=sorted(LINE_DIRECTION_OPTIONS),
         help=(
             "Direction of the line of dots on the focal-plane mask. "
-            "Choices: +x, -x, +y, -y."
+            "Choices: +x, -x, +y, -y. Required if --n-dots > 1."
         ),
     )
     parser.add_argument(
@@ -145,6 +146,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+
+    # Validate that line-direction is provided if n-dots > 1
+    if args.n_dots > 1 and args.line_direction is None:
+        parser.error("--line-direction is required when --n-dots > 1")
 
     if args.save_path is None:
         now = datetime.datetime.now().strftime("%H%M%S")
