@@ -2,22 +2,14 @@ import numpy as np
 import asgard_alignment.DM_modes2 as DM_modes2
 import zmq
 import time
-import toml
-import os
 import argparse
-import datetime
 import subprocess
 
 from asgard_alignment.bcam import Bcam
 
-from astropy.io import fits
-from xaosim.shmlib import shm
 from asgard_alignment.DM_shm_ctrl import dmclass
-import common.DM_basis_functions as dmbases
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 import hcipy
-from asgard_alignment import FLI_Cameras as FLI
 import scipy.optimize as opt
 
 parser = argparse.ArgumentParser(
