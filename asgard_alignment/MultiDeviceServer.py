@@ -515,6 +515,16 @@ class MultiDeviceServer:
 
             # standby is also a weird case, as standing by some devices shuts off others - need to iterate
             if command_name == "standby":
+                if json_data["command"]["parameters"][0]["device"] == "all":
+                    dt = datetime.datetime.now(datetime.timezone.utc).strftime(
+                        "%Y-%m-%d_%H-%M-%S"
+                    )
+                    self.instr.save("all", f"standby_before_{dt}.json")
+
+                    # put the flippers up for protection
+                    for i in range(1, 5):
+                        self.instr.devices[f"SSF{i}"].move_abs(1.0)
+
                 for dev_name in dev_names:
                     attribute = "<alias>" + dev_name + ".state"
                     reply["reply"]["parameters"].append(
