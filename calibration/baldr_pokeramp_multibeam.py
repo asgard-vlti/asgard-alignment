@@ -330,8 +330,11 @@ def acquire_pokeramp(
 
     data = {}
     for beam_id in rt.args.beam_id:
-        n_lo = int(beam_cfg[beam_id].I2M_LO.shape[0])
-        n_ho = int(beam_cfg[beam_id].I2M_HO.shape[0])
+        n_lo = int(beam_cfg[beam_id].I2M_LO.shape[1])
+        n_ho = int(beam_cfg[beam_id].I2M_HO.shape[1])
+        # print("beam_cfg[beam_id].I2M_LO", beam_cfg[beam_id].I2M_LO.shape)
+        # print("beam_cfg[beam_id].I2M_HO", beam_cfg[beam_id].I2M_HO.shape)
+        # print("n_lo", n_lo)
         data[beam_id] = {
             "imgs_cube": np.zeros((n_mode, n_amp, ny, nx), dtype=np.float32),
             "signal_cube": np.zeros((n_mode, n_amp, ny, nx), dtype=np.float32),
@@ -363,8 +366,11 @@ def acquire_pokeramp(
                     e_LO = (beam_cfg[beam_id].I2M_LO @ (beam_cfg[beam_id].I2A @ signal.reshape(-1))).astype(np.float32)
                     e_HO = (beam_cfg[beam_id].I2M_HO @ (beam_cfg[beam_id].I2A @ signal.reshape(-1))).astype(np.float32)
                 elif rt.args.signal_space == "pix":
-                    e_LO = (beam_cfg[beam_id].I2M_LO @ signal.reshape(-1)).astype(np.float32)
-                    e_HO = (beam_cfg[beam_id].I2M_HO @ signal.reshape(-1)).astype(np.float32)
+                    e_LO = (beam_cfg[beam_id].I2M_LO.T @ signal.reshape(-1)).astype(np.float32)
+                    e_HO = (beam_cfg[beam_id].I2M_HO.T @ signal.reshape(-1)).astype(np.float32)
+
+                    # print("beam_cfg[beam_id].I2M_LO.T", beam_cfg[beam_id].I2M_LO.T.shape)
+                    # print("signal", signal.shape)
                 else:
                     raise ValueError("signal_space must be 'dm' or 'pix'")
                 
@@ -639,7 +645,7 @@ def main() -> None:
         data,
         camera_config_current,
     )
-    make_summary_plots(rt, probe_amps, data)
+    # make_summary_plots(rt, probe_amps, data)
 
     print("Saved FITS files:")
     for beam_id, path in fits_paths.items():

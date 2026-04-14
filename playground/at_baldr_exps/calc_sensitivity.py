@@ -15,7 +15,7 @@ from asgard_alignment.DM_shm_ctrl import dmclass
 from asgard_alignment import FLI_Cameras as FLI
 import matplotlib.pyplot as plt
 
-beam = 2
+beam = 1
 
 
 # %%
@@ -41,14 +41,16 @@ cam = Bcam(beam)
 
 # %%
 # mds_send(sock, "off SBB")
-mds_send(sock, f"b_shut close {beam}")
+# mds_send(sock, f"b_shut close {beam}")
+cur_bmy = mds_send(sock,f"read BMY{beam}")
+mds_send(sock,f"moveabs BMY{beam} 500.0")
 time.sleep(3)
 # %%
 cam.take_dark(256)
 plt.imshow(cam.dark)
 plt.colorbar()
 # %%
-mds_send(sock, f"b_shut open {beam}")
+mds_send(sock, f"moveabs BMY{beam} {cur_bmy}")
 # mds_send(sock, "on SBB")
 time.sleep(2)
 # %%
@@ -144,7 +146,7 @@ im.shape
 import matplotlib.colors as mcolor
 
 im = im.reshape(im.shape[0], 32,32)
-idx = 3
+idx = 1
 plt.subplot(121)
 plt.imshow(hc_fourier[:, idx].reshape(12, 12), norm=mcolor.CenteredNorm(), cmap="bwr")
 plt.subplot(122)
