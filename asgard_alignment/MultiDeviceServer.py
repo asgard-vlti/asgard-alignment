@@ -640,7 +640,11 @@ class MultiDeviceServer:
 
     def _handle_custom_command(self, message):
         def read_msg(axis):
-            return str(self.instr.devices[axis].read_position())
+            if isinstance(self.instr.devices[axis], asgard_alignment.ESOdevice.Motor):
+                return str(self.instr.devices[axis].read_position())
+            if isinstance(self.instr.devices[axis], asgard_alignment.ESOdevice.Lamp):
+                return str(self.instr.devices[axis].is_on())
+            return "NACK: device not found or unsupported type"
 
         def stop_msg(axis):
             return str(self.instr.devices[axis].stop())
