@@ -149,7 +149,11 @@ def main() -> None:
     if args.save_path is None:
         now = datetime.datetime.now().strftime("%H%M%S")
         date_str = datetime.datetime.now().strftime("%Y%m%d")
-        save_path = pathlib.Path("Data") / f"{date_str}" / f"Scan_{args.beam}_{now}"
+        save_path = (
+            pathlib.Path("~/tmp/find_focal_masks")
+            / f"{date_str}"
+            / f"Scan_{args.beam}_{now}"
+        )
     else:
         save_path = pathlib.Path(args.save_path).expanduser()
 
