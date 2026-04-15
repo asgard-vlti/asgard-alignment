@@ -752,7 +752,7 @@ def handle_linear_stage():
             elif beam_number == 4:
                 align = 32.25
             else:
-                align=0.0
+                align = 0.0
 
             st.session_state[f"BDS{beam_number}_fixed_mapping"] = {
                 "BIF_H": 133.07,  # (white target)
@@ -3278,6 +3278,21 @@ with col_main:
                                     ):
                                         message = f"moveabs {state['name']} {state['position']}"
                                         send_and_get_response(message)
+                    # if all baldrs are ticked then also load BFO since it is common to all beams in baldr
+                    is_all_baldr = True
+                    for beam_candidates in [f"B{b}" for b in beams]:
+                        if f"B{beam_candidates}" not in all_ticks:
+                            is_all_baldr = False
+                            break
+
+                    if is_all_baldr:
+                        for state in states:
+                            if state["name"] == "BFO" and state["is_connected"]:
+                                message = f"moveabs {state['name']} {state['position']}"
+                                send_and_get_response(message)
+                        st.info("All Baldr beams selected, so also loaded BFO since it is common to all Baldr beams")
+                    else:
+                        st.warning("not all Baldr beams selected, so did not load BFO since it is common to all Baldr beams")
 
         if routine_options == "See All States":
 
