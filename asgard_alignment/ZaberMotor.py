@@ -41,6 +41,8 @@ class ZaberLinearActuator(ESOdevice.Motor):
         if not self.axis.is_homed():
             self.axis.home(wait_until_idle=ZaberLinearActuator.IS_BLOCKING)
 
+        self.is_shuttered = False
+
     def move_absolute(self, new_pos, units=zaber_motion.Units.LENGTH_MICROMETRES):
         """
         Move the motor to the absolute position
@@ -57,6 +59,9 @@ class ZaberLinearActuator(ESOdevice.Motor):
         --------
         None
         """
+        if self.is_shuttered:
+            raise ValueError(f"Cannot move {self.name} as it is shuttered")
+
         if self.LOWER_LIMIT <= new_pos <= self.UPPER_LIMIT:
             self.axis.move_absolute(
                 new_pos,
@@ -80,6 +85,9 @@ class ZaberLinearActuator(ESOdevice.Motor):
         --------
         None
         """
+        if self.is_shuttered:
+            raise ValueError(f"Cannot move {self.name} as it is shuttered")
+
         self.axis.move_relative(
             new_pos,
             unit=units,
@@ -112,10 +120,17 @@ class ZaberLinearActuator(ESOdevice.Motor):
         str
             The state of the motor
         """
+        s = ""
 
         if self.axis.warnings.get_flags() == set():
-            return "No error"
-        return f"{self.axis.warnings.get_flags()}"
+            s += "No error"
+        else:
+            s += f"{self.axis.warnings.get_flags()}"
+
+        if self.is_shuttered:
+            s += " SHUTTERED"
+
+        return s
 
     def ping(self):
         try:
@@ -139,6 +154,10 @@ class ZaberLinearActuator(ESOdevice.Motor):
         Don't do anything, the motor is already initialised by the constructor
         Might need to home after power cycle
         """
+        if self.is_shuttered:
+            logging.info(f"init removing {self.name} from shuttered state")
+            self.is_shuttered = False
+
         if not self.axis.is_homed():
             self.axis.home(wait_until_idle=ZaberLinearActuator.IS_BLOCKING)
 

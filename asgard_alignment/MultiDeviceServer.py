@@ -27,6 +27,10 @@ import asgard_alignment.ESOdevice
 
 import logging
 
+# TODO: change all logging to be lazy formatting for efficiency
+# TODO: check that all shutters are indeed dark
+
+
 
 # guarantees that errors are logged
 def handle_exception(exc_type, exc_value, exc_traceback):
