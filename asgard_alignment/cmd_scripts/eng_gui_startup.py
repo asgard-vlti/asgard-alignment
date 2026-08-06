@@ -4,6 +4,10 @@ import subprocess
 import pathlib
 import shutil
 
+os.environ["PATH"] += os.pathsep + os.path.abspath("/home/asg/.conda/envs/asgard/bin/")
+os.environ["PYTHONPATH"] += os.pathsep + os.path.abspath("/home/asg/Progs/repos/asgard-alignment")
+sys.path.append(os.path.abspath("/home/asg/Progs/repos/asgard-alignment"))
+
 LOCK_FILE = "/tmp/asg.eng_gui.lock"
 def main(redirect=None):
     if redirect is not None:
@@ -22,9 +26,6 @@ def main(redirect=None):
             return
         except:
             print(f"Stale lock file found. Ignoring (PID {existing_pid})")
-
-    os.environ["PATH"] += os.pathsep + os.path.abspath("/home/asg/.conda/envs/asgard/bin/")
-    sys.path.append(os.path.abspath("/home/asg/.conda/envs/asgard/bin/"))
 
     this_dir = pathlib.Path(__file__).parent
     launch_gui_command = [

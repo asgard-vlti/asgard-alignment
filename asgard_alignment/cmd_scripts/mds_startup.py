@@ -1,11 +1,15 @@
-from asgard_alignment.MultiDeviceServer import MultiDeviceServer
 import argparse
 import datetime
 import logging
 import os
-import contextlib
-import subprocess
-import multiprocessing
+import sys
+
+# Update PATH and PYTHONPATH before continuing
+os.environ["PATH"] += os.pathsep + os.path.abspath("/home/asg/.conda/envs/asgard/bin/")
+os.environ["PYTHONPATH"] += os.pathsep + os.path.abspath("/home/asg/Progs/repos/asgard-alignment")
+sys.path.append(os.path.abspath("/home/asg/Progs/repos/asgard-alignment"))
+
+from asgard_alignment.MultiDeviceServer import MultiDeviceServer
 
 config_file = "/home/asg/.config/asgard-alignment/motor_info_full_system.json"
 log_file = "/home/asg/logs/mds/log.txt"
