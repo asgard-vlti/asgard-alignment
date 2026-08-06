@@ -20,6 +20,7 @@ import pathlib
 
 from asgard_alignment import FLI_Cameras as FLI
 import asgard_alignment.Engineering
+from asgard_alignment import BALDR_ALLOWED_PHASEMASK_POSITIONS
 
 try:
     import common.phasemask_centering_tool as pct
@@ -232,7 +233,7 @@ def send_and_get_response(message):
 def handle_phasemask():
 
     # need to add session_state for the phasemask
-    valid_pos = ["J1", "J2", "J3", "J4", "J5", "H1", "H2", "H3", "H4", "H5"]
+    valid_pos = BALDR_ALLOWED_PHASEMASK_POSITIONS
 
     # phasemask interface
     st.subheader("Phasemask Interface")
