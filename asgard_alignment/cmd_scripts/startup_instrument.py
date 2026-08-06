@@ -6,7 +6,9 @@ import os
 from asgard_alignment.PDU_telnet import AtenEcoPDU
 import sys
 import time
-
+import multiprocessing
+from . import mds_startup, eng_gui_startup
+import subprocess
 
 def ping_test(ip_address):
     response = os.system(f"ping -c 1 {ip_address} > /dev/null 2>&1")
@@ -49,9 +51,15 @@ def power_on_all():
         sys.exit(1)
 
     # run mds and engineering GUI
+
+    # to not start the browser for the engineering GUI, use the option
+    # "streamlit run xxx.py --server.headless true"
+    mds_startup.main()  # !!!! The new thing being tested
+    eng_gui_startup.main()
+    print("yep")
     cmds = [
-        "test_mds",
-        "test_eng_gui",
+        # "test_mds",
+        # "test_eng_gui",
     ]
     for cmd in cmds:
         print(f"Running command: {cmd}")
@@ -93,9 +101,50 @@ def power_on_instrument_only():
         sys.exit(1)
 
     # run mds and engineering GUI
+    # proc = multiprocessing.Process(target=mds_startup.main,args=(os.path.expanduser("~/logs/mds/log.txt"),))
+    # proc.start()
+    # mds_startup.main(os.path.expanduser("~/logs/mds/log.txt"))
+    # eng_gui_startup.main(os.path.expanduser("~/logs/eng_gui/log.txt"))
+    # Try spawning as subprocesses from the script instead
+    print("Starting MDS...")
+    subprocess.run("/usr/local/bin/run_mds")
+    print("Starting engineering GUI...")
+    subprocess.run("/usr/local/bin/run_eng_gui")
+
+    print("Starting camera & DM servers, expect ~20s delay...")
+    subprocess.run("/usr/local/bin/run_cam_server")
+    subprocess.run("/usr/local/bin/run_DM_server")
+    time.sleep(16)
+    
+    print("Starting RTTs (Heimdallr and Baldr, if not already started)...")
+    subprocess.run("/usr/local/bin/run_heimdallr")
+    subprocess.run(["/usr/local/bin/run_baldr_tt", "1"])
+    subprocess.run(["/usr/local/bin/run_baldr_tt", "2"])
+    subprocess.run(["/usr/local/bin/run_baldr_tt", "3"])
+    subprocess.run(["/usr/local/bin/run_baldr_tt", "4"])
+    subprocess.run(["/usr/local/bin/run_baldr", "1"])
+    subprocess.run(["/usr/local/bin/run_baldr", "2"])
+    subprocess.run(["/usr/local/bin/run_baldr", "3"])
+    subprocess.run(["/usr/local/bin/run_baldr", "4"])
+    time.sleep(1)
+
+    print("Starting DCS (back-end) server and clients/telemetry...")
+    # The back_end_server is DCS as far as wag is concerned.
+    subprocess.run("/usr/local/bin/run_back_end_server")
+
+    #The MCS client passes information to WAG. If wag isn't started up, hopefully it is robust!
+    #As this is program that communicates with everything, it is used for the "mimir status" gui.
+    # Currently does not exist
+    print("Starting MCS client...")
+    subprocess.run("/usr/local/bin/run_mcs_client")
+
+    #This is telemetry for heimdally and baldr_tt
+    print("Starting telemetry...")
+    subprocess.run("/usr/local/bin/run_telem")
+
     cmds = [
-        "test_mds",
-        "test_eng_gui",
+        # "test_mds",
+        # "test_eng_gui",
     ]
     for cmd in cmds:
         print(f"Running command: {cmd}")
@@ -104,6 +153,8 @@ def power_on_instrument_only():
         if res != 0:
             print(f"Command '{cmd}' failed. Exiting.")
             sys.exit(1)
+
+    # proc.join() - can't do this, the mds_startup process never ends
 
     print("All commands executed successfully. Instrument startup complete.")
     print("Load a state using the gui, and run 'fetch' on the camera server")
