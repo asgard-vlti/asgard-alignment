@@ -4,6 +4,8 @@ import numpy as np
 import datetime
 import os
 
+from asgard_alignment import BALDR_ALLOWED_PHASEMASK_POSITIONS
+
 # import argparse
 # import zmq
 
@@ -52,8 +54,12 @@ class BaldrPhaseMask:
     @staticmethod
     def _load_phase_positions(phase_positions_json):
         # all units in micrometers
-        with open(phase_positions_json, "r", encoding="utf-8") as file:
-            config = json.load(file)
+        try:
+            with open(phase_positions_json, "r", encoding="utf-8") as file:
+                config = json.load(file)
+        except (FileNotFoundError, TypeError):
+            # FIXME what should this return?
+            config = {posn: [] for posn in BALDR_ALLOWED_PHASEMASK_POSITIONS}
 
         assert len(config) == 10, "There must be 10 phase mask positions"
 
