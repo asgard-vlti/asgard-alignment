@@ -23,8 +23,8 @@ import time
 
 import asgard_alignment.controllino
 
-phasemask_position_directory = Path.cwd().joinpath("config_files/phasemask_positions")
-
+#phasemask_position_directory = Path.cwd().joinpath("config_files/phasemask_positions")
+phasemask_position_directory = Path(os.path.expanduser("~/.config/asgard-alignment/config_files/phasemask_positions"))
 
 class Instrument:
     """
