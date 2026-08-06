@@ -378,6 +378,9 @@
         "serial_number": "Zaber-120405",
         "x_mcc_ip_address" : "192.168.100.113",
         "axis_number" : 1,
+        "named_pos" : {
+            "SHUTTER": 500.0
+        },
         "semaphore_id": 26
     },
     {
@@ -386,6 +389,9 @@
         "serial_number": "Zaber-120405",
         "x_mcc_ip_address" : "192.168.100.113",
         "axis_number" : 2,
+        "named_pos" : {
+            "SHUTTER": 500.0
+        },
         "semaphore_id": 27
     },
     {
@@ -394,6 +400,9 @@
         "serial_number": "Zaber-120405",
         "x_mcc_ip_address" : "192.168.100.113",
         "axis_number" : 3,
+        "named_pos" : {
+            "SHUTTER": 500.0
+        },
         "semaphore_id": 28
     },
     {
@@ -402,6 +411,9 @@
         "serial_number": "Zaber-120405",
         "x_mcc_ip_address" : "192.168.100.113",
         "axis_number" : 4,
+        "named_pos" : {
+            "SHUTTER": 500.0
+        },
         "semaphore_id": 29
     },
     {

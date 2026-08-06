@@ -33,17 +33,17 @@ def shutdown(inc_CRED):
     mds_connection = open_zmq_connection(5555)
     date = time.strftime("%Y-%m-%d %H:%M:%S")
 
-    try:
-        res = send_and_get_response(mds_connection, f"save all before_shutdown_{date}")
-        print("saved", res)
-    except zmq.error.Again:
-        inp = input(
-            "MDS did not respond (and hence state is not saved). Do you want to continue with shutdown? (y/n): "
-        )
-        if inp.lower() != "y":
-            print("Aborting shutdown.")
-            return
-        print("Proceeding with shutdown...")
+    # try:
+    #     res = send_and_get_response(mds_connection, f"save all before_shutdown_{date}")
+    #     print("saved", res)
+    # except zmq.error.Again:
+    #     inp = input(
+    #         "MDS did not respond (and hence state is not saved). Do you want to continue with shutdown? (y/n): "
+    #     )
+    #     if inp.lower() != "y":
+    #         print("Aborting shutdown.")
+    #         return
+    #     print("Proceeding with shutdown...")
 
     if inc_CRED:
         c_red_connection = open_zmq_connection(6667)
@@ -57,12 +57,12 @@ def shutdown(inc_CRED):
         send_and_get_response(mds_connection, f"off {lamp}")
         time.sleep(1)  # wait for the command to be processed
 
-    # flippers up
-    names = [f"SSF{i}" for i in range(1, 5)]
-    for i, flipper in enumerate(names):
-        message = f"moveabs {flipper} 1.0"
-        send_and_get_response(mds_connection, message)
-        time.sleep(2)  # wait for the command to be processed
+    # # flippers up
+    # names = [f"SSF{i}" for i in range(1, 5)]
+    # for i, flipper in enumerate(names):
+    #     message = f"moveabs {flipper} 1.0"
+    #     send_and_get_response(mds_connection, message)
+    #     time.sleep(2)  # wait for the command to be processed
 
     pdu = AtenEcoPDU("192.168.100.11")
     pdu.connect()
@@ -89,13 +89,14 @@ def shutdown(inc_CRED):
     post_shutdown_current = float(pdu.read_power_value("olt", LOWER_BOX_OUTLET, "curr"))
     print(f"Post-shutdown current: {post_shutdown_current} A")
 
-    input("Type 'exit' in text client for DM server. Close the MDS and engineering GUI, then press Enter to continue...")
+    input(
+        "Type 'exit' in text client for DM server. Close the MDS and engineering GUI, then press Enter to continue..."
+    )
 
     if not inc_CRED:
         input(
             "In C red server text client, type 'stop' and then type 'exit'. Then press Enter here to continue..."
         )
-
 
     pdu = AtenEcoPDU("192.168.100.11")
     pdu.connect()
@@ -112,6 +113,9 @@ def shutdown(inc_CRED):
         res = pdu.read_outlet_status(C_RED_OUTLET)
         if res == "off":
             print("C RED outlet is off.")
+
+        pdu = AtenEcoPDU("192.168.100.11")
+        pdu.connect()
 
     print("Turning off PDU outlet...")
     pdu.switch_outlet_status(LOWER_BOX_OUTLET, "off")
