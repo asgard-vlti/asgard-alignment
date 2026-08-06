@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from io import StringIO
 import toml
 import time
+import pathlib
 
 from asgard_alignment import FLI_Cameras as FLI
 import asgard_alignment.Engineering
@@ -237,7 +238,8 @@ def handle_phasemask():
     st.subheader("Phasemask Interface")
 
     st.image(
-        "figs/theoretical_ZWFS_intensities.png",
+        # FIXME - this path will *not* work on a non-editable install  
+        str(pathlib.Path(__file__).parent.parent.parent.absolute() / "figs/theoretical_ZWFS_intensities.png"),
         caption="ZWFS Theoretical Intensities (4.5 lamda/D cold stop)",
         use_column_width=True,
     )
@@ -400,7 +402,7 @@ def handle_phasemask():
         # f"/home/asg/Progs/repos/asgard-alignment/config_files/phasemask_positions/beam{beam}/*json"
         # Get all valid files
         valid_reference_position_files = glob.glob(
-            f"/home/asg/Progs/repos/asgard-alignment/config_files/phasemask_positions/beam{beam}/*json"
+            f"/home/asg/.config/asgard-alignment/config_files/phasemask_positions/beam{beam}/*json"
         )
 
         # Sort by modification time (most recent first)
@@ -476,7 +478,7 @@ def handle_phasemask():
             # )
             # f"/home/asg/Progs/repos/asgard-alignment/config_files/phasemask_positions/beam{beam}/*json"
             valid_reference_position_files = glob.glob(
-                f"/home/asg/Progs/repos/asgard-alignment/config_files/phasemask_positions/beam{beam}/*json"
+                f"/home/asg/.config/asgard-alignment/config_files/phasemask_positions/beam{beam}/*json"
             )  # save_path + f"/beam{beam}/*json")
 
             # Sort by modification time (most recent first)

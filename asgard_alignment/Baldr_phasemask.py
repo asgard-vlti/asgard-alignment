@@ -19,8 +19,11 @@ class BaldrPhaseMask:
             "y": y_axis_motor,
         }
 
-        cnt_pth = os.path.dirname(os.path.abspath(__file__))
-        save_path = cnt_pth + os.path.dirname("/../config_files/phasemask_positions/")
+        # For saving in Repos directory
+        # cnt_pth = os.path.dirname(os.path.abspath(__file__))
+        # save_path = cnt_pth + os.path.dirname("/../config_files/phasemask_positions/")
+        # For saving in ~/.config directory
+        save_path = os.path.dirname("/home/asg/.config/asgard-alignment/config_files/phasemask_positions/")
 
         if not os.path.exists(save_path):
             os.makedirs(save_path)
