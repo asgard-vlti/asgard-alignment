@@ -79,7 +79,10 @@ class BaldrPhaseMask:
             if posn not in config.keys() and posn in BALDR_PHASEMASK_INITIAL_POSITIONS[beam].keys():
                 config[posn] = BALDR_PHASEMASK_INITIAL_POSITIONS[beam][posn]
 
-        assert len(config) == len(BALDR_ALLOWED_PHASEMASK_POSITIONS), f"There must be {len(BALDR_ALLOWED_PHASEMASK_POSITIONS)} phase mask positions; you have {len(config)}"
+        if len(config) != len(BALDR_ALLOWED_PHASEMASK_POSITIONS):
+            raise ValueError(
+                f"There must be {len(BALDR_ALLOWED_PHASEMASK_POSITIONS)} phase mask positions; you have {len(config)}"
+            )
 
         return config
 
