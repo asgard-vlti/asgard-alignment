@@ -523,7 +523,7 @@ class MultiDeviceServer:
                     dt = datetime.datetime.now(datetime.timezone.utc).strftime(
                         "%Y-%m-%d_%H-%M-%S"
                     )
-                    self.instr.save("all", f"standby_before_{dt}.json")
+                    self.instr.save("all", f"before_standby_{dt}")  # self.instr.save appends .json
 
                     # put the flippers up for protection
                     for i in range(1, 5):
