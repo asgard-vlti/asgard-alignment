@@ -62,7 +62,7 @@ class BaldrPhaseMask:
             raise RuntimeError(f"Phase mask position file {phase_positions_json} not found or invalid. Please check the path and file format.")
 
         # Determine the beam from the filename using regex
-        match = re.search(r'beam(\d+)', phase_positions_json)
+        match = re.search(r'beam(\d+)', str(phase_positions_json).split(os.path.sep)[-1])
         beam = int(match.group(1)) if match else None
         if beam is None or beam not in range(1, 5):
             raise ValueError(f"Could not determine beam number from filename: {phase_positions_json}. Expected format 'beamN' where N is 1-4.")
