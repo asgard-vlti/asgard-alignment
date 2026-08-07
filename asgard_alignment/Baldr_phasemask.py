@@ -3,8 +3,9 @@ import zaber_motion  # .binary
 import numpy as np
 import datetime
 import os
+import re
 
-from asgard_alignment import BALDR_ALLOWED_PHASEMASK_POSITIONS
+from asgard_alignment import BALDR_ALLOWED_PHASEMASK_POSITIONS, BALDR_PHASEMASK_INITIAL_POSITIONS
 
 # import argparse
 # import zmq
@@ -54,25 +55,31 @@ class BaldrPhaseMask:
     @staticmethod
     def _load_phase_positions(phase_positions_json):
         # all units in micrometers
-        # try:
-        with open(phase_positions_json, "r", encoding="utf-8") as file:
-            config = json.load(file)
-        # except (FileNotFoundError, TypeError):
-            # FIXME confirm what this should return?
-            # config = {posn: [3500, 3500] for posn in BALDR_ALLOWED_PHASEMASK_POSITIONS}
+        try:
+            with open(phase_positions_json, "r", encoding="utf-8") as file:
+                config_read = json.load(file)
+        except (FileNotFoundError, TypeError) as e:
+            raise RuntimeError(f"Phase mask position file {phase_positions_json} not found or invalid. Please check the path and file format.")
 
-        # # FIXME transitional code - remove after shift to new phasemask positions complete
-        # # Remove any positions that are no longer valid
-        # for posn in config.keys():
-        # # FIXME cannot update a dict we are actively iterating over - will need to make a new dict
-        #     if posn not in BALDR_ALLOWED_PHASEMASK_POSITIONS:
-        #         del config[posn]
-        # # Add any missing positions in
-        # for posn in BALDR_ALLOWED_PHASEMASK_POSITIONS:
-        #     if posn not in config.keys():
-        #         config[posn] = [3500, 3500]
+        # Determine the beam from the filename using regex
+        match = re.search(r'beam(\d+)', phase_positions_json)
+        beam = int(match.group(1)) if match else None
+        if beam is None or beam not in range(1, 5):
+            raise ValueError(f"Could not determine beam number from filename: {phase_positions_json}. Expected format 'beamN' where N is 1-4.")
 
-        assert len(config) == len(BALDR_ALLOWED_PHASEMASK_POSITIONS), f"There must be {len(BALDR_ALLOWED_PHASEMASK_POSITIONS)} phase mask positions"
+        # FIXME transitional code - remove after shift to new phasemask positions complete
+        # Remove any positions that are no longer valid
+        config = dict()
+        for posn in config_read.keys():
+        # FIXME cannot update a dict we are actively iterating over - will need to make a new dict
+            if posn in BALDR_ALLOWED_PHASEMASK_POSITIONS:
+                config[posn] = config_read[posn]
+        # Add any missing positions in
+        for posn in BALDR_ALLOWED_PHASEMASK_POSITIONS:
+            if posn not in config.keys() and posn in BALDR_PHASEMASK_INITIAL_POSITIONS[beam].keys():
+                config[posn] = BALDR_PHASEMASK_INITIAL_POSITIONS[beam][posn]
+
+        assert len(config) == len(BALDR_ALLOWED_PHASEMASK_POSITIONS), f"There must be {len(BALDR_ALLOWED_PHASEMASK_POSITIONS)} phase mask positions; you have {len(config)}"
 
         return config
 
