@@ -1579,7 +1579,7 @@ class MultiDeviceServer:
                 result = parse(cmd.format_str, message)
                 return cmd.func(*result)
             else:
-                return "NACK: Unkown custom command"
+                return "NACK: Unknown custom command"
 
             # old
             # for pattern, func in patterns.items():
