@@ -106,15 +106,17 @@ def power_on_instrument_only():
     # mds_startup.main(os.path.expanduser("~/logs/mds/log.txt"))
     # eng_gui_startup.main(os.path.expanduser("~/logs/eng_gui/log.txt"))
     # Try spawning as subprocesses from the script instead
-    print("Starting MDS...")
+    print("Starting MDS, expect ~5s delay...")
     subprocess.run("/usr/local/bin/run_mds")
+    time.sleep(5)
     print("Starting engineering GUI...")
     subprocess.run("/usr/local/bin/run_eng_gui")
 
-    print("Starting camera & DM servers, expect ~20s delay...")
+    print("Starting camera & DM servers, expect ~30s delay...")
     subprocess.run("/usr/local/bin/run_cam_server")
+    time.sleep(15)
     subprocess.run("/usr/local/bin/run_DM_server")
-    time.sleep(16)
+    time.sleep(5)
     
     print("Starting RTTs (Heimdallr and Baldr, if not already started)...")
     subprocess.run("/usr/local/bin/run_heimdallr")
