@@ -155,7 +155,7 @@ def main() -> None:
         now = datetime.datetime.now().strftime("%H%M%S")
         date_str = datetime.datetime.now().strftime("%Y%m%d")
         save_path = (
-            pathlib.Path("~/tmp/find_focal_masks")
+            pathlib.Path("~/tmp/find_focal_masks").expanduser()
             / f"{date_str}"
             / f"Scan_{args.beam}_{now}"
         )

@@ -23,8 +23,8 @@ import time
 
 import asgard_alignment.controllino
 
-phasemask_position_directory = Path.cwd().joinpath("config_files/phasemask_positions")
-
+#phasemask_position_directory = Path.cwd().joinpath("config_files/phasemask_positions")
+phasemask_position_directory = Path(os.path.expanduser("~/.config/asgard-alignment/config_files/phasemask_positions"))
 
 class Instrument:
     """
@@ -1205,7 +1205,7 @@ class Instrument:
                     beam_id_tmp = name.split("BMX")[-1]
                 if "BMY" in name:
                     beam_id_tmp = name.split("BMY")[-1]
-                phasemask_folder_path = f"/home/asg/Progs/repos/asgard-alignment/config_files/phasemask_positions/beam{beam_id_tmp}/"
+                phasemask_folder_path = f"/home/asg/.config/asgard-alignment/config_files/phasemask_positions/beam{beam_id_tmp}/"
                 phasemask_files = glob.glob(
                     os.path.join(phasemask_folder_path, "*.json")
                 )

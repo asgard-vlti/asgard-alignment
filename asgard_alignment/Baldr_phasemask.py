@@ -4,6 +4,8 @@ import numpy as np
 import datetime
 import os
 
+from asgard_alignment import BALDR_ALLOWED_PHASEMASK_POSITIONS
+
 # import argparse
 # import zmq
 
@@ -19,8 +21,11 @@ class BaldrPhaseMask:
             "y": y_axis_motor,
         }
 
-        cnt_pth = os.path.dirname(os.path.abspath(__file__))
-        save_path = cnt_pth + os.path.dirname("/../config_files/phasemask_positions/")
+        # For saving in Repos directory
+        # cnt_pth = os.path.dirname(os.path.abspath(__file__))
+        # save_path = cnt_pth + os.path.dirname("/../config_files/phasemask_positions/")
+        # For saving in ~/.config directory
+        save_path = os.path.dirname("/home/asg/.config/asgard-alignment/config_files/phasemask_positions/")
 
         if not os.path.exists(save_path):
             os.makedirs(save_path)
@@ -49,19 +54,34 @@ class BaldrPhaseMask:
     @staticmethod
     def _load_phase_positions(phase_positions_json):
         # all units in micrometers
-        with open(phase_positions_json, "r", encoding="utf-8") as file:
-            config = json.load(file)
+        try:
+            with open(phase_positions_json, "r", encoding="utf-8") as file:
+                config = json.load(file)
+        except (FileNotFoundError, TypeError):
+            # FIXME confirm what this should return?
+            config = {posn: [3500, 3500] for posn in BALDR_ALLOWED_PHASEMASK_POSITIONS}
 
-        assert len(config) == 10, "There must be 10 phase mask positions"
+        # FIXME transitional code - remove after shift to new phasemask positions complete
+        # Remove any positions that are no longer valid
+        for posn in config.keys():
+            if posn not in BALDR_ALLOWED_PHASEMASK_POSITIONS:
+                del config[posn]
+        # Add any missing positions in
+        for posn in BALDR_ALLOWED_PHASEMASK_POSITIONS:
+            if posn not in config.keys():
+                config[posn] = [3500, 3500]
+
+        assert len(config) == len(BALDR_ALLOWED_PHASEMASK_POSITIONS), f"There must be {len(BALDR_ALLOWED_PHASEMASK_POSITIONS)} phase mask positions"
 
         return config
 
+    # TODO confirm if this is actually used - if not, delete
     def _load_phasemask_parameters(phasemask_properties_json):
         # all units in micrometers
         with open(phasemask_properties_json, "r", encoding="utf-8") as file:
             config = json.load(file)
 
-        assert len(config) == 10, "There must be 10 phase masks"
+        assert len(config) == len(BALDR_ALLOWED_PHASEMASK_POSITIONS), f"There must be {len(BALDR_ALLOWED_PHASEMASK_POSITIONS)} phase mask positions"
 
         return config
 
