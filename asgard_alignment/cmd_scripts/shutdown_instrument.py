@@ -1,6 +1,6 @@
+import argparse
 import os
 from asgard_alignment.PDU_telnet import AtenEcoPDU
-import sys
 import zmq
 import asgard_alignment.controllino as co
 import time
@@ -140,9 +140,13 @@ def shutdown(inc_CRED):
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] == "inc_CRED":
-        inc_CRED = True
-    else:
-        inc_CRED = False
-
-    shutdown(inc_CRED)
+    """Run the instrument shutdown sequence, optionally including C-RED."""
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    parser.add_argument(
+        "include_cred",
+        nargs="?",
+        choices=["inc_CRED"],
+        help="Pass inc_CRED to include the C-RED camera in the shutdown",
+    )
+    args = parser.parse_args()
+    shutdown(args.include_cred == "inc_CRED")

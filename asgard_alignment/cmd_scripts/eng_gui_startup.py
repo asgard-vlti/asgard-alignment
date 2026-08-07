@@ -10,6 +10,7 @@ sys.path.append(os.path.abspath("/home/asg/Progs/repos/asgard-alignment"))
 
 LOCK_FILE = "/tmp/asg.eng_gui.lock"
 def main(redirect=None):
+    """Launch the Streamlit engineering GUI unless it is already running."""
     if redirect is not None:
         redirect_file = open(redirect, 'a')
     else:
