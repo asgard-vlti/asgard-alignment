@@ -80,7 +80,7 @@ class BaldrPhaseMask:
                 config[posn] = BALDR_PHASEMASK_INITIAL_POSITIONS[beam][posn]
 
         if len(config) != len(BALDR_ALLOWED_PHASEMASK_POSITIONS):
-            raise ValueError(
+            raise RuntimeError(
                 f"There must be {len(BALDR_ALLOWED_PHASEMASK_POSITIONS)} phase mask positions; you have {len(config)}"
             )
 
