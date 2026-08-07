@@ -140,6 +140,7 @@ def shutdown(inc_CRED):
 
 
 def main():
+    """Run the instrument shutdown sequence, optionally including C-RED."""
     if len(sys.argv) > 1 and sys.argv[1] == "inc_CRED":
         inc_CRED = True
     else:

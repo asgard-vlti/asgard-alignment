@@ -66,6 +66,7 @@ class BMode:
                         self._send_and_get_response(message)
 
 def main():
+    """Switch the Baldr beams to FAINT or STANDARD mode and restore their state."""
     # Use argv to determine the mode (FAINT or STANDARD) and other parameters
     if len(sys.argv) != 2:
         print("Usage: python b_mode.py [FAINT|STANDARD]")

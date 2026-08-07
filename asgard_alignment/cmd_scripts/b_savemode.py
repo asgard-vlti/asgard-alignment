@@ -59,6 +59,7 @@ class BSaveMode:
         print(self._save_all_BLF_beams())
         
 def main():
+    """Archive and save the current Baldr state for FAINT or STANDARD mode."""
     # Use argv to determine the mode (FAINT or STANDARD) and other parameters
     if len(sys.argv) != 2:
         print("Usage: python b_savemode.py [FAINT|STANDARD]")
