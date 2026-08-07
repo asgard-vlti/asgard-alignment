@@ -1,7 +1,7 @@
 # Change the Baldr mode from STANDARD to FAINT or back.
 
+import argparse
 import zmq
-import sys
 import json
 
 class BMode:
@@ -67,15 +67,15 @@ class BMode:
 
 def main():
     """Switch the Baldr beams to FAINT or STANDARD mode and restore their state."""
-    # Use argv to determine the mode (FAINT or STANDARD) and other parameters
-    if len(sys.argv) != 2:
-        print("Usage: python b_mode.py [FAINT|STANDARD]")
-        sys.exit(1)
-    mode = sys.argv[1].upper()
-    if mode not in ["FAINT", "STANDARD"]:
-        print("Invalid mode. Please specify either 'FAINT' or 'STANDARD'.")
-        sys.exit(1)
-    shutter_seq = BMode(mode)
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    parser.add_argument(
+        "mode",
+        type=str.upper,
+        choices=["FAINT", "STANDARD"],
+        help="Baldr operating mode",
+    )
+    args = parser.parse_args()
+    shutter_seq = BMode(args.mode)
     shutter_seq.run()
 
 if __name__ == "__main__":    
