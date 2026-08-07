@@ -58,7 +58,7 @@ class BaldrPhaseMask:
         try:
             with open(phase_positions_json, "r", encoding="utf-8") as file:
                 config_read = json.load(file)
-        except (FileNotFoundError, TypeError) as e:
+        except (FileNotFoundError, TypeError, json.JSONDecodeError) as e:
             raise RuntimeError(f"Phase mask position file {phase_positions_json} not found or invalid. Please check the path and file format.")
 
         # Determine the beam from the filename using regex
