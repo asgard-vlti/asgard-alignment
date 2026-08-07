@@ -15,7 +15,7 @@ from copy import deepcopy
 
 import enum
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Tuple
 
 import asgard_alignment.ESOdevice
 import asgard_alignment.Instrument
@@ -1043,239 +1043,532 @@ class MultiDeviceServer:
         def status():
             return "ACK"
 
+        def arguments_msg(command_name):
+            command = commands.get(command_name)
+            if command is None:
+                return json.dumps({"error": f"Unknown command: {command_name}"})
+
+            arguments = [
+                {"name": argument.name, "type": argument.type_name}
+                for argument in command.arguments
+            ]
+            return json.dumps(arguments or None)
+
+        @dataclass(frozen=True)
+        class CommandArgument:
+            """Metadata for one command argument."""
+
+            name: str
+            type_name: str
+            description: str
+
         @dataclass
         class Command:
-            """Metadata for a command"""
+            """Metadata and implementation for a command."""
 
             info: str
             format_str: str
             func: Callable
+            arguments: Tuple[CommandArgument, ...]
+            output: str
+            output_type: str = "str"
 
         commands = {
             "read": Command(
                 info="read {axis} - read the position of the given axis",
                 format_str="read {}",
                 func=read_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Motor or lamp device name."),
+                ),
+                output="Motor position or lamp on/off state as text; NACK if the device type is unsupported.",
             ),
             "stop": Command(
                 info="stop {axis} - stop movement of the given axis",
                 format_str="stop {}",
                 func=stop_msg,
+                arguments=(CommandArgument("axis", "str", "Motor device name."),),
+                output="String representation of the device stop response.",
             ),
             "moveabs": Command(
                 info="moveabs {axis} {position} - move axis to absolute position",
                 format_str="moveabs {} {:f}",
                 func=moveabs_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Motor device name."),
+                    CommandArgument(
+                        "position",
+                        "float",
+                        "Target in the device's configured position units.",
+                    ),
+                ),
+                output="ACK after the move command and database update are issued.",
             ),
             "connected?": Command(
-                info="connected? {axis} - check if axis is connected",
+                info="connected? {axis} - check if axis is connected, returns 'connected' or 'not connected'",
                 format_str="connected? {}",
                 func=connected_msg,
+                arguments=(CommandArgument("axis", "str", "Device name."),),
+                output="'connected' or 'not connected'.",
             ),
             "connect": Command(
                 info="connect {axis} - attempt to open connection to axis",
                 format_str="connect {}",
                 func=connect_msg,
+                arguments=(CommandArgument("axis", "str", "Device name."),),
+                output="'connected' or 'not connected' after the connection attempt.",
             ),
             "init": Command(
                 info="init {axis} - initialize the given axis",
                 format_str="init {}",
                 func=init_msg,
+                arguments=(CommandArgument("axis", "str", "Device name."),),
+                output="ACK after initialization completes.",
             ),
             "tt_step": Command(
-                info="tt_step {axis} {n_steps} - move tip-tilt stage by n_steps",
+                info="tt_step {axis} {n_steps} - move tip-tilt stage by n_steps. The step amplitude is a relative measure. " \
+                "The step amplitude corresponds to the amplitude of the electrical signal sent to the Agilis motor. There is " \
+                "no linear correlation between the step amplitude and the effective motion size.",
                 format_str="tt_step {} {}",
                 func=tt_step_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Tip-tilt stage name containing 'HT'."),
+                    CommandArgument("n_steps", "int", "Signed number of steps to move."),
+                ),
+                output="Empty response on success; NACK with usage information on error.",
             ),
             "tt_config_step": Command(
-                info="tt_config_step {axis} {step_size} - configure tip-tilt step size",
+                info="tt_config_step {axis} {step_size} - configure tip-tilt step sizeThe step amplitude is a relative measure. " \
+                "The step amplitude corresponds to the amplitude of the electrical signal sent to the Agilis motor. There is " \
+                "no linear correlation between the step amplitude and the effective motion size.",
                 format_str="tt_config_step {} {}",
                 func=tt_config_step_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Tip-tilt stage name containing 'HT'."),
+                    CommandArgument("step_size", "int", "Step size accepted by the stage."),
+                ),
+                output="Empty response on success; NACK with usage information on error.",
             ),
             "moverel": Command(
                 info="moverel {axis} {position} - move axis by relative position",
                 format_str="moverel {} {:f}",
                 func=moverel_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Motor device name."),
+                    CommandArgument(
+                        "position",
+                        "float",
+                        "Signed offset in the device's configured position units.",
+                    ),
+                ),
+                output="ACK after the relative move is issued.",
             ),
             "state": Command(
                 info="state {axis} - read the state of the given axis",
                 format_str="state {}",
                 func=state_msg,
+                arguments=(CommandArgument("axis", "str", "Device name."),),
+                output="Device state returned by read_state().",
             ),
             "save": Command(
                 info="save {subset} {filename} - save instrument state to file (subset: heimdallr, baldr, solarstein, or all)",
                 format_str="save {} {}",
                 func=save_msg,
+                arguments=(
+                    CommandArgument(
+                        "subset",
+                        "str",
+                        "One of 'heimdallr', 'baldr', 'solarstein', or 'all'.",
+                    ),
+                    CommandArgument(
+                        "filename",
+                        "str",
+                        "Output basename; the server adds its state-directory path and .json suffix.",
+                    ),
+                ),
+                output="ACK when saved; NACK for an invalid subset or an existing file.",
             ),
             "dmapplyflat": Command(
                 info="dmapplyflat {dm_name} - apply flat map to deformable mirror",
                 format_str="dmapplyflat {}",
                 func=apply_flat_msg,
+                arguments=(
+                    CommandArgument("dm_name", "str", "Deformable mirror device name."),
+                ),
+                output="ACK naming the DM, or NACK if the DM is not found.",
             ),
             "dmapplycross": Command(
                 info="dmapplycross {dm_name} - apply cross map to deformable mirror",
                 format_str="dmapplycross {}",
                 func=apply_cross_msg,
+                arguments=(
+                    CommandArgument("dm_name", "str", "Deformable mirror device name."),
+                ),
+                output="ACK naming the DM, or NACK if the DM is not found.",
             ),
             "fpm_getsavepath": Command(
                 info="fpm_getsavepath {axis} - get save path for focal plane mask",
                 format_str="fpm_getsavepath {}",
                 func=fpm_get_savepath_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
+                ),
+                output="Configured save-directory path, or NACK if the axis is not found.",
             ),
             "fpm_maskpositions": Command(
                 info="fpm_maskpositions {axis} - get focal plane mask positions",
                 format_str="fpm_maskpositions {}",
                 func=fpm_mask_positions_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
+                ),
+                output="Mapping of mask names to [x, y] positions, or NACK if the axis is not found.",
             ),
             "fpm_movetomask": Command(
                 info="fpm_movetomask {axis} {maskname} - move focal plane mask to named position",
                 format_str="fpm_movetomask {} {}",
                 func=fpm_move_to_phasemask_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
+                    CommandArgument(
+                        "maskname", "str", "Mask name present in the position mapping."
+                    ),
+                ),
+                output="ACK after the move completes, or NACK if the axis is not found.",
             ),
             "fpm_moverel": Command(
                 info="fpm_moverel {axis} {new_pos} - move focal plane mask by relative position",
                 format_str="fpm_moverel {} {}",
                 func=fpm_move_relative_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
+                    CommandArgument(
+                        "new_pos",
+                        "sequence[float]",
+                        "Two-element [x, y] relative offset in micrometres.",
+                    ),
+                ),
+                output="ACK after the move completes, or NACK if the axis is not found.",
             ),
             "fpm_moveabs": Command(
                 info="fpm_moveabs {axis} {new_pos} - move focal plane mask to absolute position",
                 format_str="fpm_moveabs {} {}",
                 func=fpm_move_absolute_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
+                    CommandArgument(
+                        "new_pos",
+                        "sequence[float]",
+                        "Two-element [x, y] absolute position in micrometres.",
+                    ),
+                ),
+                output="ACK after the move completes, or NACK if the axis is not found.",
             ),
             "fpm_readpos": Command(
                 info="fpm_readpos {axis} - read focal plane mask position",
                 format_str="fpm_readpos {}",
                 func=fpm_read_position_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
+                ),
+                output="Two-element [x, y] position in micrometres, or NACK if the axis is not found.",
             ),
             "fpm_update_position_file": Command(
                 info="fpm_update_position_file {axis} {filename} - update focal plane mask position file",
                 format_str="fpm_update_position_file {} {}",
                 func=fpm_update_position_file_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
+                    CommandArgument(
+                        "filename", "str", "Path to a phase-position JSON file."
+                    ),
+                ),
+                output="ACK after loading the file, or NACK if the axis is not found.",
             ),
             "fpm_updatemaskpos": Command(
                 info="fpm_updatemaskpos {axis} {mask_name} - update focal plane mask position",
                 format_str="fpm_updatemaskpos {} {}",
                 func=fpm_update_mask_position_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
+                    CommandArgument(
+                        "mask_name", "str", "Mask whose saved position will be replaced."
+                    ),
+                ),
+                output="ACK after updating the in-memory position, or NACK if the axis is not found.",
             ),
             "fpm_offsetallmaskpositions": Command(
                 info="fpm_offsetallmaskpositions {axis} {rel_offset_x} {rel_offset_y} - offset all focal plane mask positions",
                 format_str="fpm_offsetallmaskpositions {} {} {}",
                 func=fpm_offset_all_mask_positions_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
+                    CommandArgument(
+                        "rel_offset_x", "float", "X offset in micrometres."
+                    ),
+                    CommandArgument(
+                        "rel_offset_y", "float", "Y offset in micrometres."
+                    ),
+                ),
+                output="ACK after updating all in-memory positions, or NACK if the axis is not found.",
             ),
             "fpm_writemaskpos": Command(
                 info="fpm_writemaskpos {axis} - write focal plane mask positions to file",
                 format_str="fpm_writemaskpos {}",
                 func=fpm_write_mask_positions_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
+                ),
+                output="ACK after writing a timestamped JSON file, or NACK if the axis is not found.",
             ),
             "fpm_updateallmaskpos": Command(
                 info="fpm_updateallmaskpos {axis} {current_mask_name} {reference_mask_position_file} - update all focal plane mask positions relative to current",
                 format_str="fpm_updateallmaskpos {} {} {}",
                 func=fpm_update_all_mask_positions_relative_to_current_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
+                    CommandArgument(
+                        "current_mask_name",
+                        "str",
+                        "Mask currently aligned at the measured position.",
+                    ),
+                    CommandArgument(
+                        "reference_mask_position_file",
+                        "str",
+                        "JSON file defining the calibrated relative mask positions.",
+                    ),
+                ),
+                output="ACK after updating all in-memory positions, or NACK if the axis is not found.",
             ),
             "ping": Command(
                 info="ping {axis} - ping connection to axis",
                 format_str="ping {}",
                 func=ping_msg,
+                arguments=(CommandArgument("axis", "str", "Device name."),),
+                output="'ACK: connected' or 'NACK: not connected'.",
             ),
             "health": Command(
                 info="health - check health of the whole instrument",
                 format_str="health",
                 func=health_msg,
+                arguments=(),
+                output="JSON list of objects containing axis, motor_type, is_connected, and state.",
             ),
             "on": Command(
                 info="on {lamp_name} - turn on lamp",
                 format_str="on {}",
                 func=on_msg,
+                arguments=(CommandArgument("lamp_name", "str", "Lamp device name."),),
+                output="ACK after switching the lamp on and updating the database.",
             ),
             "off": Command(
                 info="off {lamp_name} - turn off lamp",
                 format_str="off {}",
                 func=off_msg,
+                arguments=(CommandArgument("lamp_name", "str", "Lamp device name."),),
+                output="ACK after switching the lamp off and updating the database.",
             ),
             "is_on": Command(
                 info="is_on {lamp_name} - check if lamp is on",
                 format_str="is_on {}",
                 func=is_on_msg,
+                arguments=(CommandArgument("lamp_name", "str", "Lamp device name."),),
+                output="Boolean lamp state converted to text.",
             ),
             "reset": Command(
                 info="reset {axis} - reset the given axis",
                 format_str="reset {}",
                 func=reset_msg,
+                arguments=(CommandArgument("axis", "str", "Device name."),),
+                output="ACK on success, or NACK with the exception message.",
             ),
             "mv_img": Command(
                 info="mv_img {config} {beam_number} {x} {y} - move image for given config and beam",
                 format_str="mv_img {} {} {:f} {:f}",
                 func=mv_img_msg,
+                arguments=(
+                    CommandArgument(
+                        "config",
+                        "str",
+                        "One of 'c_red_one_focus', 'intermediate_focus', or 'baldr'.",
+                    ),
+                    CommandArgument("beam_number", "int", "Beam number from 1 to 4."),
+                    CommandArgument("x", "float", "Requested horizontal shift in pixels."),
+                    CommandArgument("y", "float", "Requested vertical shift in pixels."),
+                ),
+                output="'ACK: moved' on success, otherwise a NACK explaining the failure.",
             ),
             "mv_pup": Command(
                 info="mv_pup {config} {beam_number} {x} {y} - move pupil for given config and beam",
                 format_str="mv_pup {} {} {:f} {:f}",
                 func=mv_pup_msg,
+                arguments=(
+                    CommandArgument(
+                        "config",
+                        "str",
+                        "One of 'c_red_one_focus', 'intermediate_focus', or 'baldr'.",
+                    ),
+                    CommandArgument("beam_number", "int", "Beam number from 1 to 4."),
+                    CommandArgument("x", "float", "Requested horizontal shift in pixels."),
+                    CommandArgument("y", "float", "Requested vertical shift in pixels."),
+                ),
+                output="'ACK: moved' on success, otherwise a NACK explaining the failure.",
             ),
             "asg_setup": Command(
                 info="asg_setup {axis} {mtype} {value} - setup axis with motion type and value",
                 format_str="asg_setup {} {} {}",
                 func=asg_setup_msg,
+                arguments=(
+                    CommandArgument("axis", "str", "Device name."),
+                    CommandArgument(
+                        "mtype", "str", "Motion/setup type understood by the device."
+                    ),
+                    CommandArgument(
+                        "value",
+                        "str or float",
+                        "Setup value; numeric text is converted to float automatically.",
+                    ),
+                ),
+                output="ACK on success, or NACK with the exception message.",
             ),
             "home_steppers": Command(
                 info="home_steppers {motor} - home stepper motors (motor name or 'all')",
                 format_str="home_steppers {}",
                 func=home_steppers_msg,
+                arguments=(
+                    CommandArgument(
+                        "motor", "str", "Stepper motor name, or 'all' for every stepper."
+                    ),
+                ),
+                output="Empty response after homing completes.",
             ),
             "standby": Command(
                 info="standby {axis} - put axis into standby mode",
                 format_str="standby {}",
                 func=standby_msg,
+                arguments=(CommandArgument("axis", "str", "Device name."),),
+                output="ACK on success, or NACK if the device is unavailable.",
             ),
             "online": Command(
                 info="online {axes} - bring axes online (comma-separated list)",
                 format_str="online {}",
                 func=online_msg,
+                arguments=(
+                    CommandArgument(
+                        "axes",
+                        "str",
+                        "Comma-separated device names without spaces.",
+                    ),
+                ),
+                output="Empty response after attempting to connect all requested devices.",
             ),
             "h_shut": Command(
                 info="h_shut {state} {beam_numbers} - control heimdallr shutter (state: open/close, beam_numbers: comma-separated or 'all')",
                 format_str="h_shut {} {}",
                 func=h_shut_msg,
+                arguments=(
+                    CommandArgument("state", "str", "Either 'open' or 'close'."),
+                    CommandArgument(
+                        "beam_numbers",
+                        "str",
+                        "Comma-separated beam numbers from 1 to 4, or 'all'.",
+                    ),
+                ),
+                output="Empty response on success, or NACK for an invalid state.",
             ),
             "b_shut": Command(
                 info="b_shut {state} {beam_numbers} - control baldr shutter (state: open/close, beam_numbers: comma-separated or 'all')",
                 format_str="b_shut {} {}",
                 func=b_shut_msg,
+                arguments=(
+                    CommandArgument("state", "str", "Either 'open' or 'close'."),
+                    CommandArgument(
+                        "beam_numbers",
+                        "str",
+                        "Comma-separated beam numbers from 1 to 4, or 'all'.",
+                    ),
+                ),
+                output="Empty response on success, or NACK for an invalid state.",
             ),
             "h_splay": Command(
                 info="h_splay {state} - control heimdallr splay",
                 format_str="h_splay {}",
                 func=h_splay_msg,
+                arguments=(
+                    CommandArgument("state", "str", "Either 'on' or 'off'."),
+                ),
+                output="Empty response on success; NACK with usage information on error.",
             ),
             "temp_status": Command(
                 info="temp_status {mode} - get temperature status (mode: 'now' or 'keys')",
                 format_str="temp_status {}",
                 func=temp_status_msg,
+                arguments=(
+                    CommandArgument(
+                        "mode",
+                        "str",
+                        "'now' for current values or 'keys' for probe names.",
+                    ),
+                ),
+                output="Text list of temperatures or probe names; NACK for an invalid mode.",
             ),
             "set_kaya": Command(
                 info="set_kaya {state} - set kaya state (state: on/off)",
                 format_str="set_kaya {}",
                 func=set_kaya_msg,
+                arguments=(
+                    CommandArgument("state", "str", "Either 'on' or 'off'."),
+                ),
+                output="ACK on success, or NACK for an invalid state.",
             ),
             "rotm_disable": Command(
                 info="rotm_disable - disable all rotation stage motors",
                 format_str="rotm_disable",
                 func=rotm_disable,
+                arguments=(),
+                output="ACK after all rotation motors are disabled.",
             ),
             "rotm_slew": Command(
                 info="rotm_slew {adc_set} {reltarget} - enable and move rotation motor set (adc_set: U or L)",
                 format_str="rotm_slew {} {}",
                 func=rotm_slew,
+                arguments=(
+                    CommandArgument(
+                        "adc_set",
+                        "str",
+                        "Rotation-stage group key, normally 'U' or 'L'.",
+                    ),
+                    CommandArgument(
+                        "reltarget", "int", "Signed relative target in motor steps."
+                    ),
+                ),
+                output="ACK on success, or NACK listing valid motor groups.",
             ),
             "status": Command(
                 info="status - get system status",
                 format_str="status",
                 func=status,
+                arguments=(),
+                output="ACK.",
+            ),
+            "arguments": Command(
+                info='arguments "{command_name}" - list the expected arguments for a command',
+                format_str='arguments "{}"',
+                func=arguments_msg,
+                arguments=(
+                    CommandArgument(
+                        "command_name", "str", "Name of the command to inspect."
+                    ),
+                ),
+                output="JSON array of name/type objects, JSON null for a command without arguments, or an error object for an unknown command.",
+                output_type="JSON",
             ),
             "command_names": Command(
                 info="command_names - list all available commands",
                 format_str="command_names",
                 func=lambda: json.dumps([cmd_name for cmd_name in commands.keys()]),
+                arguments=(),
+                output="JSON array containing every command name.",
             ),
         }
 
