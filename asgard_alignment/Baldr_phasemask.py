@@ -54,22 +54,23 @@ class BaldrPhaseMask:
     @staticmethod
     def _load_phase_positions(phase_positions_json):
         # all units in micrometers
-        try:
-            with open(phase_positions_json, "r", encoding="utf-8") as file:
-                config = json.load(file)
-        except (FileNotFoundError, TypeError):
+        # try:
+        with open(phase_positions_json, "r", encoding="utf-8") as file:
+            config = json.load(file)
+        # except (FileNotFoundError, TypeError):
             # FIXME confirm what this should return?
-            config = {posn: [3500, 3500] for posn in BALDR_ALLOWED_PHASEMASK_POSITIONS}
+            # config = {posn: [3500, 3500] for posn in BALDR_ALLOWED_PHASEMASK_POSITIONS}
 
-        # FIXME transitional code - remove after shift to new phasemask positions complete
-        # Remove any positions that are no longer valid
-        for posn in config.keys():
-            if posn not in BALDR_ALLOWED_PHASEMASK_POSITIONS:
-                del config[posn]
-        # Add any missing positions in
-        for posn in BALDR_ALLOWED_PHASEMASK_POSITIONS:
-            if posn not in config.keys():
-                config[posn] = [3500, 3500]
+        # # FIXME transitional code - remove after shift to new phasemask positions complete
+        # # Remove any positions that are no longer valid
+        # for posn in config.keys():
+        # # FIXME cannot update a dict we are actively iterating over - will need to make a new dict
+        #     if posn not in BALDR_ALLOWED_PHASEMASK_POSITIONS:
+        #         del config[posn]
+        # # Add any missing positions in
+        # for posn in BALDR_ALLOWED_PHASEMASK_POSITIONS:
+        #     if posn not in config.keys():
+        #         config[posn] = [3500, 3500]
 
         assert len(config) == len(BALDR_ALLOWED_PHASEMASK_POSITIONS), f"There must be {len(BALDR_ALLOWED_PHASEMASK_POSITIONS)} phase mask positions"
 
