@@ -1049,7 +1049,11 @@ class MultiDeviceServer:
                 return json.dumps({"error": f"Unknown command: {command_name}"})
 
             arguments = [
-                {"name": argument.name, "type": argument.type_name}
+                {
+                    "name": argument.name,
+                    "type": argument.type_name,
+                    "description": argument.description,
+                }
                 for argument in command.arguments
             ]
             return json.dumps(arguments or None)
@@ -1560,7 +1564,7 @@ class MultiDeviceServer:
                         "command_name", "str", "Name of the command to inspect."
                     ),
                 ),
-                output="JSON array of name/type objects, JSON null for a command without arguments, or an error object for an unknown command.",
+                output="JSON array of name/type/description objects, JSON null for a command without arguments, or an error object for an unknown command.",
                 output_type="JSON",
             ),
             "command_names": Command(
