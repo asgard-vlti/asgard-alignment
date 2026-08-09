@@ -1,24 +1,36 @@
 import argparse
-import os
 from asgard_alignment.PDU_telnet import AtenEcoPDU
 import zmq
 import asgard_alignment.controllino as co
 import time
+import socket
+import subprocess
 
 LOWER_BOX_OUTLET = 5
 C_RED_OUTLET = 6
+MDS_HOST = "192.168.100.2"
+MDS_PORT = 5555
+MDS_WAIT_TIMEOUT_S = 45
+MDS_POLL_INTERVAL_S = 1
+C_RED_PORT = 6667
+C_RED_WAIT_TIMEOUT_S = 10
 
 
 def ping_device(ip):
-    response = os.system(f"ping -c 1 {ip} > /dev/null 2>&1")
-    return response == 0
+    result = subprocess.run(
+        ["ping", "-c", "1", ip],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    return result.returncode == 0
 
 
 def open_zmq_connection(port):
     context = zmq.Context()
     socket = context.socket(zmq.REQ)
     socket.setsockopt(zmq.RCVTIMEO, 10000)
-    server_address = f"tcp://192.168.100.2:{port}"
+    server_address = f"tcp://{MDS_HOST}:{port}"
     socket.connect(server_address)
     return socket
 
@@ -29,8 +41,80 @@ def send_and_get_response(socket, string):
     return res
 
 
+def is_tcp_port_open(host, port, timeout_s=1.0):
+    try:
+        with socket.create_connection((host, port), timeout=timeout_s):
+            return True
+    except OSError:
+        return False
+
+
+def restart_mds_from_path():
+    # Policy constraint: MDS restart must happen only via run_mds on PATH.
+    subprocess.run(["run_mds"], check=True)
+
+
+def wait_for_mds(host, port, total_wait_s=MDS_WAIT_TIMEOUT_S, poll_s=MDS_POLL_INTERVAL_S):
+    deadline = time.time() + total_wait_s
+    while time.time() < deadline:
+        if is_tcp_port_open(host, port):
+            return True
+        time.sleep(poll_s)
+    return False
+
+
+def wait_for_tcp_port(host, port, total_wait_s, poll_s=1):
+    deadline = time.time() + total_wait_s
+    while time.time() < deadline:
+        if is_tcp_port_open(host, port):
+            return True
+        time.sleep(poll_s)
+    return False
+
+
+def get_mds_connection_or_recover():
+    if not is_tcp_port_open(MDS_HOST, MDS_PORT):
+        print("MDS is not reachable. Restarting MDS using run_mds...")
+        try:
+            restart_mds_from_path()
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                "run_mds was not found on PATH. Install/activate it before running shutdown."
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(f"run_mds failed with exit code {exc.returncode}.") from exc
+
+        print("Waiting for MDS to become reachable...")
+        if not wait_for_mds(MDS_HOST, MDS_PORT):
+            raise RuntimeError(
+                f"MDS did not come up within {MDS_WAIT_TIMEOUT_S}s after run_mds restart attempt."
+            )
+
+    return open_zmq_connection(MDS_PORT)
+
+
+def send_with_mds_recovery(mds_connection, command):
+    try:
+        return send_and_get_response(mds_connection, command), mds_connection
+    except zmq.error.Again:
+        print(f"MDS timeout while sending '{command}'. Attempting MDS recovery...")
+        mds_connection = get_mds_connection_or_recover()
+        try:
+            return send_and_get_response(mds_connection, command), mds_connection
+        except zmq.error.Again as exc:
+            raise RuntimeError(
+                f"MDS remained unresponsive after recovery while sending '{command}'."
+            ) from exc
+
+
 def shutdown(inc_CRED):
-    mds_connection = open_zmq_connection(5555)
+    try:
+        mds_connection = get_mds_connection_or_recover()
+    except RuntimeError as exc:
+        print(f"Unable to establish MDS connection: {exc}")
+        print("Aborting shutdown.")
+        return
+
     date = time.strftime("%Y-%m-%d %H:%M:%S")
 
     # try:
@@ -46,7 +130,14 @@ def shutdown(inc_CRED):
     #     print("Proceeding with shutdown...")
 
     if inc_CRED:
-        c_red_connection = open_zmq_connection(6667)
+        if not wait_for_tcp_port(MDS_HOST, C_RED_PORT, C_RED_WAIT_TIMEOUT_S):
+            print(
+                f"Warning: C-RED connection not reachable after {C_RED_WAIT_TIMEOUT_S}s; "
+                "continuing without C-RED shutdown."
+            )
+            inc_CRED = False
+        else:
+            c_red_connection = open_zmq_connection(C_RED_PORT)
 
     cc = co.PowerControllino("192.168.100.10", init_motors=False)
 
@@ -54,7 +145,12 @@ def shutdown(inc_CRED):
     lamps = ["SRL", "SGL", "SBB"]
 
     for lamp in lamps:
-        send_and_get_response(mds_connection, f"off {lamp}")
+        try:
+            _, mds_connection = send_with_mds_recovery(mds_connection, f"off {lamp}")
+        except RuntimeError as exc:
+            print(f"Failed to send MDS shutdown command for {lamp}: {exc}")
+            print("Aborting shutdown.")
+            return
         time.sleep(1)  # wait for the command to be processed
 
     # # flippers up
@@ -90,7 +186,7 @@ def shutdown(inc_CRED):
     print(f"Post-shutdown current: {post_shutdown_current} A")
 
     input(
-        "Type 'exit' in text client for DM server. Close the MDS and engineering GUI, then press Enter to continue..."
+        "Type 'exit' in text client for DM server. Kill the MDS and engineering GUI, then press Enter to continue..."
     )
 
     if not inc_CRED:
