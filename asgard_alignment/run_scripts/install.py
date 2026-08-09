@@ -1,9 +1,14 @@
 from pathlib import Path
 import subprocess
 import sys
+import argparse
 
 def main():
     """Install run_* commands for asgard-alignment."""
+
+    parser = argparse.ArgumentParser(description="Install run_* commands for asgard-alignment.")
+
+    args = parser.parse_args()
 
     pwd = Path(__file__).parent
     run_scripts = [str(_) for _ in pwd.glob("run_*")]

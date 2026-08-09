@@ -67,11 +67,10 @@ class BaldrPhaseMask:
         if beam is None or beam not in range(1, 5):
             raise ValueError(f"Could not determine beam number from filename: {phase_positions_json}. Expected format 'beamN' where N is 1-4.")
 
-        # FIXME transitional code - remove after shift to new phasemask positions complete
         # Remove any positions that are no longer valid
         config = dict()
         for posn in config_read.keys():
-        # FIXME cannot update a dict we are actively iterating over - will need to make a new dict
+        # cannot delete from a dict we are actively iterating over - will need to make a new dict
             if posn in BALDR_ALLOWED_PHASEMASK_POSITIONS:
                 config[posn] = config_read[posn]
         # Add any missing positions in
@@ -83,6 +82,9 @@ class BaldrPhaseMask:
             raise RuntimeError(
                 f"There must be {len(BALDR_ALLOWED_PHASEMASK_POSITIONS)} phase mask positions; you have {len(config)}"
             )
+        
+        print(f"Loaded phasemask config for positions: {list(config.keys())}")
+        print(f"Allowed phasemask positions are: {BALDR_ALLOWED_PHASEMASK_POSITIONS}")
 
         return config
 
