@@ -39,6 +39,77 @@ import pathlib
 
 from libs.FPM_Finder import FPM_Finder, LINE_DIRECTION_OPTIONS
 
+FILTER_OPTIONS = {"H", "J"}
+
+
+def _apply_filter_defaults(args: argparse.Namespace) -> None:
+    if args.filter is None:
+        return
+
+    if args.filter == "H":
+        args.line_direction = "-y"
+        args.n_dots = 4
+    elif args.filter == "J":
+        args.line_direction = "+y"
+        args.n_dots = 4
+
+    print(
+        f"Filter {args.filter} selected: forcing --line-direction {args.line_direction} and --n-dots {args.n_dots}."
+    )
+
+
+def _prompt_save_positions() -> bool:
+    response = input("Save positions? [y/N]: ").strip().lower()
+    return response == "y"
+
+
+def _find_latest_beam_config(beam: int) -> pathlib.Path:
+    beam_dir = (
+        pathlib.Path("~/.config/asgard-alignment/config_files/phasemask_positions")
+        .expanduser()
+        / f"beam{beam}"
+    )
+    if not beam_dir.exists():
+        raise FileNotFoundError(f"Beam config directory does not exist: {beam_dir}")
+
+    candidates = [path for path in beam_dir.glob("*.json") if path.is_file()]
+    if not candidates:
+        raise FileNotFoundError(f"No JSON config files found in: {beam_dir}")
+
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
+def _update_filter_positions(
+    *,
+    filter_name: str,
+    beam: int,
+    result: dict,
+) -> pathlib.Path:
+    found_dots = result.get("found_dots", [])
+    if len(found_dots) < 4:
+        raise ValueError(
+            f"Need 4 found dots to update filter positions, got {len(found_dots)}"
+        )
+
+    if filter_name == "J":
+        keys = ["J4", "J3", "J2", "J1"]
+    elif filter_name == "H":
+        keys = ["H5", "H4", "H3", "H2"]
+    else:
+        raise ValueError(f"Unsupported filter: {filter_name}")
+
+    latest_json = _find_latest_beam_config(beam)
+    payload = json.loads(latest_json.read_text(encoding="utf-8"))
+
+    for i, key in enumerate(keys):
+        payload[key] = found_dots[i]["position"]
+
+    output_dir = latest_json.parent
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    output_json = output_dir / f"phase_positions_beam{beam}_{timestamp}.json"
+    output_json.write_text(json.dumps(payload, indent=4), encoding="utf-8")
+    return output_json
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -77,6 +148,17 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Direction of the line of dots on the focal-plane mask. "
             "Choices: +x, -x, +y, -y. Required if --n-dots > 1."
+        ),
+    )
+    parser.add_argument(
+        "--filter",
+        type=str,
+        required=False,
+        default=None,
+        choices=sorted(FILTER_OPTIONS),
+        help=(
+            "Optional filter mode. If H: uses --line-direction=-y and --n-dots=4. "
+            "If J: uses --line-direction=+y and --n-dots=4."
         ),
     )
     parser.add_argument(
@@ -146,6 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+    _apply_filter_defaults(args)
 
     # Validate that line-direction is provided if n-dots > 1
     if args.n_dots > 1 and args.line_direction is None:
@@ -161,6 +244,9 @@ def main() -> None:
         )
     else:
         save_path = pathlib.Path(args.save_path).expanduser()
+
+    save_path = save_path.expanduser()
+    print(f"Output directory: {save_path.resolve()}")
 
     finder = FPM_Finder()
     init_pos = finder.get_positions(args.beam)
@@ -181,14 +267,29 @@ def main() -> None:
         print(f"Error during focal mask finding: {e}")
         print(f"resetting back to original position ")
         finder.set_positions(args.beam, init_pos)
+        print(f"Partial outputs (if any) are in: {save_path.resolve()}")
 
         return
     except KeyboardInterrupt:
         print("Process interrupted by user. Resetting to original position.")
         finder.set_positions(args.beam, init_pos)
+        print(f"Partial outputs (if any) are in: {save_path.resolve()}")
         return
 
     finder.set_positions(args.beam, init_pos)
+    print(f"Plots and data saved in: {save_path.resolve()}")
+
+    if args.filter is not None and _prompt_save_positions():
+        try:
+            updated_file = _update_filter_positions(
+                filter_name=args.filter,
+                beam=args.beam,
+                result=result,
+            )
+            print(f"Updated filter positions in: {updated_file}")
+        except (FileNotFoundError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            print(f"Could not save filter positions: {exc}")
+
     print(json.dumps(result, indent=2))
 
 

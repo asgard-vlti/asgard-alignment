@@ -8,7 +8,8 @@
 //  "h[MOTOR]" Home a motor, but moving backwards until the home sensor is found.
 //  "w[MOTOR]" Find the position of a motor.
 //  "z[MOTOR]" Find if the motor is homed.
-//  "p[MOTOR]"  Read out the zero Pin directy.
+//  "p[MOTOR]" Read out the zero Pin directly.
+//  "l[MOTOR]" Read the position of the last zero.
 //  "s[MOTOR] [STEPS]" Move to a fixed number of steps from zero. 
 //  "f[MOTOR] [STEPS]" Fix a motor to a forced position of this many steps. 
 //  "v" Find the version of the installed software.
@@ -32,13 +33,14 @@ IPAddress ip(192,168,100,12);                           // IP address (arbitrari
 EthernetServer server(23);                            // HTTP port
 int next_str_ix;  // The next index in the string we're passing (saves passing back and forth)
 
-#define VERSION 1
+#define VERSION 2
 #define MAX_MOTORS 12
 #define STEP_PIN 27
 #define DIR_PIN 28
 #define MS1 30
 #define MS2 31
 #define MS3 32
+int last_zero_pos[MAX_MOTORS] = {0,0,0,0,0,0,0,0,0,0,0,0};
 int current_pos[MAX_MOTORS] = {0,0,0,0,0,0,0,0,0,0,0,0};
 int target_pos[MAX_MOTORS] = {0,0,0,0,0,0,0,0,0,0,0,0};
 int zero_pins[MAX_MOTORS]   = {21,20,23,22,17,16,19,18,2,3,0,1};
@@ -227,6 +229,11 @@ void loop() {
       } else if (c=='z'){ //Has zero been found?
         if ((pin >= MAX_MOTORS) || (pin < 0)) return failure(clients[i]); 
         else clients[i].println(String(int(found_home[pin])));
+      } else if (c=='l'){
+        if ((pin >= MAX_MOTORS) || (pin < 0)) return failure(clients[i]); 
+        else {
+          clients[i].println(String(int(last_zero_pos[pin])));
+        }
       } else if (c=='p'){ //Read out zero pin directly
         if ((pin >= MAX_MOTORS) || (pin < 0)) return failure(clients[i]); 
         else {
@@ -262,6 +269,7 @@ void loop() {
             Serial.println("Found home the third time");
             delay(10);
             if (digitalRead(zero_pins[i]) == 1){
+                last_zero_pos[i]=current_pos[i];
                 target_pos[i]=0;
                 current_pos[i]=0;
                 looking_for_home[i]=false;

@@ -5,7 +5,7 @@
 // Commands: 
 //  "o[PIN]" open relay or off for high side switches.
 //  "c[PIN]" close relay or on for high side switches.
-//  "g[PIN]" get value for a pin. Mostly relevant to determine what a pin was set to.
+//  "g[PIN]" get value for a pin. Mostly relevant to determine what a pin was set to last.
 //  "i[PIN]" Analog input for a pin.
 //  "a[PIN] [VALUE]" Analog out for a pin via MCP4728
 //  "m[PIN] [VALUE]" PWM modulated analog out for a pin.
@@ -42,6 +42,7 @@ int next_str_ix;  // The next index in the string we're passing (saves passing b
 
 #define MIN_9V_PIN 3
 #define MAX_9V_PIN 10
+#define N_PINS 81
 
 #define MAX_SERVOS 2
 #define MAX_INTEGRAL 5120000 //An offset of 512 for 10000 milli-seconds
@@ -57,6 +58,8 @@ struct PIParams {
   int m_pin_val; // Last value written to the modulation pin
 };
 
+int last_onoff[N_PINS];
+
 struct PIParams pi_params[MAX_SERVOS];
 int s_ix=0; // Servo index
 bool mcp_init=false; //Is the MCP initialised? This can be checked on start-up.
@@ -65,6 +68,11 @@ void setup() {
   // Ethernet initialization
   Serial.begin(9600);
   Ethernet.begin(mac, ip);
+
+  // Zero the last pin output position.
+  for (int i=0; i<N_PINS;i++){
+      last_onoff[i]=0; 
+  }
 
   // Start with all servos zeroed.
   for (int i=0; i<MAX_SERVOS;i++){
@@ -135,6 +143,7 @@ void loop() {
     // Now the commands which use 1 or more arguments
     if (c == 'o') {
       digitalWrite(pin, HIGH);
+      last_onoff[pin]=0;
       return success(client);
     } else if (c == 'm'){
       // SAFETY: Limit this explicitly
@@ -149,9 +158,12 @@ void loop() {
       else failure(client);
     } else if (c == 'c') {
       digitalWrite(pin, LOW);
+      last_onoff[pin]=1;
       return success(client);
     } else if (c == 'g') {
-      client.println(String(digitalRead(pin)));
+      client.println(String(last_onoff[pin]));
+      //We don't have digital input pins. Change code if this changes!!!!
+      //client.println(String(digitalRead(pin)));
     } else if (c == 'i') {
       client.println(String(analogRead(pin)));
     } else if (c == 'a') {
@@ -254,7 +266,7 @@ int get_value(String request){
 
     // Initial command - check that the pin number isn't silly.
     // We can do more sophisticated checking later!
-    if (next_str_ix == 1 && value > 80) value=-1;
+    if (next_str_ix == 1 && value >= N_PINS) value=-1;
    
     //Increment the place of the next number.
     next_str_ix = i + 1;
