@@ -3,6 +3,9 @@ import zaber_motion  # .binary
 import numpy as np
 import datetime
 import os
+import re
+
+from asgard_alignment import BALDR_ALLOWED_PHASEMASK_POSITIONS, BALDR_PHASEMASK_INITIAL_POSITIONS
 
 # import argparse
 # import zmq
@@ -19,8 +22,11 @@ class BaldrPhaseMask:
             "y": y_axis_motor,
         }
 
-        cnt_pth = os.path.dirname(os.path.abspath(__file__))
-        save_path = cnt_pth + os.path.dirname("/../config_files/phasemask_positions/")
+        # For saving in Repos directory
+        # cnt_pth = os.path.dirname(os.path.abspath(__file__))
+        # save_path = cnt_pth + os.path.dirname("/../config_files/phasemask_positions/")
+        # For saving in ~/.config directory
+        save_path = os.path.dirname("/home/asg/.config/asgard-alignment/config_files/phasemask_positions/")
 
         if not os.path.exists(save_path):
             os.makedirs(save_path)
@@ -49,19 +55,46 @@ class BaldrPhaseMask:
     @staticmethod
     def _load_phase_positions(phase_positions_json):
         # all units in micrometers
-        with open(phase_positions_json, "r", encoding="utf-8") as file:
-            config = json.load(file)
+        try:
+            with open(phase_positions_json, "r", encoding="utf-8") as file:
+                config_read = json.load(file)
+        except (FileNotFoundError, TypeError, json.JSONDecodeError) as e:
+            raise RuntimeError(f"Phase mask position file {phase_positions_json} not found or invalid. Please check the path and file format.")
 
-        assert len(config) == 10, "There must be 10 phase mask positions"
+        # Determine the beam from the filename using regex
+        match = re.search(r'beam(\d+)', str(phase_positions_json).split(os.path.sep)[-1])
+        beam = int(match.group(1)) if match else None
+        if beam is None or beam not in range(1, 5):
+            raise ValueError(f"Could not determine beam number from filename: {phase_positions_json}. Expected format 'beamN' where N is 1-4.")
+
+        # Remove any positions that are no longer valid
+        config = dict()
+        for posn in config_read.keys():
+        # cannot delete from a dict we are actively iterating over - will need to make a new dict
+            if posn in BALDR_ALLOWED_PHASEMASK_POSITIONS:
+                config[posn] = config_read[posn]
+        # Add any missing positions in
+        for posn in BALDR_ALLOWED_PHASEMASK_POSITIONS:
+            if posn not in config.keys() and posn in BALDR_PHASEMASK_INITIAL_POSITIONS[beam].keys():
+                config[posn] = BALDR_PHASEMASK_INITIAL_POSITIONS[beam][posn]
+
+        if len(config) != len(BALDR_ALLOWED_PHASEMASK_POSITIONS):
+            raise RuntimeError(
+                f"There must be {len(BALDR_ALLOWED_PHASEMASK_POSITIONS)} phase mask positions; you have {len(config)}"
+            )
+        
+        print(f"Loaded phasemask config for positions: {list(config.keys())}")
+        print(f"Allowed phasemask positions are: {BALDR_ALLOWED_PHASEMASK_POSITIONS}")
 
         return config
 
+    # TODO confirm if this is actually used - if not, delete
     def _load_phasemask_parameters(phasemask_properties_json):
         # all units in micrometers
         with open(phasemask_properties_json, "r", encoding="utf-8") as file:
             config = json.load(file)
 
-        assert len(config) == 10, "There must be 10 phase masks"
+        assert len(config) == len(BALDR_ALLOWED_PHASEMASK_POSITIONS), f"There must be {len(BALDR_ALLOWED_PHASEMASK_POSITIONS)} phase mask positions"
 
         return config
 

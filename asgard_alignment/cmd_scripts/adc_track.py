@@ -117,7 +117,9 @@ def parse_args():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--slew", action="store_true", help="Run one-shot slew")
     mode.add_argument(
-        "--track", action="store_true", help="Continuously recompute and slew"
+        "--track",
+        action="store_true",
+        help="Continuously recompute and track the rotation during the observation",
     )
     parser.add_argument(
         "--track-interval",

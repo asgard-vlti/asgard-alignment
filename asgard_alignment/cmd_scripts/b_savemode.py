@@ -1,7 +1,8 @@
 # Change the Baldr mode from STANDARD to FAINT or back.
 
+import argparse
 import zmq
-import sys, os, shutil
+import os, shutil
 import time
 
 class BSaveMode:
@@ -59,15 +60,16 @@ class BSaveMode:
         print(self._save_all_BLF_beams())
         
 def main():
-    # Use argv to determine the mode (FAINT or STANDARD) and other parameters
-    if len(sys.argv) != 2:
-        print("Usage: python b_savemode.py [FAINT|STANDARD]")
-        sys.exit(1)
-    mode = sys.argv[1].upper()
-    if mode not in ["FAINT", "STANDARD"]:
-        print("Invalid mode. Please specify either 'FAINT' or 'STANDARD'.")
-        sys.exit(1)
-    saveit = BSaveMode(mode.lower())
+    """Archive and save the current Baldr state for FAINT or STANDARD mode."""
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    parser.add_argument(
+        "mode",
+        type=str.upper,
+        choices=["FAINT", "STANDARD"],
+        help="Baldr state category to save",
+    )
+    args = parser.parse_args()
+    saveit = BSaveMode(args.mode.lower())
     saveit.run()
 
 if __name__ == "__main__":    

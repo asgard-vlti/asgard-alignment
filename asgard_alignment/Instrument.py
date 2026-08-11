@@ -23,8 +23,8 @@ import time
 
 import asgard_alignment.controllino
 
-phasemask_position_directory = Path.cwd().joinpath("config_files/phasemask_positions")
-
+#phasemask_position_directory = Path.cwd().joinpath("config_files/phasemask_positions")
+phasemask_position_directory = Path(os.path.expanduser("~/.config/asgard-alignment/config_files/phasemask_positions"))
 
 class Instrument:
     """
@@ -137,9 +137,7 @@ class Instrument:
         self.is_h_splay = "off"
 
         self.b_shutter_states = {i: "open" for i in range(1, 5)}
-        self.b_shutter_offsets = {
-            i: {f"BTP{i}": 0.0, f"BTT{i}": 0.0} for i in range(1, 5)
-        }
+        self.b_shutter_last_pos = {i: {f"BMY{i}": None} for i in range(1, 5)}
 
     @property
     def devices(self):
@@ -433,7 +431,7 @@ class Instrument:
                 self.devices[name].is_shuttered = is_shuttered
 
     def _apply_shutter_state_to_beam_baldr(self, state, beam_number):
-        dev_prefixes = ["BTT", "BTP"]
+        dev_prefixes = ["BTT", "BTP", "BMX, BMY"]
         if beam_number != 1:
             dev_prefixes += ["BOTT", "BOTP"]
         if state not in ["open", "close"]:
@@ -444,35 +442,17 @@ class Instrument:
         for dev in dev_prefixes:
             name = f"{dev}{beam_number}"
             if name in self.devices:
-                logging.info(f"Shuttering {name} to {is_shuttered}")
+                logging.info(f"Changing {name} to {is_shuttered}")
                 self.devices[name].is_shuttered = is_shuttered
 
     def b_shut(self, state, beam_numbers):
-        offest_mag = 0.5  # degrees
-        possible_shutter_devs = ["BTT", "BTP"]
-
         if state == "close":
             beams_to_close = []
             for beam_n in beam_numbers:
                 if not self.b_shutter_states[beam_n] == "close":
                     beams_to_close.append(beam_n)
-            # if we are closing the shutter, we need to pick a direction for the offsets and apply them
-            # pick the direction by choosing the axis that has the largest current value (abs value sense)
+
             for beam_n in beams_to_close:
-                axis_pos = {}
-                for dev in possible_shutter_devs:
-                    numbered_dev = f"{dev}{beam_n}"
-                    if numbered_dev in self.devices:
-                        axis_pos[numbered_dev] = self.devices[
-                            numbered_dev
-                        ].read_position()
-
-                # find the axis with the largest absolute value
-                max_dev = max(axis_pos, key=lambda x: abs(axis_pos[x]))
-
-                # apply the offset in the opposite direction
-                offset = offest_mag if axis_pos[max_dev] < 0 else -offest_mag
-                self.b_shutter_offsets[beam_n][max_dev] = offset
 
                 # wait in a blocking way for the device to stop moving
                 timeout = 3.0
@@ -484,9 +464,16 @@ class Instrument:
                         break
                     time.sleep(0.1)
 
-                self.devices[max_dev].move_relative(offset)
+                dev_name = f"BMY{beam_n}"
+                self.b_shutter_last_pos[beam_n][dev_name] = self.all_devices[
+                    dev_name
+                ].read_position()
+
+                # self.devices[max_dev].move_relative(offset)
+                self.devices[dev_name].setup("NAME", "SHUTTER")
                 self.b_shutter_states[beam_n] = "closed"
-                logging.info(f"sending moverel {offset} to {numbered_dev}")
+                logging.info(f"sending setup SHUTTER to {dev_name}")
+
             for beam_n in beam_numbers:
                 self._apply_shutter_state_to_beam_baldr(state, beam_n)
 
@@ -496,38 +483,47 @@ class Instrument:
                 if not self.b_shutter_states[beam_n] == "open":
                     beams_to_open.append(beam_n)
             logging.info(f"beams to open{beams_to_open}")
+
             for beam_n in beam_numbers:
                 self._apply_shutter_state_to_beam_baldr(state, beam_n)
+
             # if we are opening the shutter, we need apply the opposite of the offsets and set the
             # offset variable back to 0.0
             for beam_n in beams_to_open:
-                for dev in possible_shutter_devs:
-                    numbered_dev = f"{dev}{beam_n}"
-                    print(f"{self.b_shutter_offsets[beam_n]}")
-                    print(
-                        f"{numbered_dev} {self.b_shutter_offsets[beam_n][numbered_dev]}"
-                    )
-                    if not np.isclose(
-                        self.b_shutter_offsets[beam_n][numbered_dev], 0.0
-                    ):
-                        timeout = 3.0
-                        start_time = time.time()
-                        while self.devices[numbered_dev].is_moving():
-                            logging.info(f"waiting for {numbered_dev} to stop moving")
-                            if time.time() - start_time > timeout:
-                                logging.warning(
-                                    f"Timeout waiting for {numbered_dev} to stop moving"
-                                )
-                                break
-                            time.sleep(0.1)
-                        self.devices[numbered_dev].move_relative(
-                            -self.b_shutter_offsets[beam_n][numbered_dev]
-                        )
-                        logging.info(
-                            f"sending moverel {-self.b_shutter_offsets[beam_n][numbered_dev]} to {numbered_dev}"
-                        )
-                        self.b_shutter_offsets[beam_n][numbered_dev] = 0.0
-                        self.b_shutter_states[beam_n] = "open"
+                dev_name = f"BMY{beam_n}"
+
+                pos = self.b_shutter_last_pos[beam_n][dev_name]
+                self.devices[dev_name].move_abs(pos)
+                self.b_shutter_states[beam_n] = "open"
+                logging.info(f"Set {dev_name} back to pre-shutter position")
+
+                # for dev in possible_shutter_devs:
+                #     numbered_dev = f"{dev}{beam_n}"
+                #     print(f"{self.b_shutter_offsets[beam_n]}")
+                #     print(
+                #         f"{numbered_dev} {self.b_shutter_offsets[beam_n][numbered_dev]}"
+                #     )
+                #     if not np.isclose(
+                #         self.b_shutter_offsets[beam_n][numbered_dev], 0.0
+                #     ):
+                #         timeout = 3.0
+                #         start_time = time.time()
+                #         while self.devices[numbered_dev].is_moving():
+                #             logging.info(f"waiting for {numbered_dev} to stop moving")
+                #             if time.time() - start_time > timeout:
+                #                 logging.warning(
+                #                     f"Timeout waiting for {numbered_dev} to stop moving"
+                #                 )
+                #                 break
+                #             time.sleep(0.1)
+                #         self.devices[numbered_dev].move_relative(
+                #             -self.b_shutter_offsets[beam_n][numbered_dev]
+                #         )
+                #         logging.info(
+                #             f"sending moverel {-self.b_shutter_offsets[beam_n][numbered_dev]} to {numbered_dev}"
+                #         )
+                #         self.b_shutter_offsets[beam_n][numbered_dev] = 0.0
+                #         self.b_shutter_states[beam_n] = "open"
 
         logging.info(f"self.b_shutter_states: {self.b_shutter_states}")
 
@@ -1209,7 +1205,7 @@ class Instrument:
                     beam_id_tmp = name.split("BMX")[-1]
                 if "BMY" in name:
                     beam_id_tmp = name.split("BMY")[-1]
-                phasemask_folder_path = f"/home/asg/Progs/repos/asgard-alignment/config_files/phasemask_positions/beam{beam_id_tmp}/"
+                phasemask_folder_path = f"/home/asg/.config/asgard-alignment/config_files/phasemask_positions/beam{beam_id_tmp}/"
                 phasemask_files = glob.glob(
                     os.path.join(phasemask_folder_path, "*.json")
                 )
@@ -1218,14 +1214,18 @@ class Instrument:
                 )  # most recently created
                 with open(recent_phasemask_file, "r", encoding="utf-8") as pfile:
                     positions_tmp = json.load(pfile)
+
+                oneAxis_dict = {}
+                # this adds the "SHUTTER" named position
+                if "named_positions" in self._motor_config[name]:
+                    oneAxis_dict = self._motor_config[name]["named_positions"]
+
                 if "BMX" in name:
-                    oneAxis_dict = {
-                        key: value[0] for key, value in positions_tmp.items()
-                    }
+                    for key, value in positions_tmp.items():
+                        oneAxis_dict[key] = value[0]
                 elif "BMY" in name:
-                    oneAxis_dict = {
-                        key: value[1] for key, value in positions_tmp.items()
-                    }
+                    for key, value in positions_tmp.items():
+                        oneAxis_dict[key] = value[1]
 
                 self._devices[name] = asgard_alignment.ZaberMotor.ZaberLinearActuator(
                     name,

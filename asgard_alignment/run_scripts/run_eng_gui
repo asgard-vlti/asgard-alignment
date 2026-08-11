@@ -1,0 +1,2 @@
+#!/bin/bash
+setsid /home/asg/.conda/envs/asgard/bin/eng_gui 1>> /home/asg/logs/eng_gui/log.txt 2>&1 &
