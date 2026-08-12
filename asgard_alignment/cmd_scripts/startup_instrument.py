@@ -43,7 +43,7 @@ def power_on_all():
 
     print("Box and camera powered on successfully.")
 
-    time.sleep(2)
+    time.sleep(5)
 
     # Ping test 192.168.100.10
     if not ping_test("192.168.100.10"):
