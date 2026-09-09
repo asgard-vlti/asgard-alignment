@@ -1,5 +1,7 @@
 import socket
+import threading
 import time
+import threading
 
 import numpy as np
 
@@ -596,7 +598,7 @@ class RotationMotorTeensy(UController):
     1. controller reads through most recent file and notes latest position of all stepper motors
     2.
 
-    """  # TODO: how does this get power cycled?
+    """  # TODO: how does this get power cycled? Same as LEDs
 
     def __init__(self, ip, port=23, savepth=None):
         super().__init__(ip, port)
@@ -609,7 +611,7 @@ class RotationMotorTeensy(UController):
     # Home the stepper motor
     def home(self, motor: int) -> bool:
         """
-        Command to home a stepper motor.
+        Home a stepper motor after its zero pin is clear.
 
         Parameters
         ----------
@@ -619,9 +621,28 @@ class RotationMotorTeensy(UController):
         Returns
         -------
         bool
-            Status of the command.
+            True after starting the homing operation.
         """
-        return self.send_command(f"h{motor}")
+        if self.zero_pin(motor) == 0:
+            return self.send_command(f"h{motor}")
+
+        current_position = self.where(motor)
+        self.amove(motor, current_position + 20000)
+        threading.Thread(
+            target=self._wait_for_zero_pin_and_home,
+            args=(motor,),
+            daemon=True,
+        ).start()
+        return True
+
+    def _wait_for_zero_pin_and_home(self, motor: int):
+        deadline = time.monotonic() + 100
+        while time.monotonic() < deadline:
+            if self.zero_pin(motor) == 0:
+                self.send_command(f"h{motor}")
+                return
+            time.sleep(1)
+        print(f"Timed out waiting for zero pin on motor {motor}")
 
     # Find out where a motor is in steps
     def where(self, motor: int) -> int:
@@ -649,6 +670,15 @@ class RotationMotorTeensy(UController):
         except ValueError:
             raise ValueError(f"Returned value {return_str} was not an integer")
 
+    # Fine the current value of the zero pin.
+    def zero_pin(self, motor: int) -> int:
+        """Return the zero-pin value for a motor."""
+        return_str = self.send_command_anyreply(f"p{motor}")
+        try:
+            return int(return_str)
+        except ValueError:
+            raise ValueError(f"Returned value {return_str} was not an integer")
+    
     # Find out if a motor is homed with the "z" command
     def is_homed(self, motor: int) -> bool:
         """
