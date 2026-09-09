@@ -3,6 +3,8 @@
 import argparse
 import zmq
 import json
+import os
+import shutil
 
 class BMode:
     def __init__(self, mode):
@@ -38,14 +40,55 @@ class BMode:
             results.append((beam_num, message, res))
         return results
 
+    def _save_cred1_split_config(self):
+        config_dir = os.path.expanduser("~/.config")
+        source_path = os.path.join(config_dir, "cred1_split.json")
+        destination_path = os.path.join(
+            config_dir, f"cred1_split_{self.mode}.json"
+        )
+        shutil.copy2(source_path, destination_path)
+        print(f"Saved CRED1 split configuration to {destination_path}")
+
+    def _apply_cred1_split_config(self):
+        config_dir = os.path.expanduser("~/.config")
+        live_path = os.path.join(config_dir, "cred1_split.json")
+        profile_path = os.path.join(
+            config_dir, f"cred1_split_{self.mode}.json"
+        )
+
+        with open(live_path) as config_file:
+            live_config = json.load(config_file)
+        with open(profile_path) as config_file:
+            profile_config = json.load(config_file)
+
+        for beam_number in range(1, 5):
+            beam_name = f"baldr{beam_number}"
+            live_config[beam_name] = profile_config[beam_name]
+
+        with open(live_path, "w") as config_file:
+            json.dump(live_config, config_file, indent=4)
+            config_file.write("\n")
+
+        context = zmq.Context()
+        socket = context.socket(zmq.REQ)
+        socket.setsockopt(zmq.RCVTIMEO, 10000)
+        socket.connect("tcp://localhost:6667")
+        socket.send_string("split_mode 1")
+        response = socket.recv_string()
+        socket.close()
+        context.term()
+        print(f"Applied CRED1 {self.mode} split configuration: {response.strip()}")
+
     def run(self):
         if self.mode == "FAINT":
             # Implementation for FAINT mode
             file_pth = "/home/asg/.config/asgard-alignment/stable_states/baldr_ONLY_faint.json"
+            self._apply_cred1_split_config()
             self._move_all_BLF_beams("FAINT")
         elif self.mode == "STANDARD":
             # Implementation for STANDARD mode
             file_pth = "/home/asg/.config/asgard-alignment/stable_states/baldr_ONLY_standard.json"
+            self._apply_cred1_split_config()
             self._move_all_BLF_beams("STANDARD")
         else:
             raise ValueError("Invalid mode. Please specify either 'FAINT' or 'STANDARD'.")
