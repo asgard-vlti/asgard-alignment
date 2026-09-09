@@ -55,8 +55,18 @@ class BSaveMode:
             res = f"ERROR: {e}"
         return res
 
+    def _save_cred1_split_config(self):
+        config_dir = os.path.expanduser("~/.config")
+        source_path = os.path.join(config_dir, "cred1_split.json")
+        destination_path = os.path.join(
+            config_dir, f"cred1_split_{self.mode.upper()}.json"
+        )
+        shutil.copy2(source_path, destination_path)
+        print(f"Saved CRED1 split configuration to {destination_path}")
+
     def run(self):
         self._archive_current_state()
+        self._save_cred1_split_config()
         print(self._save_all_BLF_beams())
         
 def main():
