@@ -16,7 +16,7 @@ def get_git_root() -> Path:
 
 
 ## Git project root path
-root_path = get_git_root()
+root_path = Path("/usr/local/etc")#get_git_root()
 
 
 class dmclass:

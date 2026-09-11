@@ -20,9 +20,9 @@ def get_git_root() -> Path:
     )
 
 
-## Git project root path
+## Settings files root path
 # root_path = get_git_root()
-root_path = get_git_root()
+root_path = Path("/usr/local/etc")
 
 
 dm_shape_pth = (
