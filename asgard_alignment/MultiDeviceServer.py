@@ -525,9 +525,14 @@ class MultiDeviceServer:
                     )
                     self.instr.save("all", f"before_standby_{dt}")  # self.instr.save appends .json
 
-                    # put the flippers up for protection
+                    # put the flippers up for protection. This will not do anything if
+                    # already in standby mode, i.e. if SSF{i} is not in the devies list.
                     for i in range(1, 5):
-                        self.instr.devices[f"SSF{i}"].move_abs(1.0)
+                        if f"SSF{i}" in self.instr.devices:
+                            logging.info(f"Flipper {i} up for protection.")
+                            self.instr.devices[f"SSF{i}"].move_abs(1.0)
+                        else:
+                            logging.info(f"Flipper {i} not found - likely in standby already.")
 
                 for dev_name in dev_names:
                     attribute = "<alias>" + dev_name + ".state"
