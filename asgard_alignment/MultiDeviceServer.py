@@ -874,94 +874,29 @@ class MultiDeviceServer:
             logging.info(f"Cross map applied to {dm_name}")
             return f"ACK: Cross map applied to  {dm_name}"
 
-        def fpm_get_savepath_msg(axis):
-            device = self.instr.all_devices[axis]
-            if device is None:
-                return f"NACK: Axis {axis} not found"
-            else:
-                return device.savepath
+        def fpm_movetomask_msg(beam, mask_name):
+            self.instr.move_phasemask_to_named_position(int(beam), mask_name)
+            return "ACK"
 
-        def fpm_mask_positions_msg(axis):
-            device = self.instr.all_devices[axis]
-            if device is None:
-                return f"NACK: Axis {axis} not found"
-            else:
-                return device.mask_positions
-            
-        def fpm_update_position_file_msg(axis, filename):
-            device = self.instr.all_devices[axis]
-            if device is None:
-                return f"NACK: Axis {axis} not found"
-            else:
-                device.update_position_file(filename)
-                return "ACK"
+        def fpm_update_msg(beam, mask_name, scope):
+            self.instr.update_phasemask_positions(int(beam), mask_name, scope)
+            return "ACK"
 
-        def fpm_move_to_phasemask_msg(axis, maskname):
-            device = self.instr.all_devices[axis]
-            if device is None:
-                return f"NACK: Axis {axis} not found"
-            else:
-                device.move_to_mask(maskname)
-                return "ACK"
+        def fpm_read_msg(beam):
+            beams = range(1, 5) if int(beam) == -1 else [int(beam)]
+            position_files = [
+                self.instr.reload_phasemask_named_positions(beam_number)
+                for beam_number in beams
+            ]
+            return f"ACK: Reloaded {', '.join(position_files)}"
 
-        def fpm_move_relative_msg(axis, new_pos):
-            device = self.instr.all_devices[axis]
-            if device is None:
-                return f"NACK: Axis {axis} not found"
-            else:
-                device.move_relative(new_pos)
-                return "ACK"
-
-        def fpm_move_absolute_msg(axis, new_pos):
-            device = self.instr.all_devices[axis]
-            if device is None:
-                return f"NACK: Axis {axis} not found"
-            else:
-                device.move_absolute(new_pos)
-                return "ACK"
-
-        def fpm_read_position_msg(axis):
-            device = self.instr.all_devices[axis]
-            if device is None:
-                return f"NACK: Axis {axis} not found"
-            else:
-                return device.read_position()
-            
-        def fpm_update_mask_position_msg(axis, mask_name):
-            device = self.instr.all_devices[axis]
-            if device is None:
-                return f"NACK: Axis {axis} not found"
-            else:
-                device.update_mask_position(mask_name)
-                return "ACK"
-
-        def fpm_offset_all_mask_positions_msg(axis, rel_offset_x, rel_offset_y):
-            device = self.instr.all_devices[axis]
-            if device is None:
-                return f"NACK: Axis {axis} not found"
-            else:
-                device.offset_all_mask_positions(rel_offset_x, rel_offset_y)
-                return "ACK"
-
-        def fpm_write_mask_positions_msg(axis):
-            device = self.instr.all_devices[axis]
-            if device is None:
-                return f"NACK: Axis {axis} not found"
-            else:
-                device.write_current_mask_positions()
-                return "ACK"
-
-        def fpm_update_all_mask_positions_relative_to_current_msg(
-            axis, current_mask_name, reference_mask_position_file
-        ):
-            device = self.instr.all_devices[axis]
-            if device is None:
-                return f"NACK: Axis {axis} not found"
-            else:
-                device.update_all_mask_positions_relative_to_current(
-                    current_mask_name, reference_mask_position_file, write_file=False
-                )
-                return "ACK"
+        def fpm_write_msg(beam):
+            beams = range(1, 5) if int(beam) == -1 else [int(beam)]
+            position_files = [
+                self.instr.write_phasemask_positions(beam_number)
+                for beam_number in beams
+            ]
+            return f"ACK: Wrote {', '.join(position_files)}"
 
         def standby_msg(axis):
             return self.instr.standby(axis)
@@ -1197,157 +1132,56 @@ class MultiDeviceServer:
                 ),
                 output="ACK when saved; NACK for an invalid subset or an existing file.",
             ),
-            "dmapplyflat": Command(
-                info="dmapplyflat {dm_name} - apply flat map to deformable mirror",
-                format_str="dmapplyflat {}",
-                func=apply_flat_msg,
-                arguments=(
-                    CommandArgument("dm_name", "str", "Deformable mirror device name."),
-                ),
-                output="ACK naming the DM, or NACK if the DM is not found.",
-            ),
-            "dmapplycross": Command(
-                info="dmapplycross {dm_name} - apply cross map to deformable mirror",
-                format_str="dmapplycross {}",
-                func=apply_cross_msg,
-                arguments=(
-                    CommandArgument("dm_name", "str", "Deformable mirror device name."),
-                ),
-                output="ACK naming the DM, or NACK if the DM is not found.",
-            ),
-            "fpm_getsavepath": Command(
-                info="fpm_getsavepath {axis} - get save path for focal plane mask",
-                format_str="fpm_getsavepath {}",
-                func=fpm_get_savepath_msg,
-                arguments=(
-                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
-                ),
-                output="Configured save-directory path, or NACK if the axis is not found.",
-            ),
-            "fpm_maskpositions": Command(
-                info="fpm_maskpositions {axis} - get focal plane mask positions",
-                format_str="fpm_maskpositions {}",
-                func=fpm_mask_positions_msg,
-                arguments=(
-                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
-                ),
-                output="Mapping of mask names to [x, y] positions, or NACK if the axis is not found.",
-            ),
             "fpm_movetomask": Command(
-                info="fpm_movetomask {axis} {maskname} - move focal plane mask to named position",
+                info="fpm_movetomask {beam} {mask_name} - move a focal plane mask to a named position",
                 format_str="fpm_movetomask {} {}",
-                func=fpm_move_to_phasemask_msg,
+                func=fpm_movetomask_msg,
                 arguments=(
-                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
+                    CommandArgument("beam", "int", "Beam number from 1 to 4."),
                     CommandArgument(
-                        "maskname", "str", "Mask name present in the position mapping."
+                        "mask_name", "str", "Mask name present in the position mapping."
                     ),
                 ),
-                output="ACK after the move completes, or NACK if the axis is not found.",
+                output="ACK after both BMX and BMY move commands are issued.",
             ),
-            "fpm_moverel": Command(
-                info="fpm_moverel {axis} {new_pos} - move focal plane mask by relative position",
-                format_str="fpm_moverel {} {}",
-                func=fpm_move_relative_msg,
+            "fpm_update": Command(
+                info="fpm_update {beam} {mask_name} {scope} - update named positions from the current focal plane mask position",
+                format_str="fpm_update {} {} {}",
+                func=fpm_update_msg,
                 arguments=(
-                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
+                    CommandArgument("beam", "int", "Beam number from 1 to 4."),
                     CommandArgument(
-                        "new_pos",
-                        "sequence[float]",
-                        "Two-element [x, y] relative offset in micrometres.",
-                    ),
-                ),
-                output="ACK after the move completes, or NACK if the axis is not found.",
-            ),
-            "fpm_moveabs": Command(
-                info="fpm_moveabs {axis} {new_pos} - move focal plane mask to absolute position",
-                format_str="fpm_moveabs {} {}",
-                func=fpm_move_absolute_msg,
-                arguments=(
-                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
-                    CommandArgument(
-                        "new_pos",
-                        "sequence[float]",
-                        "Two-element [x, y] absolute position in micrometres.",
-                    ),
-                ),
-                output="ACK after the move completes, or NACK if the axis is not found.",
-            ),
-            "fpm_readpos": Command(
-                info="fpm_readpos {axis} - read focal plane mask position",
-                format_str="fpm_readpos {}",
-                func=fpm_read_position_msg,
-                arguments=(
-                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
-                ),
-                output="Two-element [x, y] position in micrometres, or NACK if the axis is not found.",
-            ),
-            "fpm_update_position_file": Command(
-                info="fpm_update_position_file {axis} {filename} - update focal plane mask position file",
-                format_str="fpm_update_position_file {} {}",
-                func=fpm_update_position_file_msg,
-                arguments=(
-                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
-                    CommandArgument(
-                        "filename", "str", "Path to a phase-position JSON file."
-                    ),
-                ),
-                output="ACK after loading the file, or NACK if the axis is not found.",
-            ),
-            "fpm_updatemaskpos": Command(
-                info="fpm_updatemaskpos {axis} {mask_name} - update focal plane mask position",
-                format_str="fpm_updatemaskpos {} {}",
-                func=fpm_update_mask_position_msg,
-                arguments=(
-                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
-                    CommandArgument(
-                        "mask_name", "str", "Mask whose saved position will be replaced."
-                    ),
-                ),
-                output="ACK after updating the in-memory position, or NACK if the axis is not found.",
-            ),
-            "fpm_offsetallmaskpositions": Command(
-                info="fpm_offsetallmaskpositions {axis} {rel_offset_x} {rel_offset_y} - offset all focal plane mask positions",
-                format_str="fpm_offsetallmaskpositions {} {} {}",
-                func=fpm_offset_all_mask_positions_msg,
-                arguments=(
-                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
-                    CommandArgument(
-                        "rel_offset_x", "float", "X offset in micrometres."
+                        "mask_name", "str", "Currently aligned mask name."
                     ),
                     CommandArgument(
-                        "rel_offset_y", "float", "Y offset in micrometres."
-                    ),
-                ),
-                output="ACK after updating all in-memory positions, or NACK if the axis is not found.",
-            ),
-            "fpm_writemaskpos": Command(
-                info="fpm_writemaskpos {axis} - write focal plane mask positions to file",
-                format_str="fpm_writemaskpos {}",
-                func=fpm_write_mask_positions_msg,
-                arguments=(
-                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
-                ),
-                output="ACK after writing a timestamped JSON file, or NACK if the axis is not found.",
-            ),
-            "fpm_updateallmaskpos": Command(
-                info="fpm_updateallmaskpos {axis} {current_mask_name} {reference_mask_position_file} - update all focal plane mask positions relative to current",
-                format_str="fpm_updateallmaskpos {} {} {}",
-                func=fpm_update_all_mask_positions_relative_to_current_msg,
-                arguments=(
-                    CommandArgument("axis", "str", "Focal-plane-mask compound device name."),
-                    CommandArgument(
-                        "current_mask_name",
+                        "scope",
                         "str",
-                        "Mask currently aligned at the measured position.",
-                    ),
-                    CommandArgument(
-                        "reference_mask_position_file",
-                        "str",
-                        "JSON file defining the calibrated relative mask positions.",
+                        "'one' updates this mask, 'band' its H/J band, and 'all' every H/J mask.",
                     ),
                 ),
-                output="ACK after updating all in-memory positions, or NACK if the axis is not found.",
+                output="ACK after updating the in-memory BMX/BMY named positions.",
+            ),
+            "fpm_read": Command(
+                info="fpm_read {beam} - reload focal plane mask positions from JSON (beam: 1-4 or -1 for all)",
+                format_str="fpm_read {}",
+                func=fpm_read_msg,
+                arguments=(
+                    CommandArgument(
+                        "beam", "int", "Beam number from 1 to 4, or -1 for all beams."
+                    ),
+                ),
+                output="ACK with the JSON files reloaded into BMX/BMY named positions.",
+            ),
+            "fpm_write": Command(
+                info="fpm_write {beam} - write focal plane mask named positions to JSON (beam: 1-4 or -1 for all)",
+                format_str="fpm_write {}",
+                func=fpm_write_msg,
+                arguments=(
+                    CommandArgument(
+                        "beam", "int", "Beam number from 1 to 4, or -1 for all beams."
+                    ),
+                ),
+                output="ACK with the timestamped JSON files written from BMX/BMY named positions.",
             ),
             "ping": Command(
                 info="ping {axis} - ping connection to axis",

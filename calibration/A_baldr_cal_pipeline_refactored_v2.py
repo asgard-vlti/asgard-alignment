@@ -384,7 +384,7 @@ def acquire_mean_images_all_beams(
 
 def move_all_beams_to_mask(rt: RuntimeContext, phasemask: str) -> None:
     for beam_id in rt.args.beam_id:
-        res = rt.send_and_get_response(f"fpm_movetomask phasemask{beam_id} {phasemask}")
+        res = rt.send_and_get_response(f"fpm_movetomask {beam_id} {phasemask}")
         print(f"beam {beam_id}: moved to phasemask {phasemask}: {res}")
 
 

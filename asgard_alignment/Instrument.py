@@ -2,6 +2,7 @@ import asgard_alignment
 import json
 import sys
 import pyvisa
+import datetime
 from pathlib import Path
 import serial.tools.list_ports
 import sys
@@ -16,12 +17,12 @@ import asgard_alignment.Engineering
 import asgard_alignment.Lamps
 import asgard_alignment.NewportMotor
 import asgard_alignment.ZaberMotor
-import asgard_alignment.Baldr_phasemask
 
 import logging
 import time
 
 import asgard_alignment.controllino
+from asgard_alignment import BALDR_ALLOWED_PHASEMASK_POSITIONS
 
 #phasemask_position_directory = Path.cwd().joinpath("config_files/phasemask_positions")
 phasemask_position_directory = Path(os.path.expanduser("~/.config/asgard-alignment/config_files/phasemask_positions"))
@@ -82,10 +83,6 @@ class Instrument:
 
         self._controllers = {}
         self._devices = {}  # str of name : ESOdevice
-        # bcb
-        self.compound_devices = (
-            {}
-        )  # new dictionary for combined devices (e.g. phasemask)
 
         self._prev_port_mapping = None
         self._prev_zaber_port = None
@@ -127,9 +124,6 @@ class Instrument:
 
         self.temp_summary = TemperatureSummary(self._controllers["controllino"])
 
-        # finally do phasemask objects (the respective motors need to be in devices first)
-        self._create_phasemask_wrapper()
-
         self.h_shutter_states = {i: "open" for i in range(1, 5)}
         self.h_shutter_offsets = {
             i: {f"HTTP{i}": 0.0, f"HTPP{i}": 0.0} for i in range(1, 5)
@@ -146,18 +140,107 @@ class Instrument:
         """
         return self._devices
 
-    # bcb
-    @property
-    def all_devices(self):
-        """
-        Return a merged dictionary of all devices,
-        giving access to the entries in compound_devices.
-        """
-        merged = dict(self._devices)  # copy the standard devices
-        merged.update(
-            self.compound_devices
-        )  # phasemask devices override if keys overlap
-        return merged
+    def reload_phasemask_named_positions(self, beam):
+        """Reload named BMX/BMY positions from the newest phase-mask JSON for a beam."""
+        beam = int(beam)
+        if beam not in range(1, 5):
+            raise ValueError("Beam must be in the range 1 through 4")
+
+        phasemask_folder_path = phasemask_position_directory / f"beam{beam}"
+        phasemask_files = list(phasemask_folder_path.glob("*.json"))
+        if not phasemask_files:
+            raise FileNotFoundError(
+                f"No phase-mask position files found in {phasemask_folder_path}"
+            )
+
+        position_file = max(phasemask_files, key=os.path.getmtime)
+        with position_file.open("r", encoding="utf-8") as file:
+            positions = json.load(file)
+
+        for axis, coordinate in ((f"BMX{beam}", 0), (f"BMY{beam}", 1)):
+            if axis not in self.devices:
+                raise ValueError(f"{axis} is not connected")
+            self.devices[axis].named_positions.update(
+                {
+                    name: position[coordinate]
+                    for name, position in positions.items()
+                }
+            )
+
+        logging.info(
+            f"Reloaded phase-mask named positions for beam {beam} from {position_file}"
+        )
+        return str(position_file)
+
+    def move_phasemask_to_named_position(self, beam, mask_name):
+        """Move both phase-mask axes for a beam to a named position."""
+        x_axis, y_axis = self._phasemask_axes(beam)
+        x_axis.setup("NAME", mask_name)
+        y_axis.setup("NAME", mask_name)
+
+    def update_phasemask_positions(self, beam, mask_name, scope):
+        """Update named phase-mask positions from the current BMX/BMY position."""
+        x_axis, y_axis = self._phasemask_axes(beam)
+        if mask_name not in x_axis.named_positions or mask_name not in y_axis.named_positions:
+            raise ValueError(f"Unknown phase-mask position {mask_name}")
+        if scope not in {"all", "band", "one"}:
+            raise ValueError("Scope must be 'all', 'band', or 'one'")
+
+        current_position = (x_axis.read_position(), y_axis.read_position())
+        reference_position = (
+            x_axis.named_positions[mask_name],
+            y_axis.named_positions[mask_name],
+        )
+        offset = (
+            current_position[0] - reference_position[0],
+            current_position[1] - reference_position[1],
+        )
+
+        if scope == "one":
+            position_names = [mask_name]
+        elif scope == "band":
+            position_names = [
+                name
+                for name in BALDR_ALLOWED_PHASEMASK_POSITIONS
+                if name.startswith(mask_name[0])
+            ]
+        else:
+            position_names = [
+                name
+                for name in BALDR_ALLOWED_PHASEMASK_POSITIONS
+                if name.startswith(("H", "J"))
+            ]
+
+        for position_name in position_names:
+            if position_name not in x_axis.named_positions or position_name not in y_axis.named_positions:
+                continue
+            x_axis.named_positions[position_name] += offset[0]
+            y_axis.named_positions[position_name] += offset[1]
+
+    def write_phasemask_positions(self, beam):
+        """Write current phase-mask named positions for one beam to a timestamped JSON file."""
+        x_axis, y_axis = self._phasemask_axes(beam)
+        positions = {
+            name: [x_axis.named_positions[name], y_axis.named_positions[name]]
+            for name in BALDR_ALLOWED_PHASEMASK_POSITIONS
+            if name in x_axis.named_positions and name in y_axis.named_positions
+        }
+        directory = phasemask_position_directory / f"beam{beam}"
+        directory.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+        position_file = directory / f"phase_positions_beam{beam}_{timestamp}.json"
+        with position_file.open("w", encoding="utf-8") as file:
+            json.dump(positions, file, indent=4)
+        return str(position_file)
+
+    def _phasemask_axes(self, beam):
+        beam = int(beam)
+        if beam not in range(1, 5):
+            raise ValueError("Beam must be in the range 1 through 4")
+        axis_names = (f"BMX{beam}", f"BMY{beam}")
+        if any(axis not in self.devices for axis in axis_names):
+            raise ValueError(f"Phase-mask axes for beam {beam} are not connected")
+        return tuple(self.devices[axis] for axis in axis_names)
 
     def health(self):
         """
@@ -465,7 +548,7 @@ class Instrument:
                     time.sleep(0.1)
 
                 dev_name = f"BMY{beam_n}"
-                self.b_shutter_last_pos[beam_n][dev_name] = self.all_devices[
+                self.b_shutter_last_pos[beam_n][dev_name] = self.devices[
                     dev_name
                 ].read_position()
 
@@ -671,67 +754,6 @@ class Instrument:
 
         logging.info("success")
         return res
-
-    def _create_phasemask_wrapper(self):
-        """
-        wraps the phasemask x,y motors into a specific Baldr_phasemask class that has
-        unique read/write update commands to update all phasemask positions
-        based on the current one. This class is also required as input to phasemask alignment tools.
-        """
-        for beam in [1, 2, 3, 4]:
-            if (f"BMX{beam}" not in self.devices) or (f"BMY{beam}" not in self.devices):
-                logging.warning(
-                    f"don't have both phasemasks: (BMX in devices = {(f'BMX{beam}' not in self.devices)}, BMY in devices = {(f'BMX{beam}' not in self.devices)}"
-                )
-                # Prompt the user for input
-                user_input = (
-                    input("Type 'y' to continue, or 'n' to stop the program: ")
-                    .strip()
-                    .lower()
-                )
-
-                if user_input == "n":
-                    logging.info("Stopping the program as requested.")
-                    sys.exit(0)  # Exit the program
-                elif user_input == "y":
-                    logging.info("Continuing the program...")
-                else:
-                    logging.warning("Invalid input. Assuming continuation.")
-            else:
-                # try to find if configuration file provided in config file
-                pth = phasemask_position_directory.joinpath(Path(f"beam{beam}/"))
-
-                # if not try find the most recent in a predefined folder
-                files = list(
-                    pth.glob("*.json")
-                )  # [file for file in pth.iterdir() if file.is_file()]
-
-                # most recent
-                if files:
-                    phase_positions_json = max(
-                        files, key=lambda file: file.stat().st_mtime, default=None
-                    )
-                    logging.info(
-                        f"using most recent file for beam {beam}: {phase_positions_json}"
-                    )
-                else:
-                    logging.warning(f"no phasemask configuration files found in {pth}")
-                # otherwise raise error - we do not want to deal with case where we don't have on
-
-                # do I need to update the self._config dictionaries?
-                # bcb #self.devices[f"phasemask{beam}"]
-                self.compound_devices[f"phasemask{beam}"] = (
-                    asgard_alignment.Baldr_phasemask.BaldrPhaseMask(
-                        beam=beam,
-                        x_axis_motor=self.devices[f"BMX{beam}"],
-                        y_axis_motor=self.devices[f"BMY{beam}"],
-                        phase_positions_json=phase_positions_json,
-                    )
-                )
-
-    # BCB to do , make new variable dictionary (not device)
-    # _combined_device <- new variable dictionary , multiDeviceServer <- custom functions
-    # update Mutil device server
 
     def _open_ucontrollers(self):
         self._controllers["controllino"] = (

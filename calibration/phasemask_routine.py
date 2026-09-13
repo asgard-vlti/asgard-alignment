@@ -452,7 +452,7 @@ if args.open_dms_here:
 
 
 
-message = f"fpm_movetomask phasemask{args.beam} {args.phasemask_name}"
+message = f"fpm_movetomask {args.beam} {args.phasemask_name}"
 res = send_and_get_response(message)
 print(res)
 
@@ -623,7 +623,7 @@ Ypos = float( send_and_get_response(message) )
 
 
 # # Update the current mask position
-message = f"fpm_updatemaskpos phasemask{args.beam} {args.phasemask_name}"
+message = f"fpm_update {args.beam} {args.phasemask_name} one"
 res = send_and_get_response(message)
 
 
@@ -671,7 +671,7 @@ plt.savefig( args.data_path + f'reference_mask_positions_beam{args.beam}.png')
 
 
 # # Update all other mask positions relative to the current (aquired!) mask
-message = f"fpm_updateallmaskpos phasemask{args.beam} {args.phasemask_name} {reference_mask_pos_file}"
+message = f"fpm_update {args.beam} {args.phasemask_name} all"
 res = send_and_get_response(message)
 
 
@@ -682,7 +682,7 @@ fig, axes = plt.subplots(5, 2, figsize=(10, 15))  # 5 rows, 2 columns
 for i, mask in enumerate([f"J{x}" for x in range(1, 6)]):
 
     # Send move command
-    message = f"fpm_movetomask phasemask{args.beam} {mask}"
+    message = f"fpm_movetomask {args.beam} {mask}"
     res = send_and_get_response(message)
     if "ACK" in res:
         print(f'Successfully moved to mask {mask}')
@@ -709,7 +709,7 @@ for i, mask in enumerate([f"J{x}" for x in range(1, 6)]):
 for i, mask in enumerate([f"H{x}" for x in range(1, 6)]):
     
     # Send move command
-    message = f"fpm_movetomask phasemask{args.beam} {mask}"
+    message = f"fpm_movetomask {args.beam} {mask}"
     res = send_and_get_response(message)
     if "ACK" in res:
         print(f'Successfully moved to mask {mask}')
@@ -742,7 +742,7 @@ plt.savefig(args.data_path + f'calibrated_phasemasks_beam{args.beam}_{tstamp}.pn
 write2file = int( input('write to file? enter 1 for yes, 0 for no') )
 
 if write2file:
-    message = f"fpm_writemaskpos phasemask{args.beam}"
+    message = f"fpm_write {args.beam}"
     res = send_and_get_response(message)
 
     if "ACK" in res:

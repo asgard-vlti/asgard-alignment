@@ -130,7 +130,7 @@ args=parser.parse_args()
 
 # move to phasemask 
 for beam_id in args.beam_id:
-    message = f"fpm_movetomask phasemask{beam_id} {args.phasemask}"
+    message = f"fpm_movetomask {beam_id} {args.phasemask}"
     res = send_and_get_response(message)
     print(f"moved to phasemask {args.phasemask} on beam {beam_id} with response: {res}")
 

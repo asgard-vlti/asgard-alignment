@@ -479,7 +479,7 @@ if usr_input == "0":
 
 # Move to phase mask
 for beam_id in args.beam_id:
-    message = f"fpm_movetomask phasemask{beam_id} {args.phasemask}"
+    message = f"fpm_movetomask {beam_id} {args.phasemask}"
     res = send_and_get_response(message)
     print(f"moved to phasemask {args.phasemask} with response: {res}")
 
@@ -583,7 +583,7 @@ print(
 )
 # Move to phase mask
 for beam_id in args.beam_id:
-    message = f"fpm_movetomask phasemask{beam_id} {args.phasemask}"
+    message = f"fpm_movetomask {beam_id} {args.phasemask}"
     res = send_and_get_response(message)
     print(f"moved to phasemask {args.phasemask} with response: {res}")
 
@@ -595,7 +595,7 @@ print(
 )
 # Move to phase mask
 for beam_id in args.beam_id:
-    message = f"fpm_movetomask phasemask{beam_id} {args.phasemask}"
+    message = f"fpm_movetomask {beam_id} {args.phasemask}"
     res = send_and_get_response(message)
     print(f"moved to phasemask {args.phasemask} with response: {res}")
 
@@ -1396,7 +1396,7 @@ for beam_id in args.beam_id:
 print(f"moving to phasemask {args.phasemask} reference position")
 # Move to phase mask
 for beam_id in args.beam_id:
-    message = f"fpm_movetomask phasemask{beam_id} {args.phasemask}"
+    message = f"fpm_movetomask {beam_id} {args.phasemask}"
     res = send_and_get_response(message)
     print(f"moved to phasemask {args.phasemask} with response: {res}")
 

@@ -284,7 +284,7 @@ c.start_camera()
 
 # phasemask
 for beam in [1,2,3,4]:
-    message = f"fpm_movetomask phasemask{beam} {args.phasemask_name}"
+    message = f"fpm_movetomask {beam} {args.phasemask_name}"
     res = send_and_get_response(message)
     print(res)
     time.sleep(2)

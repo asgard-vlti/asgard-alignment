@@ -308,7 +308,7 @@ for beam_id in args.beam_id:
 
 
 #---------- Move to phase mask
-message = f"fpm_movetomask phasemask{beam_id} {args.phasemask}"
+message = f"fpm_movetomask {beam_id} {args.phasemask}"
 mds_socket.send_string(message)
 response = mds_socket.recv_string()#.decode("ascii")
 print(f"moved to phasemask {args.phasemask}")

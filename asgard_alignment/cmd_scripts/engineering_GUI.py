@@ -280,7 +280,7 @@ def handle_phasemask():
 
     if submit:
 
-        message = f"fpm_movetomask {targets[0]} {preset_position}"
+        message = f"fpm_movetomask {beam} {preset_position}"
         st.write(f"{message}")
 
         res = send_and_get_response(message)
@@ -436,7 +436,7 @@ def handle_phasemask():
         # update_position_file(self, phase_positions_json ):
 
         # Save the updated positions to file
-        save_message = f"fpm_update_position_file {targets[0]} {selected_position_file}"
+        save_message = f"fpm_read {beam}"
         save_res = send_and_get_response(save_message)
 
         if "NACK" in save_res:
@@ -454,7 +454,7 @@ def handle_phasemask():
         ):
             if "unknown" not in st.session_state["selected_mask"][0].lower():
                 # Update the current mask position
-                message = f"fpm_updatemaskpos {targets[0]} {st.session_state['selected_mask'][0]}"
+                message = f"fpm_update {beam} {st.session_state['selected_mask'][0]} one"
                 res = send_and_get_response(message)
 
                 if "NACK" in res:
@@ -518,7 +518,7 @@ def handle_phasemask():
             if submit_reference_file:
                 if "unknown" not in st.session_state["selected_mask"][0].lower():
 
-                    message = f"fpm_updateallmaskpos {targets[0]} {st.session_state['selected_mask'][0]} {selected_reference_file}"
+                    message = f"fpm_update {beam} {st.session_state['selected_mask'][0]} all"
 
                     res = send_and_get_response(message)
 
@@ -545,7 +545,7 @@ def handle_phasemask():
                 # save_path = send_and_get_response(f"fpm_getsavepath {targets[0]}")
 
                 # Save the updated positions to file
-                save_message = f"fpm_writemaskpos {targets[0]}"
+                save_message = f"fpm_write {beam}"
                 save_res = send_and_get_response(save_message)
 
                 if "NACK" in save_res:
@@ -1519,11 +1519,11 @@ with col_main:
                 with col:
                     if st.button(f"H{mask}"):
                         for beam in [1, 2, 3, 4]:
-                            message = f"fpm_movetomask phasemask{beam} H{mask}"
+                            message = f"fpm_movetomask {beam} H{mask}"
                             res = send_and_get_response(message)
                     if st.button(f"J{mask}"):
                         for beam in [1, 2, 3, 4]:
-                            message = f"fpm_movetomask phasemask{beam} J{mask}"
+                            message = f"fpm_movetomask {beam} J{mask}"
                             res = send_and_get_response(message)
 
             # col1, col2 = st.columns(2)
