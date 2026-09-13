@@ -998,6 +998,31 @@ class MultiDeviceServer:
             ]
             return json.dumps(arguments or None)
 
+        def signature_msg(command_name):
+            command = commands.get(command_name)
+            if command is None:
+                return json.dumps({"error": f"Unknown command: {command_name}"})
+
+            return json.dumps(
+                {
+                    "arguments": [
+                        {
+                            "name": argument.name,
+                            "type": argument.type_name,
+                            "description": argument.description,
+                        }
+                        for argument in command.arguments
+                    ],
+                    "return_type": command.output_type,
+                }
+            )
+
+        def description_msg(command_name):
+            command = commands.get(command_name)
+            if command is None:
+                return f"NACK: Unknown command: {command_name}"
+            return command.info
+
         @dataclass(frozen=True)
         class CommandArgument:
             """Metadata for one command argument."""
@@ -1145,7 +1170,7 @@ class MultiDeviceServer:
                 output="ACK after both BMX and BMY move commands are issued.",
             ),
             "fpm_update": Command(
-                info="fpm_update {beam} {mask_name} {scope} - update named positions from the current focal plane mask position",
+                info="fpm_update {beam} {mask_name} {all|one|band} - update named positions from the current focal plane mask position",
                 format_str="fpm_update {} {} {}",
                 func=fpm_update_msg,
                 arguments=(
@@ -1405,6 +1430,29 @@ class MultiDeviceServer:
                 ),
                 output="JSON array of name/type/description objects, JSON null for a command without arguments, or an error object for an unknown command.",
                 output_type="JSON",
+            ),
+            "signature": Command(
+                info='signature "{command_name}" - get a command signature',
+                format_str='signature "{}"',
+                func=signature_msg,
+                arguments=(
+                    CommandArgument(
+                        "command_name", "str", "Name of the command to inspect."
+                    ),
+                ),
+                output="JSON object containing argument metadata and the return type, or an error object for an unknown command.",
+                output_type="JSON",
+            ),
+            "description": Command(
+                info='description "{command_name}" - get a command description',
+                format_str='description "{}"',
+                func=description_msg,
+                arguments=(
+                    CommandArgument(
+                        "command_name", "str", "Name of the command to inspect."
+                    ),
+                ),
+                output="The command usage and description, or NACK for an unknown command.",
             ),
             "command_names": Command(
                 info="command_names - list all available commands",
