@@ -43,12 +43,13 @@ def power_on_all():
 
     print("Box and camera powered on successfully.")
 
-    time.sleep(5)
+    time.sleep(4)
 
     # Ping test 192.168.100.10
     if not ping_test("192.168.100.10"):
         print("Ping test failed for 192.168.100.10 (controllino). Exiting.")
         sys.exit(1)
+    time.sleep(0.5)
 
     # run mds and engineering GUI
 
@@ -99,6 +100,8 @@ def power_on_instrument_only():
     if not ping_test("192.168.100.10"):
         print("Ping test failed for 192.168.100.10 (controllino). Exiting.")
         sys.exit(1)
+        
+    time.sleep(0.5)
 
     # run mds and engineering GUI
     # proc = multiprocessing.Process(target=mds_startup.main,args=(os.path.expanduser("~/logs/mds/log.txt"),))
