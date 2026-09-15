@@ -6,8 +6,6 @@ import os
 from asgard_alignment.PDU_telnet import AtenEcoPDU
 import sys
 import time
-import multiprocessing
-from . import mds_startup, eng_gui_startup
 import subprocess
 
 def ping_test(ip_address):
@@ -15,20 +13,20 @@ def ping_test(ip_address):
     return response == 0
 
 
-def power_on_all():
+def power_on_all(power_on_camera=False):
     # Box power ON through 192.168.100.11, port [05]
     pdu = AtenEcoPDU("192.168.100.11")
     pdu.connect()
-    print("Powering on the camera...")
-    pdu.switch_outlet_status(6, "on")
+    outlets_to_power = [5]
+    if power_on_camera:
+        print("Powering on the camera...")
+        pdu.switch_outlet_status(6, "on")
+        outlets_to_power.append(6)
 
     print("Powering on the box...")
     pdu.switch_outlet_status(5, "on")
 
-    is_on = {
-        5: False,
-        6: False,
-    }
+    is_on = {outlet: False for outlet in outlets_to_power}
 
     while not all(is_on.values()):
         for outlet in is_on.keys():
@@ -41,74 +39,33 @@ def power_on_all():
             print("Waiting for the power on...")
             time.sleep(1)  # wait for the box to power on
 
-    print("Box and camera powered on successfully.")
+    print(
+        "Box and camera powered on successfully."
+        if power_on_camera
+        else "Box powered on successfully."
+    )
 
-    time.sleep(4)
-
-    # Ping test 192.168.100.10
-    if not ping_test("192.168.100.10"):
-        print("Ping test failed for 192.168.100.10 (controllino). Exiting.")
-        sys.exit(1)
-    time.sleep(0.5)
-
-    # run mds and engineering GUI
-
-    # to not start the browser for the engineering GUI, use the option
-    # "streamlit run xxx.py --server.headless true"
-    mds_startup.main()  # !!!! The new thing being tested
-    eng_gui_startup.main()
-    print("yep")
-    cmds = [
-        # "test_mds",
-        # "test_eng_gui",
-    ]
-    for cmd in cmds:
-        print(f"Running command: {cmd}")
-        res = os.system(cmd)
-        if res != 0:
-            print(f"Command '{cmd}' failed. Exiting.")
-            sys.exit(1)
-        # if not the last, wait 15 seconds
-        if cmd != cmds[-1]:
-            time.sleep(15)
-
-    print("All commands executed successfully. Instrument startup complete.")
-    print("Load a state using the gui, and run 'fetch' on the camera server")
-
-
-def power_on_instrument_only():
-
-    # Box power ON through 192.168.100.11, port [05]
-    pdu = AtenEcoPDU("192.168.100.11")
-    pdu.connect()
-    print("Powering on the box...")
-    pdu.switch_outlet_status(5, "on")
-    time.sleep(4)  # wait for the box to power on
-    res = pdu.read_outlet_status(5)
-    time.sleep(4)  # wait for the box to power on
-    # check
-    res = pdu.read_outlet_status(5)
-    if res != "on":
-        print(res)
-        print("Failed to power on the box. Exiting.")
-        sys.exit(1)
-    print("Box powered on successfully.")
-
-    time.sleep(2)
+    time.sleep(3)
 
     # Ping test 192.168.100.10
     if not ping_test("192.168.100.10"):
         print("Ping test failed for 192.168.100.10 (controllino). Exiting.")
         sys.exit(1)
-        
+    
+    # Start the installed status GUI in its own session so it outlives this terminal.
+    print("Starting status-mimir...")
+    subprocess.Popen(
+        ["/home/asg/.conda/envs/asgard/bin/status-mimir"],
+        start_new_session=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    
+    # Sleep a tiny bit more, for MDS boot-up.
     time.sleep(0.5)
 
-    # run mds and engineering GUI
-    # proc = multiprocessing.Process(target=mds_startup.main,args=(os.path.expanduser("~/logs/mds/log.txt"),))
-    # proc.start()
-    # mds_startup.main(os.path.expanduser("~/logs/mds/log.txt"))
-    # eng_gui_startup.main(os.path.expanduser("~/logs/eng_gui/log.txt"))
-    # Try spawning as subprocesses from the script instead
+    # Start services as subprocesses so they remain independent of this script.
     print("Starting MDS, expect ~5s delay...")
     subprocess.run("/usr/local/bin/run_mds")
     time.sleep(5)
@@ -146,6 +103,10 @@ def power_on_instrument_only():
     #This is telemetry for heimdally and baldr_tt
     print("Starting telemetry...")
     subprocess.run("/usr/local/bin/run_telem")
+    
+    #Loading the laboratory flats
+    print("Loading laboratory flats...")
+    subprocess.run("/home/asg/.conda/envs/asgard/bin/flat-load -1 lab")
 
     cmds = [
         # "test_mds",
@@ -159,8 +120,6 @@ def power_on_instrument_only():
             print(f"Command '{cmd}' failed. Exiting.")
             sys.exit(1)
 
-    # proc.join() - can't do this, the mds_startup process never ends
-
     print("All commands executed successfully. Instrument startup complete.")
     print("Load a state using the gui, and run 'fetch' on the camera server")
 
@@ -173,9 +132,9 @@ def main():
         .lower()
     )
     if inp == "y":
-        power_on_all()
+        power_on_all(power_on_camera=True)
     elif inp == "n":
-        power_on_instrument_only()
+        power_on_all()
     else:
         print("Invalid input. Please enter 'y' or 'n'.")
         sys.exit(1)
