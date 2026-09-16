@@ -104,21 +104,10 @@ def power_on_all(power_on_camera=False):
     print("Starting telemetry...")
     subprocess.run("/usr/local/bin/run_telem")
     
-    #Loading the laboratory flats
+    #Loading the laboratory (internal) flats
+    time.sleep(1)
     print("Loading laboratory flats...")
     subprocess.run("/home/asg/.conda/envs/asgard/bin/flat-load -1 lab")
-
-    cmds = [
-        # "test_mds",
-        # "test_eng_gui",
-    ]
-    for cmd in cmds:
-        print(f"Running command: {cmd}")
-        res = os.system(cmd)
-        time.sleep(15)
-        if res != 0:
-            print(f"Command '{cmd}' failed. Exiting.")
-            sys.exit(1)
 
     print("All commands executed successfully. Instrument startup complete.")
     print("Load a state using the gui, and run 'fetch' on the camera server")
