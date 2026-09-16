@@ -105,9 +105,8 @@ def power_on_all(power_on_camera=False):
     subprocess.run("/usr/local/bin/run_telem")
     
     #Loading the laboratory (internal) flats
-    time.sleep(1)
     print("Loading laboratory flats...")
-    subprocess.run("/home/asg/.conda/envs/asgard/bin/flat-load -1 lab")
+    subprocess.run(["/home/asg/.conda/envs/asgard/bin/flat-load", "-1", "lab"])
 
     print("All commands executed successfully. Instrument startup complete.")
     print("Load a state using the gui, and run 'fetch' on the camera server")
