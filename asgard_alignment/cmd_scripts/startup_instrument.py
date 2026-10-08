@@ -8,6 +8,7 @@ import sys
 import time
 import subprocess
 
+
 def ping_test(ip_address):
     response = os.system(f"ping -c 1 {ip_address} > /dev/null 2>&1")
     return response == 0
@@ -49,9 +50,14 @@ def power_on_all(power_on_camera=False):
 
     # Ping test 192.168.100.10
     if not ping_test("192.168.100.10"):
-        print("Ping test failed for 192.168.100.10 (controllino). Exiting.")
-        sys.exit(1)
-    
+        print(
+            "Ping test failed for 192.168.100.10 (controllino). Trying once more time..."
+        )
+        time.sleep(5)
+        if not ping_test("192.168.100.10"):
+            print("Ping test failed for 192.168.100.10 (controllino). Exiting.")
+            sys.exit(1)
+
     # Start the installed status GUI in its own session so it outlives this terminal.
     print("Starting status-mimir...")
     subprocess.Popen(
@@ -61,7 +67,7 @@ def power_on_all(power_on_camera=False):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    
+
     # Sleep a tiny bit more, for MDS boot-up.
     time.sleep(0.5)
 
@@ -77,7 +83,7 @@ def power_on_all(power_on_camera=False):
     time.sleep(15)
     subprocess.run("/usr/local/bin/run_DM_server")
     time.sleep(5)
-    
+
     print("Starting RTTs (Heimdallr and Baldr, if not already started)...")
     subprocess.run("/usr/local/bin/run_heimdallr")
     subprocess.run(["/usr/local/bin/run_baldr_tt", "1"])
@@ -94,17 +100,17 @@ def power_on_all(power_on_camera=False):
     # The back_end_server is DCS as far as wag is concerned.
     subprocess.run("/usr/local/bin/run_back_end_server")
 
-    #The MCS client passes information to WAG. If wag isn't started up, hopefully it is robust!
-    #As this is program that communicates with everything, it is used for the "mimir status" gui.
+    # The MCS client passes information to WAG. If wag isn't started up, hopefully it is robust!
+    # As this is program that communicates with everything, it is used for the "mimir status" gui.
     # Currently does not exist
     print("Starting MCS client...")
     subprocess.run("/usr/local/bin/run_mcs_client")
 
-    #This is telemetry for heimdally and baldr_tt
+    # This is telemetry for heimdally and baldr_tt
     print("Starting telemetry...")
     subprocess.run("/usr/local/bin/run_telem")
-    
-    #Loading the laboratory (internal) flats
+
+    # Loading the laboratory (internal) flats
     time.sleep(1)
     print("Loading laboratory flats...")
     subprocess.run("/home/asg/.conda/envs/asgard/bin/flat-load -1 lab")
