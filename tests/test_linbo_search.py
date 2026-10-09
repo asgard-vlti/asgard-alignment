@@ -17,9 +17,10 @@ SPEC.loader.exec_module(linbo_search)
 
 
 class FakeMdsSocket:
-    def __init__(self, events, starting_position=1000):
+    def __init__(self, events, starting_position=1000, reject_position=None):
         self.events = events
         self.position = starting_position
+        self.reject_position = reject_position
 
     def send_string(self, command):
         self.events.append(command)
@@ -29,7 +30,12 @@ class FakeMdsSocket:
         if self.command.startswith("read HPOL"):
             return str(self.position)
         if self.command.startswith("moveabs HPOL"):
-            self.position = int(self.command.split()[-1])
+            position_text = self.command.split()[-1]
+            if "." not in position_text:
+                return "NACK: expected a float"
+            if float(position_text) == self.reject_position:
+                return "NACK: move rejected"
+            self.position = int(float(position_text))
             return "ACK"
         raise AssertionError(self.command)
 
@@ -82,7 +88,7 @@ class LinboSearchTests(unittest.TestCase):
             events[:7],
             [
                 "read HPOL1",
-                "moveabs HPOL1 850",
+                "moveabs HPOL1 850.0",
                 "read HPOL1",
                 ("find-fringes", "K1", "8", "0.5"),
                 ("h-tilts",),
@@ -90,7 +96,7 @@ class LinboSearchTests(unittest.TestCase):
                 "status",
             ],
         )
-        self.assertEqual(events[-2:], ["moveabs HPOL1 1000", "read HPOL1"])
+        self.assertEqual(events[-3:], ["read HPOL1", "moveabs HPOL1 1000.0", "read HPOL1"])
 
         with tempfile.TemporaryDirectory() as directory:
             with mock.patch.object(linbo_search.Path, "cwd", return_value=Path(directory)):
@@ -135,7 +141,19 @@ class LinboSearchTests(unittest.TestCase):
             linbo_search.run_scan(mds, FakeHeimdallrSocket(events), fail_on_tilts)
 
         self.assertEqual(mds.position, 1000)
-        self.assertEqual(events[-2:], ["moveabs HPOL1 1000", "read HPOL1"])
+        self.assertEqual(events[-3:], ["read HPOL1", "moveabs HPOL1 1000.0", "read HPOL1"])
+
+    def test_rejected_first_move_keeps_original_error_and_position(self):
+        events = []
+        mds = FakeMdsSocket(events, starting_position=0, reject_position=-150)
+
+        with self.assertRaisesRegex(RuntimeError, "move rejected"):
+            linbo_search.run_scan(
+                mds, FakeHeimdallrSocket(events), lambda *_args, **_kwargs: None
+            )
+
+        self.assertEqual(mds.position, 0)
+        self.assertEqual(events.count("moveabs HPOL1 0.0"), 0)
 
     def test_other_beam_selects_its_three_baselines(self):
         events = []

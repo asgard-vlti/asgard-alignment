@@ -45,7 +45,7 @@ def read_hpol(socket, beam):
 
 
 def move_hpol(socket, beam, position):
-    response = request(socket, f"moveabs HPOL{beam} {position}")
+    response = request(socket, f"moveabs HPOL{beam} {float(position)}")
     if response != "ACK":
         raise RuntimeError(f"MDS rejected HPOL{beam} move to {position}: {response}")
 
@@ -111,13 +111,16 @@ def run_scan(mds_socket, heimdallr_socket, run_command=subprocess.run):
                 heimdallr_socket, baseline_indices
             )
     finally:
-        print(f"Restoring HPOL{beam_number} to {starting_position}")
         try:
-            move_hpol(mds_socket, beam_number, starting_position)
+            if read_hpol(mds_socket, beam_number) != starting_position:
+                print(f"Restoring HPOL{beam_number} to {starting_position}")
+                move_hpol(mds_socket, beam_number, starting_position)
         except zmq.ZMQError:
             restore_socket = open_socket(mds_socket.context, MDS_ENDPOINT)
             try:
-                move_hpol(restore_socket, beam_number, starting_position)
+                if read_hpol(restore_socket, beam_number) != starting_position:
+                    print(f"Restoring HPOL{beam_number} to {starting_position}")
+                    move_hpol(restore_socket, beam_number, starting_position)
             finally:
                 restore_socket.close()
 
