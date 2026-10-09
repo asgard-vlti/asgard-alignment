@@ -9,6 +9,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as onp
 import zmq
+from tqdm import tqdm
 
 
 beam_number = 1
@@ -99,8 +100,9 @@ def run_scan(mds_socket, heimdallr_socket, run_command=subprocess.run):
     ]
 
     try:
-        for index, position in enumerate(positions):
-            print(f"Sample {index + 1}/{scan_nsteps}: HPOL{beam_number} = {position}")
+        for index, position in enumerate(
+            tqdm(positions, desc=f"HPOL{beam_number} sweep", unit="position")
+        ):
             move_hpol(mds_socket, beam_number, int(position))
             run_command(fringe_command, check=True)
             run_command(["h-tilts"], check=True)
