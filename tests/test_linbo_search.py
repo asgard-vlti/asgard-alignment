@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -67,8 +68,10 @@ class LinboSearchTests(unittest.TestCase):
         mds = FakeMdsSocket(events)
         heimdallr = FakeHeimdallrSocket(events)
 
-        def run_command(command, check):
+        def run_command(command, check, stdout, stderr):
             self.assertTrue(check)
+            self.assertEqual(stderr, subprocess.STDOUT)
+            stdout.write("verbose child output\n")
             events.append(tuple(command))
 
         results = linbo_search.run_scan(mds, heimdallr, run_command)
@@ -132,7 +135,7 @@ class LinboSearchTests(unittest.TestCase):
         events = []
         mds = FakeMdsSocket(events)
 
-        def fail_on_tilts(command, check):
+        def fail_on_tilts(command, check, stdout, stderr):
             events.append(tuple(command))
             if command == ["h-tilts"]:
                 raise RuntimeError("h-tilts failed")
@@ -154,6 +157,17 @@ class LinboSearchTests(unittest.TestCase):
 
         self.assertEqual(mds.position, 0)
         self.assertEqual(events.count("moveabs HPOL1 0.0"), 0)
+
+    def test_failed_command_reports_recent_output(self):
+        def fail(command, check, stdout, stderr):
+            for index in range(25):
+                stdout.write(f"line {index}\n")
+            raise subprocess.CalledProcessError(2, command)
+
+        with self.assertRaisesRegex(RuntimeError, "line 24") as error:
+            linbo_search.run_quiet_command(["find-fringes", "K1", "8", "0.5"], fail)
+
+        self.assertNotIn("line 0\n", str(error.exception))
 
     def test_other_beam_selects_its_three_baselines(self):
         events = []

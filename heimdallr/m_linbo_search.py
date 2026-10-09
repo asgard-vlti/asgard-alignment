@@ -2,7 +2,9 @@
 
 import json
 import subprocess
+import tempfile
 import time
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 
@@ -68,6 +70,21 @@ def sample_visibilities(socket, baseline_indices):
     return samples.mean(axis=0)
 
 
+def run_quiet_command(command, run_command):
+    with tempfile.TemporaryFile(mode="w+t") as output:
+        try:
+            run_command(
+                command, check=True, stdout=output, stderr=subprocess.STDOUT
+            )
+        except subprocess.CalledProcessError as error:
+            output.seek(0)
+            recent_output = "".join(deque(output, maxlen=20)).strip()
+            message = f"{' '.join(command)} failed with exit code {error.returncode}"
+            if recent_output:
+                message += f"\nLast output lines:\n{recent_output}"
+            raise RuntimeError(message) from error
+
+
 def run_scan(mds_socket, heimdallr_socket, run_command=subprocess.run):
     if beam_number not in (1, 2, 3, 4):
         raise ValueError("beam_number must be between 1 and 4")
@@ -100,16 +117,20 @@ def run_scan(mds_socket, heimdallr_socket, run_command=subprocess.run):
     ]
 
     try:
-        for index, position in enumerate(
-            tqdm(positions, desc=f"HPOL{beam_number} sweep", unit="position")
-        ):
-            move_hpol(mds_socket, beam_number, int(position))
-            run_command(fringe_command, check=True)
-            run_command(["h-tilts"], check=True)
-            run_command(fringe_command, check=True)
-            averaged_v2[index] = sample_visibilities(
-                heimdallr_socket, baseline_indices
-            )
+        with tqdm(positions, desc=f"HPOL{beam_number} sweep", unit="position") as progress:
+            for index, position in enumerate(progress):
+                progress.set_postfix_str(f"{position} steps: moving")
+                move_hpol(mds_socket, beam_number, int(position))
+                progress.set_postfix_str(f"{position} steps: fringes 1/2")
+                run_quiet_command(fringe_command, run_command)
+                progress.set_postfix_str(f"{position} steps: tilts")
+                run_quiet_command(["h-tilts"], run_command)
+                progress.set_postfix_str(f"{position} steps: fringes 2/2")
+                run_quiet_command(fringe_command, run_command)
+                progress.set_postfix_str(f"{position} steps: sampling")
+                averaged_v2[index] = sample_visibilities(
+                    heimdallr_socket, baseline_indices
+                )
     finally:
         try:
             if read_hpol(mds_socket, beam_number) != starting_position:
