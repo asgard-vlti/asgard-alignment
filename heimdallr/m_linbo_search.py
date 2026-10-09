@@ -19,10 +19,6 @@ scan_nsteps = 15
 fringe_band = "K1"
 fringe_srange = 8
 fringe_step = 1.0
-hfo_um_per_200_hpol_steps = 25
-initial_fringe_band = "K1"
-initial_fringe_srange = 50
-initial_fringe_step = 5
 status_message_count = 50
 
 MDS_ENDPOINT = "tcp://192.168.100.2:5555"
@@ -49,31 +45,12 @@ def read_hpol(socket, beam):
     return int(request(socket, f"read HPOL{beam}"))
 
 
-def move_hpol(socket, beam, position):
-    response = request(socket, f"moveabs HPOL{beam} {float(position)}")
-    if response != "ACK":
-        raise RuntimeError(f"MDS rejected HPOL{beam} move to {position}: {response}")
-
+def move_hpol(socket, beam, position, run_command):
+    run_quiet_command(["move-hpol", str(beam), str(int(position))], run_command)
     deadline = time.monotonic() + MOVE_TIMEOUT_SECONDS
     while read_hpol(socket, beam) != position:
         if time.monotonic() >= deadline:
             raise TimeoutError(f"HPOL{beam} did not reach {position} steps")
-        time.sleep(0.2)
-
-
-def read_hfo(socket, beam):
-    return float(request(socket, f"read HFO{beam}"))
-
-
-def move_hfo(socket, beam, position):
-    response = request(socket, f"moveabs HFO{beam} {position:.5f}")
-    if response != "ACK":
-        raise RuntimeError(f"MDS rejected HFO{beam} move to {position}: {response}")
-
-    deadline = time.monotonic() + MOVE_TIMEOUT_SECONDS
-    while abs(read_hfo(socket, beam) - position) > 0.001:
-        if time.monotonic() >= deadline:
-            raise TimeoutError(f"HFO{beam} did not reach {position:.5f} mm")
         time.sleep(0.2)
 
 
@@ -111,7 +88,6 @@ def run_scan(mds_socket, heimdallr_socket, run_command=subprocess.run):
         )
 
     starting_position = read_hpol(mds_socket, beam_number)
-    starting_hfo_position_mm = read_hfo(mds_socket, beam_number)
     positions = onp.rint(
         onp.linspace(
             starting_position - scan_width / 2,
@@ -135,36 +111,16 @@ def run_scan(mds_socket, heimdallr_socket, run_command=subprocess.run):
         str(fringe_srange),
         str(fringe_step),
     ]
-    initial_fringe_command = [
-        "find-fringes",
-        initial_fringe_band,
-        str(initial_fringe_srange),
-        str(initial_fringe_step),
-    ]
-
     try:
         with tqdm(
             positions, desc=f"HPOL{beam_number} sweep", unit="position"
         ) as progress:
             for index, position in enumerate(progress):
                 progress.set_postfix_str(f"{position} steps: moving")
-                move_hpol(mds_socket, beam_number, int(position))
-                if index == 0:
-                    progress.set_postfix_str(f"{position} steps: HFO feed-forward")
-                    hfo_delta_um = (
-                        (int(position) - starting_position)
-                        * hfo_um_per_200_hpol_steps
-                        / 200
-                    )
-                    hfo_target_mm = starting_hfo_position_mm + hfo_delta_um / 1000
-                    move_hfo(mds_socket, beam_number, hfo_target_mm)
-                    progress.set_postfix_str(f"{position} steps: coarse fringes")
-                    run_quiet_command(initial_fringe_command, run_command)
-                progress.set_postfix_str(f"{position} steps: fringes 1/2")
-                run_quiet_command(fringe_command, run_command)
+                move_hpol(mds_socket, beam_number, int(position), run_command)
                 progress.set_postfix_str(f"{position} steps: tilts")
                 run_quiet_command(["h-tilts"], run_command)
-                progress.set_postfix_str(f"{position} steps: fringes 2/2")
+                progress.set_postfix_str(f"{position} steps: fringes")
                 run_quiet_command(fringe_command, run_command)
                 progress.set_postfix_str(f"{position} steps: sampling")
                 averaged_v2[index] = sample_visibilities(
@@ -174,13 +130,13 @@ def run_scan(mds_socket, heimdallr_socket, run_command=subprocess.run):
         try:
             if read_hpol(mds_socket, beam_number) != starting_position:
                 print(f"Restoring HPOL{beam_number} to {starting_position}")
-                move_hpol(mds_socket, beam_number, starting_position)
+                move_hpol(mds_socket, beam_number, starting_position, run_command)
         except zmq.ZMQError:
             restore_socket = open_socket(mds_socket.context, MDS_ENDPOINT)
             try:
                 if read_hpol(restore_socket, beam_number) != starting_position:
                     print(f"Restoring HPOL{beam_number} to {starting_position}")
-                    move_hpol(restore_socket, beam_number, starting_position)
+                    move_hpol(restore_socket, beam_number, starting_position, run_command)
             finally:
                 restore_socket.close()
 
@@ -203,10 +159,6 @@ def save_results(starting_position, positions, baseline_labels, averaged_v2):
         fringe_band=fringe_band,
         fringe_srange=fringe_srange,
         fringe_step=fringe_step,
-        hfo_um_per_200_hpol_steps=hfo_um_per_200_hpol_steps,
-        initial_fringe_band=initial_fringe_band,
-        initial_fringe_srange=initial_fringe_srange,
-        initial_fringe_step=initial_fringe_step,
         status_message_count=status_message_count,
     )
     print(f"Saved {data_path}")
