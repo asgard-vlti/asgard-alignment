@@ -18,9 +18,12 @@ SPEC.loader.exec_module(linbo_search)
 
 
 class FakeMdsSocket:
-    def __init__(self, events, starting_position=1000, reject_position=None):
+    def __init__(
+        self, events, starting_position=1000, starting_hfo=8.0, reject_position=None
+    ):
         self.events = events
         self.position = starting_position
+        self.hfo_position = starting_hfo
         self.reject_position = reject_position
 
     def send_string(self, command):
@@ -30,6 +33,8 @@ class FakeMdsSocket:
     def recv_string(self):
         if self.command.startswith("read HPOL"):
             return str(self.position)
+        if self.command.startswith("read HFO"):
+            return str(self.hfo_position)
         if self.command.startswith("moveabs HPOL"):
             position_text = self.command.split()[-1]
             if "." not in position_text:
@@ -37,6 +42,9 @@ class FakeMdsSocket:
             if float(position_text) == self.reject_position:
                 return "NACK: move rejected"
             self.position = int(float(position_text))
+            return "ACK"
+        if self.command.startswith("moveabs HFO"):
+            self.hfo_position = float(self.command.split()[-1])
             return "ACK"
         raise AssertionError(self.command)
 
@@ -85,17 +93,29 @@ class LinboSearchTests(unittest.TestCase):
         onp.testing.assert_array_equal(averaged[0, 1], [10.5, 11.5, 12.5])
         self.assertEqual(heimdallr.count, 11 * 50)
         self.assertEqual(mds.position, starting_position)
-        self.assertEqual(events.count(("find-fringes", "K1", "8", "0.5")), 22)
+        self.assertAlmostEqual(mds.hfo_position, 7.98125)
+        normal_fringe_command = (
+            "find-fringes",
+            linbo_search.fringe_band,
+            str(linbo_search.fringe_srange),
+            str(linbo_search.fringe_step),
+        )
+        self.assertEqual(events.count(normal_fringe_command), 22)
+        self.assertEqual(events.count(("find-fringes", "K1", "50", "5")), 1)
         self.assertEqual(events.count(("h-tilts",)), 11)
         self.assertEqual(
-            events[:7],
+            events[:11],
             [
                 "read HPOL1",
+                "read HFO1",
                 "moveabs HPOL1 850.0",
                 "read HPOL1",
-                ("find-fringes", "K1", "8", "0.5"),
+                "moveabs HFO1 7.98125",
+                "read HFO1",
+                ("find-fringes", "K1", "50", "5"),
+                normal_fringe_command,
                 ("h-tilts",),
-                ("find-fringes", "K1", "8", "0.5"),
+                normal_fringe_command,
                 "status",
             ],
         )
@@ -128,7 +148,11 @@ class LinboSearchTests(unittest.TestCase):
                 self.assertEqual(int(saved["scan_nsteps"]), 11)
                 self.assertEqual(str(saved["fringe_band"]), "K1")
                 self.assertEqual(float(saved["fringe_srange"]), 8)
-                self.assertEqual(float(saved["fringe_step"]), 0.5)
+                self.assertEqual(float(saved["fringe_step"]), linbo_search.fringe_step)
+                self.assertEqual(float(saved["hfo_um_per_200_hpol_steps"]), 25)
+                self.assertEqual(str(saved["initial_fringe_band"]), "K1")
+                self.assertEqual(float(saved["initial_fringe_srange"]), 50)
+                self.assertEqual(float(saved["initial_fringe_step"]), 5)
                 self.assertEqual(int(saved["status_message_count"]), 50)
 
     def test_command_failure_restores_hpol(self):
