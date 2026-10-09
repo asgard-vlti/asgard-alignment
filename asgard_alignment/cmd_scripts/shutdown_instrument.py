@@ -54,7 +54,9 @@ def restart_mds_from_path():
     subprocess.run(["run_mds"], check=True)
 
 
-def wait_for_mds(host, port, total_wait_s=MDS_WAIT_TIMEOUT_S, poll_s=MDS_POLL_INTERVAL_S):
+def wait_for_mds(
+    host, port, total_wait_s=MDS_WAIT_TIMEOUT_S, poll_s=MDS_POLL_INTERVAL_S
+):
     deadline = time.time() + total_wait_s
     while time.time() < deadline:
         if is_tcp_port_open(host, port):
@@ -82,7 +84,9 @@ def get_mds_connection_or_recover():
                 "run_mds was not found on PATH. Install/activate it before running shutdown."
             ) from exc
         except subprocess.CalledProcessError as exc:
-            raise RuntimeError(f"run_mds failed with exit code {exc.returncode}.") from exc
+            raise RuntimeError(
+                f"run_mds failed with exit code {exc.returncode}."
+            ) from exc
 
         print("Waiting for MDS to become reachable...")
         if not wait_for_mds(MDS_HOST, MDS_PORT):
@@ -117,17 +121,17 @@ def shutdown(inc_CRED):
 
     date = time.strftime("%Y-%m-%d %H:%M:%S")
 
-    # try:
-    #     res = send_and_get_response(mds_connection, f"save all before_shutdown_{date}")
-    #     print("saved", res)
-    # except zmq.error.Again:
-    #     inp = input(
-    #         "MDS did not respond (and hence state is not saved). Do you want to continue with shutdown? (y/n): "
-    #     )
-    #     if inp.lower() != "y":
-    #         print("Aborting shutdown.")
-    #         return
-    #     print("Proceeding with shutdown...")
+    try:
+        res = send_and_get_response(mds_connection, f"save all before_shutdown_{date}")
+        print("saved", res)
+    except zmq.error.Again:
+        inp = input(
+            "MDS did not respond (and hence state is not saved). Do you want to continue with shutdown? (y/n): "
+        )
+        if inp.lower() != "y":
+            print("Aborting shutdown.")
+            return
+        print("Proceeding with shutdown...")
 
     if inc_CRED:
         if not wait_for_tcp_port(MDS_HOST, C_RED_PORT, C_RED_WAIT_TIMEOUT_S):

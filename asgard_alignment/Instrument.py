@@ -336,8 +336,7 @@ class Instrument:
             }
             if is_connected:
                 res = self.devices[name].read_position()
-                if res != "None":
-                    state["position"] = float(res)
+                state["position"] = float(res)
             states.append(state)
             logging.info(state)
 
