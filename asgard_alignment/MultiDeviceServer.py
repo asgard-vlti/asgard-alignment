@@ -1120,7 +1120,7 @@ class MultiDeviceServer:
             ),
             "moverel": Command(
                 info="moverel {axis} {position} - move axis by relative position",
-                format_str="moverel {} {:f}",
+                format_str="moverel {} {:g}",
                 func=moverel_msg,
                 arguments=(
                     CommandArgument("axis", "str", "Motor device name."),
