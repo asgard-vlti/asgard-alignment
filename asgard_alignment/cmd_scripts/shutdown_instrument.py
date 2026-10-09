@@ -12,6 +12,7 @@ MDS_HOST = "192.168.100.2"
 MDS_PORT = 5555
 MDS_WAIT_TIMEOUT_S = 45
 MDS_POLL_INTERVAL_S = 1
+DM_PORT = 6666
 C_RED_PORT = 6667
 C_RED_WAIT_TIMEOUT_S = 10
 
@@ -111,6 +112,34 @@ def send_with_mds_recovery(mds_connection, command):
             ) from exc
 
 
+def send_server_shutdown_commands(server_name, port, commands):
+    if not is_tcp_port_open(MDS_HOST, port):
+        print(f"{server_name} is already unreachable; skipping its shutdown commands.")
+        return True
+
+    try:
+        connection = open_zmq_connection(port)
+    except zmq.ZMQError as exc:
+        print(f"Could not connect to {server_name}: {exc}")
+        return False
+    try:
+        for command in commands:
+            print(f"Sending '{command}' to {server_name}...")
+            try:
+                response = send_and_get_response(connection, command)
+            except zmq.ZMQError as exc:
+                print(f"{server_name} did not acknowledge '{command}': {exc}")
+                return False
+            print(f"{server_name} response: {response}")
+            if response.lstrip().lower().startswith("error:"):
+                print(f"{server_name} rejected '{command}'.")
+                return False
+    finally:
+        connection.close(linger=0)
+
+    return True
+
+
 def shutdown(inc_CRED):
     try:
         mds_connection = get_mds_connection_or_recover()
@@ -189,14 +218,18 @@ def shutdown(inc_CRED):
     post_shutdown_current = float(pdu.read_power_value("olt", LOWER_BOX_OUTLET, "curr"))
     print(f"Post-shutdown current: {post_shutdown_current} A")
 
-    input(
-        "Type 'exit' in text client for DM server. Kill the MDS and engineering GUI, then press Enter to continue..."
-    )
+    if not send_server_shutdown_commands("DM server", DM_PORT, ("exit",)):
+        print("Aborting shutdown before switching off the lower-box outlet.")
+        return
+
+    input("Kill the MDS and engineering GUI, then press Enter to continue...")
 
     if not inc_CRED:
-        input(
-            "In C red server text client, type 'stop' and then type 'exit'. Then press Enter here to continue..."
-        )
+        if not send_server_shutdown_commands(
+            "C-RED server", C_RED_PORT, ("stop", "exit")
+        ):
+            print("Aborting shutdown before switching off the lower-box outlet.")
+            return
 
     pdu = AtenEcoPDU("192.168.100.11")
     pdu.connect()
