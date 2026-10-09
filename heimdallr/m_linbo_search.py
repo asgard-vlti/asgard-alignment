@@ -13,13 +13,12 @@ import numpy as onp
 import zmq
 from tqdm import tqdm
 
-
 beam_number = 1
 scan_width = 300
 scan_nsteps = 11
 fringe_band = "K1"
 fringe_srange = 8
-fringe_step = 0.5
+fringe_step = 1.0
 status_message_count = 50
 
 MDS_ENDPOINT = "tcp://192.168.100.2:5555"
@@ -73,9 +72,7 @@ def sample_visibilities(socket, baseline_indices):
 def run_quiet_command(command, run_command):
     with tempfile.TemporaryFile(mode="w+t") as output:
         try:
-            run_command(
-                command, check=True, stdout=output, stderr=subprocess.STDOUT
-            )
+            run_command(command, check=True, stdout=output, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as error:
             output.seek(0)
             recent_output = "".join(deque(output, maxlen=20)).strip()
@@ -89,7 +86,9 @@ def run_scan(mds_socket, heimdallr_socket, run_command=subprocess.run):
     if beam_number not in (1, 2, 3, 4):
         raise ValueError("beam_number must be between 1 and 4")
     if scan_width <= 0 or scan_nsteps < 2:
-        raise ValueError("scan_width must be positive and scan_nsteps must be at least 2")
+        raise ValueError(
+            "scan_width must be positive and scan_nsteps must be at least 2"
+        )
 
     starting_position = read_hpol(mds_socket, beam_number)
     positions = onp.rint(
@@ -117,7 +116,9 @@ def run_scan(mds_socket, heimdallr_socket, run_command=subprocess.run):
     ]
 
     try:
-        with tqdm(positions, desc=f"HPOL{beam_number} sweep", unit="position") as progress:
+        with tqdm(
+            positions, desc=f"HPOL{beam_number} sweep", unit="position"
+        ) as progress:
             for index, position in enumerate(progress):
                 progress.set_postfix_str(f"{position} steps: moving")
                 move_hpol(mds_socket, beam_number, int(position))
