@@ -25,6 +25,7 @@ class FakeMdsSocket:
         self.position = starting_position
         self.hfo_position = starting_hfo
         self.reject_position = reject_position
+        self.hfo_after_moves = []
 
     def send_string(self, command):
         self.events.append(command)
@@ -33,20 +34,21 @@ class FakeMdsSocket:
     def recv_string(self):
         if self.command.startswith("read HPOL"):
             return str(self.position)
-        if self.command.startswith("read HFO"):
-            return str(self.hfo_position)
-        if self.command.startswith("moveabs HPOL"):
-            position_text = self.command.split()[-1]
-            if "." not in position_text:
-                return "NACK: expected a float"
-            if float(position_text) == self.reject_position:
-                return "NACK: move rejected"
-            self.position = int(float(position_text))
-            return "ACK"
-        if self.command.startswith("moveabs HFO"):
-            self.hfo_position = float(self.command.split()[-1])
-            return "ACK"
         raise AssertionError(self.command)
+
+    def run_command(self, command, check, stdout, stderr):
+        if not check or stderr != subprocess.STDOUT:
+            raise AssertionError("Command output must be captured and checked")
+        stdout.write("verbose child output\n")
+        self.events.append(tuple(command))
+        if command[0] == "move-hpol":
+            target = int(command[2])
+            if target == self.reject_position:
+                stdout.write("move rejected\n")
+                raise subprocess.CalledProcessError(1, command)
+            self.hfo_position += (target - self.position) * 0.11 / 1000
+            self.position = target
+            self.hfo_after_moves.append(self.hfo_position)
 
 
 class FakeHeimdallrSocket:
@@ -75,14 +77,7 @@ class LinboSearchTests(unittest.TestCase):
         events = []
         mds = FakeMdsSocket(events)
         heimdallr = FakeHeimdallrSocket(events)
-
-        def run_command(command, check, stdout, stderr):
-            self.assertTrue(check)
-            self.assertEqual(stderr, subprocess.STDOUT)
-            stdout.write("verbose child output\n")
-            events.append(tuple(command))
-
-        results = linbo_search.run_scan(mds, heimdallr, run_command)
+        results = linbo_search.run_scan(mds, heimdallr, mds.run_command)
         starting_position, positions, labels, averaged = results
 
         self.assertEqual(starting_position, 1000)
@@ -93,33 +88,32 @@ class LinboSearchTests(unittest.TestCase):
         onp.testing.assert_array_equal(averaged[0, 1], [10.5, 11.5, 12.5])
         self.assertEqual(heimdallr.count, 11 * 50)
         self.assertEqual(mds.position, starting_position)
-        self.assertAlmostEqual(mds.hfo_position, 7.98125)
+        self.assertAlmostEqual(mds.hfo_after_moves[0], 7.9835)
+        self.assertAlmostEqual(mds.hfo_position, 8.0)
         normal_fringe_command = (
             "find-fringes",
             linbo_search.fringe_band,
             str(linbo_search.fringe_srange),
             str(linbo_search.fringe_step),
         )
-        self.assertEqual(events.count(normal_fringe_command), 22)
-        self.assertEqual(events.count(("find-fringes", "K1", "50", "5")), 1)
+        self.assertEqual(events.count(normal_fringe_command), 11)
+        self.assertEqual(
+            sum(event[0] == "move-hpol" for event in events if isinstance(event, tuple)),
+            12,
+        )
         self.assertEqual(events.count(("h-tilts",)), 11)
         self.assertEqual(
-            events[:11],
+            events[:6],
             [
                 "read HPOL1",
-                "read HFO1",
-                "moveabs HPOL1 850.0",
+                ("move-hpol", "1", "850"),
                 "read HPOL1",
-                "moveabs HFO1 7.98125",
-                "read HFO1",
-                ("find-fringes", "K1", "50", "5"),
-                normal_fringe_command,
                 ("h-tilts",),
                 normal_fringe_command,
                 "status",
             ],
         )
-        self.assertEqual(events[-3:], ["read HPOL1", "moveabs HPOL1 1000.0", "read HPOL1"])
+        self.assertEqual(events[-3:], ["read HPOL1", ("move-hpol", "1", "1000"), "read HPOL1"])
 
         with tempfile.TemporaryDirectory() as directory:
             with mock.patch.object(linbo_search.Path, "cwd", return_value=Path(directory)):
@@ -149,10 +143,6 @@ class LinboSearchTests(unittest.TestCase):
                 self.assertEqual(str(saved["fringe_band"]), "K1")
                 self.assertEqual(float(saved["fringe_srange"]), 8)
                 self.assertEqual(float(saved["fringe_step"]), linbo_search.fringe_step)
-                self.assertEqual(float(saved["hfo_um_per_200_hpol_steps"]), 25)
-                self.assertEqual(str(saved["initial_fringe_band"]), "K1")
-                self.assertEqual(float(saved["initial_fringe_srange"]), 50)
-                self.assertEqual(float(saved["initial_fringe_step"]), 5)
                 self.assertEqual(int(saved["status_message_count"]), 50)
 
     def test_command_failure_restores_hpol(self):
@@ -160,15 +150,16 @@ class LinboSearchTests(unittest.TestCase):
         mds = FakeMdsSocket(events)
 
         def fail_on_tilts(command, check, stdout, stderr):
-            events.append(tuple(command))
             if command == ["h-tilts"]:
+                events.append(tuple(command))
                 raise RuntimeError("h-tilts failed")
+            mds.run_command(command, check, stdout, stderr)
 
         with self.assertRaisesRegex(RuntimeError, "h-tilts failed"):
             linbo_search.run_scan(mds, FakeHeimdallrSocket(events), fail_on_tilts)
 
         self.assertEqual(mds.position, 1000)
-        self.assertEqual(events[-3:], ["read HPOL1", "moveabs HPOL1 1000.0", "read HPOL1"])
+        self.assertEqual(events[-3:], ["read HPOL1", ("move-hpol", "1", "1000"), "read HPOL1"])
 
     def test_rejected_first_move_keeps_original_error_and_position(self):
         events = []
@@ -176,11 +167,11 @@ class LinboSearchTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "move rejected"):
             linbo_search.run_scan(
-                mds, FakeHeimdallrSocket(events), lambda *_args, **_kwargs: None
+                mds, FakeHeimdallrSocket(events), mds.run_command
             )
 
         self.assertEqual(mds.position, 0)
-        self.assertEqual(events.count("moveabs HPOL1 0.0"), 0)
+        self.assertEqual(events.count(("move-hpol", "1", "0")), 0)
 
     def test_failed_command_reports_recent_output(self):
         def fail(command, check, stdout, stderr):
@@ -195,13 +186,15 @@ class LinboSearchTests(unittest.TestCase):
 
     def test_other_beam_selects_its_three_baselines(self):
         events = []
+        mds = FakeMdsSocket(events)
         with mock.patch.object(linbo_search, "beam_number", 2):
             results = linbo_search.run_scan(
-                FakeMdsSocket(events), FakeHeimdallrSocket(events), lambda *_args, **_kwargs: None
+                mds, FakeHeimdallrSocket(events), mds.run_command
             )
 
         onp.testing.assert_array_equal(results[2], ["1-2", "2-3", "2-4"])
         onp.testing.assert_array_equal(results[3][0, 0], [0.5, 3.5, 4.5])
+        self.assertIn(("move-hpol", "2", "850"), events)
 
 
 if __name__ == "__main__":
