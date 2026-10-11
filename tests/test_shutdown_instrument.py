@@ -11,9 +11,10 @@ from asgard_alignment.cmd_scripts import shutdown_instrument as shutdown_script
 class FakeSocket:
     def __init__(self, port):
         self.port = port
+        self.closed = False
 
     def close(self, linger=0):
-        pass
+        self.closed = True
 
 
 class ShutdownInstrumentTests(unittest.TestCase):
@@ -22,6 +23,10 @@ class ShutdownInstrumentTests(unittest.TestCase):
         self.reachable_ports = {shutdown_script.DM_PORT, shutdown_script.C_RED_PORT}
         self.failed_command = None
         self.failed_response = None
+        self.standby_status = "ACTIVE\n"
+        self.operator_answer = "n"
+        self.opened_sockets = []
+        self.mds_connection = FakeSocket(shutdown_script.MDS_PORT)
 
         def send(connection, command):
             self.events.append(("send", connection.port, command))
@@ -29,7 +34,14 @@ class ShutdownInstrumentTests(unittest.TestCase):
                 if self.failed_response is not None:
                     return self.failed_response
                 raise zmq.Again()
+            if command == "standby_status":
+                return self.standby_status
             return "Exiting!" if command == "exit" else "OK"
+
+        def open_connection(port):
+            connection = FakeSocket(port)
+            self.opened_sockets.append(connection)
+            return connection
 
         def send_mds(connection, command):
             self.events.append(("send", shutdown_script.MDS_PORT, command))
@@ -55,10 +67,10 @@ class ShutdownInstrumentTests(unittest.TestCase):
             mock.patch.object(
                 shutdown_script,
                 "get_mds_connection_or_recover",
-                return_value=FakeSocket(shutdown_script.MDS_PORT),
+                return_value=self.mds_connection,
             ),
             mock.patch.object(
-                shutdown_script, "open_zmq_connection", side_effect=FakeSocket
+                shutdown_script, "open_zmq_connection", side_effect=open_connection
             ),
             mock.patch.object(shutdown_script, "send_and_get_response", side_effect=send),
             mock.patch.object(
@@ -80,7 +92,10 @@ class ShutdownInstrumentTests(unittest.TestCase):
                 shutdown_script,
                 "input",
                 create=True,
-                side_effect=lambda prompt: self.events.append(("operator", prompt)),
+                side_effect=lambda prompt: (
+                    self.events.append(("operator", prompt)),
+                    self.operator_answer,
+                )[1],
             ),
         ]
         for patcher in patches:
@@ -92,6 +107,99 @@ class ShutdownInstrumentTests(unittest.TestCase):
         with contextlib.redirect_stdout(output):
             shutdown_script.shutdown(include_cred)
         return output.getvalue()
+
+    def save_commands(self):
+        return [
+            event[2]
+            for event in self.events
+            if event[0] == "send"
+            and event[1] == shutdown_script.MDS_PORT
+            and event[2].startswith("save ")
+        ]
+
+    def test_active_instrument_saves_before_shutdown(self):
+        self.run_shutdown()
+
+        self.assertEqual(len(self.save_commands()), 1)
+        self.assertTrue(self.save_commands()[0].startswith("save all before_shutdown_"))
+        status_event = self.events.index(
+            ("send", shutdown_script.MDS_PORT, "standby_status")
+        )
+        save_event = self.events.index(
+            ("send", shutdown_script.MDS_PORT, self.save_commands()[0])
+        )
+        self.assertLess(status_event, save_event)
+        self.assertTrue(self.opened_sockets[0].closed)
+        self.assertFalse(self.mds_connection.closed)
+
+    def test_standby_skips_save_and_completes_shutdown(self):
+        self.standby_status = "STANDBY\n"
+
+        output = self.run_shutdown()
+
+        self.assertEqual(self.save_commands(), [])
+        self.assertIn("MDS is in standby; skipping state save", output)
+        self.assertIn(
+            ("outlet", shutdown_script.LOWER_BOX_OUTLET, "off"), self.events
+        )
+
+    def test_unknown_status_rejection_requires_operator_confirmation(self):
+        self.standby_status = "NACK: Unknown custom command\n"
+
+        output = self.run_shutdown()
+
+        self.assertEqual(self.save_commands(), [])
+        self.assertIn("Aborting shutdown", output)
+        self.assertFalse(any(event[0] == "device_off" for event in self.events))
+        self.assertFalse(any(event[0] == "outlet" for event in self.events))
+
+    def test_unknown_status_can_continue_without_save(self):
+        self.standby_status = "unexpected"
+        self.operator_answer = "y"
+
+        output = self.run_shutdown()
+
+        self.assertEqual(self.save_commands(), [])
+        self.assertIn("Proceeding with shutdown", output)
+        self.assertIn(
+            ("outlet", shutdown_script.LOWER_BOX_OUTLET, "off"), self.events
+        )
+
+    def test_standby_status_timeout_closes_query_socket(self):
+        self.failed_command = (shutdown_script.MDS_PORT, "standby_status")
+
+        output = self.run_shutdown()
+
+        self.assertEqual(self.save_commands(), [])
+        self.assertIn("Could not determine MDS standby status", output)
+        self.assertTrue(self.opened_sockets[0].closed)
+        self.assertFalse(self.mds_connection.closed)
+        self.assertFalse(any(event[0] == "outlet" for event in self.events))
+
+    def test_standby_status_timeout_can_continue_without_save(self):
+        self.failed_command = (shutdown_script.MDS_PORT, "standby_status")
+        self.operator_answer = "y"
+
+        self.run_shutdown()
+
+        self.assertEqual(self.save_commands(), [])
+        self.assertIn(
+            ("outlet", shutdown_script.LOWER_BOX_OUTLET, "off"), self.events
+        )
+
+    def test_active_save_timeout_keeps_existing_operator_prompt(self):
+        timestamp = "2026-10-11 12:00:00"
+        self.failed_command = (
+            shutdown_script.MDS_PORT,
+            f"save all before_shutdown_{timestamp}",
+        )
+
+        with mock.patch.object(shutdown_script.time, "strftime", return_value=timestamp):
+            output = self.run_shutdown()
+
+        self.assertIn("state is not saved", self.events[-1][1])
+        self.assertIn("Aborting shutdown", output)
+        self.assertFalse(any(event[0] == "outlet" for event in self.events))
 
     def test_panel_commands_without_cred_poweroff(self):
         output = self.run_shutdown()
@@ -159,10 +267,15 @@ class ShutdownInstrumentTests(unittest.TestCase):
         self.assertFalse(any(event[0] == "outlet" for event in self.events))
 
     def test_dm_connection_failure_aborts_before_lower_box_poweroff(self):
+        def open_connection(port):
+            if port == shutdown_script.DM_PORT:
+                raise zmq.ZMQError("socket unavailable")
+            return FakeSocket(port)
+
         with mock.patch.object(
             shutdown_script,
             "open_zmq_connection",
-            side_effect=zmq.ZMQError("socket unavailable"),
+            side_effect=open_connection,
         ):
             output = self.run_shutdown()
 

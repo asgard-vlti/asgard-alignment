@@ -42,6 +42,14 @@ def send_and_get_response(socket, string):
     return res
 
 
+def get_standby_status():
+    connection = open_zmq_connection(MDS_PORT)
+    try:
+        return send_and_get_response(connection, "standby_status").strip()
+    finally:
+        connection.close(linger=0)
+
+
 def is_tcp_port_open(host, port, timeout_s=1.0):
     try:
         with socket.create_connection((host, port), timeout=timeout_s):
@@ -148,14 +156,31 @@ def shutdown(inc_CRED):
         print("Aborting shutdown.")
         return
 
-    date = time.strftime("%Y-%m-%d %H:%M:%S")
-
     try:
-        res = send_and_get_response(mds_connection, f"save all before_shutdown_{date}")
-        print("saved", res)
-    except zmq.error.Again:
+        standby_status = get_standby_status()
+    except zmq.ZMQError as exc:
+        print(f"Could not determine MDS standby status: {exc}")
+        standby_status = None
+
+    if standby_status == "STANDBY":
+        print("MDS is in standby; skipping state save.")
+    elif standby_status == "ACTIVE":
+        date = time.strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            res = send_and_get_response(mds_connection, f"save all before_shutdown_{date}")
+            print("saved", res)
+        except zmq.error.Again:
+            inp = input(
+                "MDS did not respond (and hence state is not saved). Do you want to continue with shutdown? (y/n): "
+            )
+            if inp.lower() != "y":
+                print("Aborting shutdown.")
+                return
+            print("Proceeding with shutdown...")
+    else:
+        print(f"Unknown MDS standby status: {standby_status!r}")
         inp = input(
-            "MDS did not respond (and hence state is not saved). Do you want to continue with shutdown? (y/n): "
+            "State will not be saved. Continue with shutdown? (y/n): "
         )
         if inp.lower() != "y":
             print("Aborting shutdown.")

@@ -153,6 +153,12 @@ class MultiDeviceServer:
         # Format the UTC time
         return current_utc_time.strftime("%Y-%m-%dT%H:%M:%S")
 
+    def get_standby_status(self):
+        configured_motors = self.instr._motor_config
+        if any(name in self.instr.devices for name in configured_motors):
+            return "ACTIVE"
+        return "STANDBY"
+
     def _reset_setup_ls(self):
         self.setup_ls = [[], []]
 
@@ -519,7 +525,7 @@ class MultiDeviceServer:
 
             # standby is also a weird case, as standing by some devices shuts off others - need to iterate
             if command_name == "standby":
-                if json_data["command"]["parameters"][0]["device"] == "all":
+                if is_all_devs and self.get_standby_status() == "ACTIVE":
                     dt = datetime.datetime.now(datetime.timezone.utc).strftime(
                         "%Y-%m-%d_%H-%M-%S"
                     )
@@ -1316,6 +1322,13 @@ class MultiDeviceServer:
                 func=standby_msg,
                 arguments=(CommandArgument("axis", "str", "Device name."),),
                 output="ACK on success, or NACK if the device is unavailable.",
+            ),
+            "standby_status": Command(
+                info="standby_status - report whole-instrument standby status",
+                format_str="standby_status",
+                func=self.get_standby_status,
+                arguments=(),
+                output="STANDBY if no configured motors remain, otherwise ACTIVE.",
             ),
             "online": Command(
                 info="online {axes} - bring axes online (comma-separated list)",
