@@ -13,9 +13,9 @@ import numpy as onp
 import zmq
 from tqdm import tqdm
 
-beam_number = 1
-scan_width = 300
-scan_nsteps = 11
+beam_number = 4
+scan_width = 600
+scan_nsteps = 15
 fringe_band = "K1"
 fringe_srange = 8
 fringe_step = 1.0
