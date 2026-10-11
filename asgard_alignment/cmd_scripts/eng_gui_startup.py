@@ -9,12 +9,8 @@ os.environ["PYTHONPATH"] += os.pathsep + os.path.abspath("/home/asg/Progs/repos/
 sys.path.append(os.path.abspath("/home/asg/Progs/repos/asgard-alignment"))
 
 LOCK_FILE = "/tmp/asg.eng_gui.lock"
-def main(redirect=None):
+def main():
     """Launch the Streamlit engineering GUI unless it is already running."""
-    if redirect is not None:
-        redirect_file = open(redirect, 'a')
-    else:
-        redirect_file=subprocess.DEVNULL
     try:
         with open(LOCK_FILE,"r") as f:
             existing_pid = int(f.read().strip())
@@ -52,4 +48,4 @@ def main(redirect=None):
 
 if __name__ == "__main__":
 
-    main(redirect="/home/asg/logs/eng_gui/log.txt")
+    main()
