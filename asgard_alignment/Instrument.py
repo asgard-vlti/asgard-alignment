@@ -513,7 +513,7 @@ class Instrument:
                 self.devices[name].is_shuttered = is_shuttered
 
     def _apply_shutter_state_to_beam_baldr(self, state, beam_number):
-        dev_prefixes = ["BTT", "BTP", "BMX, BMY"]
+        dev_prefixes = ["BTT", "BTP", "BMX", "BMY"]
         if beam_number != 1:
             dev_prefixes += ["BOTT", "BOTP"]
         if state not in ["open", "close"]:
@@ -531,27 +531,25 @@ class Instrument:
         if state == "close":
             beams_to_close = []
             for beam_n in beam_numbers:
-                if not self.b_shutter_states[beam_n] == "close":
+                if self.b_shutter_states[beam_n] != "closed":
                     beams_to_close.append(beam_n)
 
             for beam_n in beams_to_close:
-
+                dev_name = f"BMY{beam_n}"
                 # wait in a blocking way for the device to stop moving
                 timeout = 3.0
                 start_time = time.time()
-                while self.devices[max_dev].is_moving():
-                    logging.info(f"waiting for {max_dev} to stop moving")
+                while self.devices[dev_name].is_moving():
+                    logging.info(f"waiting for {dev_name} to stop moving")
                     if time.time() - start_time > timeout:
-                        logging.warning(f"Timeout waiting for {max_dev} to stop moving")
+                        logging.warning(f"Timeout waiting for {dev_name} to stop moving")
                         break
                     time.sleep(0.1)
 
-                dev_name = f"BMY{beam_n}"
                 self.b_shutter_last_pos[beam_n][dev_name] = self.devices[
                     dev_name
                 ].read_position()
 
-                # self.devices[max_dev].move_relative(offset)
                 self.devices[dev_name].setup("NAME", "SHUTTER")
                 self.b_shutter_states[beam_n] = "closed"
                 logging.info(f"sending setup SHUTTER to {dev_name}")
@@ -1234,10 +1232,11 @@ class Instrument:
                 with open(recent_phasemask_file, "r", encoding="utf-8") as pfile:
                     positions_tmp = json.load(pfile)
 
-                oneAxis_dict = {}
-                # this adds the "SHUTTER" named position
-                if "named_positions" in self._motor_config[name]:
-                    oneAxis_dict = self._motor_config[name]["named_positions"]
+                oneAxis_dict = dict(
+                    self._motor_config[name].get(
+                        "named_positions", self._motor_config[name].get("named_pos", {})
+                    )
+                )
 
                 if "BMX" in name:
                     for key, value in positions_tmp.items():
