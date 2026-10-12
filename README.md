@@ -10,6 +10,11 @@ The key scripts are:
 * *mds* : the Multi-device server. It relies on a single settings file, which is usually "motor_info_full_system.json".
 * *eng_gui* : the Engineering GUI. This requires no settings files. However, it saves and restores motor states.
 
+MDS log rows use explicit UTC timestamps (`YYYY-MM-DDTHH:MM:SS.mmmZ`) for both
+the installed `mds` command and direct Python startup. Existing log files are
+unchanged; historical zone-less MDS rows from mimir use `America/Santiago`.
+The command/reply timestamp format is unchanged.
+
 # Useful commands
 
 If you are unsure about any of the commands, you can always run `python <script> --help` to get more information, where `<script>` is the name of the script you want to run. 

@@ -9,6 +9,7 @@ os.environ["PYTHONPATH"] += os.pathsep + os.path.abspath("/home/asg/Progs/repos/
 sys.path.append(os.path.abspath("/home/asg/Progs/repos/asgard-alignment"))
 
 from asgard_alignment.MultiDeviceServer import MultiDeviceServer
+from asgard_alignment.logging_utils import utc_log_formatter
 
 config_file = "/home/asg/.config/asgard-alignment/motor_info_full_system.json"
 LOCK_FILE = "/tmp/asg.mds.lock"
@@ -45,9 +46,7 @@ def main():
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
-    formatter = logging.Formatter(
-        "%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-    )
+    formatter = utc_log_formatter()
 
     # Console handler with millisecond timestamps
     console = logging.StreamHandler()

@@ -26,6 +26,7 @@ import asgard_alignment.controllino
 import asgard_alignment.ESOdevice
 
 import logging
+from asgard_alignment.logging_utils import utc_log_formatter
 
 # TODO: change all logging to be lazy formatting for efficiency
 # TODO: check that all shutters are indeed dark
@@ -1517,9 +1518,7 @@ if __name__ == "__main__":
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
-    formatter = logging.Formatter(
-        "%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-    )
+    formatter = utc_log_formatter()
 
     # Console handler with millisecond timestamps
     console = logging.StreamHandler()
