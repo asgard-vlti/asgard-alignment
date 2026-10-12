@@ -12,7 +12,6 @@ sys.path.append(os.path.abspath("/home/asg/Progs/repos/asgard-alignment"))
 from asgard_alignment.MultiDeviceServer import MultiDeviceServer
 
 config_file = "/home/asg/.config/asgard-alignment/motor_info_full_system.json"
-log_file = "/home/asg/logs/mds/log.txt"
 LOCK_FILE = "/tmp/asg.mds.lock"
 
 def main(redirect=None):
