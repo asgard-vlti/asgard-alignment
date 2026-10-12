@@ -62,12 +62,17 @@ class ZaberLinearActuator(ESOdevice.Motor):
         if self.is_shuttered:
             raise ValueError(f"Cannot move {self.name} as it is shuttered")
 
-        if self.LOWER_LIMIT <= new_pos <= self.UPPER_LIMIT:
-            self.axis.move_absolute(
-                new_pos,
-                unit=units,
-                wait_until_idle=ZaberLinearActuator.IS_BLOCKING,
+        if not self.LOWER_LIMIT <= new_pos <= self.UPPER_LIMIT:
+            raise ValueError(
+                f"Position {new_pos} for {self.name} is outside "
+                f"[{self.LOWER_LIMIT}, {self.UPPER_LIMIT}]"
             )
+
+        self.axis.move_absolute(
+            new_pos,
+            unit=units,
+            wait_until_idle=ZaberLinearActuator.IS_BLOCKING,
+        )
 
     def move_relative(self, new_pos, units=zaber_motion.Units.LENGTH_MICROMETRES):
         """
@@ -247,10 +252,13 @@ class ZaberLinearActuator(ESOdevice.Motor):
     def setup(self, motion_type, value):
         if motion_type == "NAME":
             try:
-                self.move_absolute(self.named_positions[value])
-            except KeyError:
-                print(f"{self.name} does not have a named position {value}")
+                position = self.named_positions[value]
+            except KeyError as exc:
+                raise ValueError(
+                    f"{self.name} does not have a named position {value}"
+                ) from exc
 
+            self.move_absolute(position)
             return
 
         value = self.ESO_to_internal(value)

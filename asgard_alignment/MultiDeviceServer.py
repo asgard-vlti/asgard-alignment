@@ -1067,7 +1067,7 @@ class MultiDeviceServer:
             ),
             "moveabs": Command(
                 info="moveabs {axis} {position} - move axis to absolute position",
-                format_str="moveabs {} {:f}",
+                format_str="moveabs {} {:g}",
                 func=moveabs_msg,
                 arguments=(
                     CommandArgument("axis", "str", "Motor device name."),
