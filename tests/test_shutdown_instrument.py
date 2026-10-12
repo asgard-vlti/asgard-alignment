@@ -1,5 +1,8 @@
 import contextlib
 import io
+import os
+import signal
+import tempfile
 import unittest
 from unittest import mock
 
@@ -90,6 +93,13 @@ class ShutdownInstrumentTests(unittest.TestCase):
             mock.patch.object(shutdown_script, "ping_device", return_value=False),
             mock.patch.object(
                 shutdown_script,
+                "stop_locked_service",
+                side_effect=lambda name, lock_path, host, port: self.events.append(
+                    ("stop", name)
+                ),
+            ),
+            mock.patch.object(
+                shutdown_script,
                 "input",
                 create=True,
                 side_effect=lambda prompt: (
@@ -130,7 +140,7 @@ class ShutdownInstrumentTests(unittest.TestCase):
         )
         self.assertLess(status_event, save_event)
         self.assertTrue(self.opened_sockets[0].closed)
-        self.assertFalse(self.mds_connection.closed)
+        self.assertTrue(self.mds_connection.closed)
 
     def test_standby_skips_save_and_completes_shutdown(self):
         self.standby_status = "STANDBY\n"
@@ -205,18 +215,20 @@ class ShutdownInstrumentTests(unittest.TestCase):
         output = self.run_shutdown()
 
         dm_exit = self.events.index(("send", shutdown_script.DM_PORT, "exit"))
-        operator = next(
-            i for i, event in enumerate(self.events) if event[0] == "operator"
-        )
+        gui_stop = self.events.index(("stop", "engineering GUI"))
+        mds_stop = self.events.index(("stop", "MDS"))
         cred_stop = self.events.index(("send", shutdown_script.C_RED_PORT, "stop"))
         cred_exit = self.events.index(("send", shutdown_script.C_RED_PORT, "exit"))
         lower_off = self.events.index(
             ("outlet", shutdown_script.LOWER_BOX_OUTLET, "off")
         )
-        self.assertLess(dm_exit, operator)
-        self.assertLess(operator, cred_stop)
+        self.assertLess(dm_exit, gui_stop)
+        self.assertLess(gui_stop, mds_stop)
+        self.assertLess(mds_stop, cred_stop)
         self.assertLess(cred_stop, cred_exit)
         self.assertLess(cred_exit, lower_off)
+        self.assertFalse(any(event[0] == "operator" for event in self.events))
+        self.assertTrue(self.mds_connection.closed)
         self.assertNotIn(("outlet", shutdown_script.C_RED_OUTLET, "off"), self.events)
         self.assertIn("Sending 'exit' to DM server", output)
         self.assertIn("Sending 'stop' to C-RED server", output)
@@ -302,6 +314,146 @@ class ShutdownInstrumentTests(unittest.TestCase):
         self.assertNotIn(("send", shutdown_script.C_RED_PORT, "exit"), self.events)
         self.assertNotIn(
             ("outlet", shutdown_script.LOWER_BOX_OUTLET, "off"), self.events
+        )
+
+    def test_gui_stop_failure_aborts_before_mds_and_poweroff(self):
+        with mock.patch.object(
+            shutdown_script,
+            "stop_locked_service",
+            side_effect=RuntimeError("permission denied"),
+        ) as stop:
+            output = self.run_shutdown()
+
+        self.assertIn("permission denied", output)
+        self.assertEqual(stop.call_count, 1)
+        self.assertNotIn(("outlet", shutdown_script.LOWER_BOX_OUTLET, "off"), self.events)
+
+    def test_mds_stop_failure_aborts_before_poweroff(self):
+        def stop(name, lock_path, host, port):
+            self.events.append(("stop", name))
+            if name == "MDS":
+                raise RuntimeError("MDS still active")
+
+        with mock.patch.object(shutdown_script, "stop_locked_service", side_effect=stop):
+            output = self.run_shutdown()
+
+        self.assertIn("MDS still active", output)
+        self.assertIn(("stop", "engineering GUI"), self.events)
+        self.assertNotIn(("outlet", shutdown_script.LOWER_BOX_OUTLET, "off"), self.events)
+
+
+class LockedServiceTests(unittest.TestCase):
+    def setUp(self):
+        temporary_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary_directory.cleanup)
+        self.lock_path = os.path.join(temporary_directory.name, "asg.mds.lock")
+        with open(self.lock_path, "w", encoding="utf-8") as lock_file:
+            lock_file.write("1234")
+
+    def stop(self):
+        shutdown_script.stop_locked_service(
+            "MDS", self.lock_path, shutdown_script.MDS_HOST, shutdown_script.MDS_PORT
+        )
+
+    def test_kills_verified_pid_and_waits_for_process_and_port(self):
+        commands = [["python", "/home/asg/.conda/envs/asgard/bin/mds"], []]
+        with mock.patch.object(
+            shutdown_script, "read_process_command", side_effect=commands
+        ), mock.patch.object(
+            shutdown_script, "is_tcp_port_open", return_value=False
+        ), mock.patch.object(shutdown_script.os, "kill") as kill:
+            self.stop()
+
+        kill.assert_called_once_with(1234, signal.SIGKILL)
+
+    def test_accepts_already_stopped_process(self):
+        with mock.patch.object(
+            shutdown_script, "read_process_command", return_value=[]
+        ), mock.patch.object(
+            shutdown_script, "is_tcp_port_open", return_value=False
+        ), mock.patch.object(shutdown_script.os, "kill") as kill:
+            self.stop()
+
+        kill.assert_not_called()
+
+    def test_missing_lock_with_open_port_aborts(self):
+        os.unlink(self.lock_path)
+        with mock.patch.object(
+            shutdown_script, "is_tcp_port_open", return_value=True
+        ), mock.patch.object(shutdown_script.os, "kill") as kill:
+            with self.assertRaisesRegex(RuntimeError, "no live PID"):
+                self.stop()
+
+        kill.assert_not_called()
+
+    def test_wrong_process_is_not_killed(self):
+        with mock.patch.object(
+            shutdown_script, "read_process_command", return_value=["python", "other.py"]
+        ), mock.patch.object(shutdown_script.os, "kill") as kill:
+            with self.assertRaisesRegex(RuntimeError, "belongs to another process"):
+                self.stop()
+
+        kill.assert_not_called()
+
+    def test_invalid_lock_pid_is_not_killed(self):
+        with open(self.lock_path, "w", encoding="utf-8") as lock_file:
+            lock_file.write("0")
+        with mock.patch.object(shutdown_script.os, "kill") as kill:
+            with self.assertRaisesRegex(RuntimeError, "Invalid MDS PID"):
+                self.stop()
+
+        kill.assert_not_called()
+
+    def test_permission_error_aborts(self):
+        with mock.patch.object(
+            shutdown_script,
+            "read_process_command",
+            return_value=["python", "/home/asg/.conda/envs/asgard/bin/mds"],
+        ), mock.patch.object(
+            shutdown_script.os, "kill", side_effect=PermissionError("denied")
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Could not kill MDS"):
+                self.stop()
+
+    def test_kill_timeout_aborts(self):
+        with mock.patch.object(
+            shutdown_script,
+            "read_process_command",
+            return_value=["python", "/home/asg/.conda/envs/asgard/bin/mds"],
+        ), mock.patch.object(shutdown_script.os, "kill"), mock.patch.object(
+            shutdown_script.time, "monotonic", side_effect=[0, 6]
+        ):
+            with self.assertRaisesRegex(RuntimeError, "still active after 5s"):
+                self.stop()
+
+    def test_closed_pid_with_open_port_aborts(self):
+        commands = [["python", shutdown_script.MDS_EXECUTABLE], []]
+        with mock.patch.object(
+            shutdown_script, "read_process_command", side_effect=commands
+        ), mock.patch.object(
+            shutdown_script, "is_tcp_port_open", return_value=True
+        ), mock.patch.object(shutdown_script.os, "kill"), mock.patch.object(
+            shutdown_script.time, "monotonic", side_effect=[0, 6]
+        ):
+            with self.assertRaisesRegex(RuntimeError, "still active after 5s"):
+                self.stop()
+
+    def test_engineering_gui_command_must_be_streamlit_run(self):
+        self.assertTrue(
+            shutdown_script.matches_service_command(
+                "engineering GUI",
+                [
+                    "/usr/bin/streamlit",
+                    "run",
+                    "/srv/asgard_alignment/cmd_scripts/engineering_GUI.py",
+                ],
+            )
+        )
+        self.assertFalse(
+            shutdown_script.matches_service_command(
+                "engineering GUI",
+                ["python", "/srv/asgard_alignment/cmd_scripts/engineering_GUI.py"],
+            )
         )
 
 
