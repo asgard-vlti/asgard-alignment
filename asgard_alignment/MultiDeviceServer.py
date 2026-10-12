@@ -1506,22 +1506,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--host", type=str, default="192.168.100.2", help="Host address"
     )
-    parser.add_argument(
-        "--log-location",
-        type=str,
-        default="~/logs/mds/",
-        help="Path to the log directory",
-    )
     parser.add_argument("-p", "--port", type=int, default=5555, help="Port number")
 
     args = parser.parse_args()
-
-    # logname from the current time
-    log_fname = (
-        datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
-        + ".log"
-    )
-    log_path = os.path.join(os.path.expanduser(args.log_location), log_fname)
 
     # Remove all handlers associated with the root logger object (if any)
     for handler in logging.root.handlers[:]:
@@ -1530,15 +1517,11 @@ if __name__ == "__main__":
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
-    # File handler with ms precision
-    file_handler = logging.FileHandler(log_path)
     formatter = logging.Formatter(
         "%(asctime)s.%(msecs)03d %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
 
-    # Console handler with same formatter
+    # Console handler with millisecond timestamps
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
     console.setFormatter(formatter)
