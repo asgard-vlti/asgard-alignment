@@ -1,6 +1,4 @@
 import argparse
-import os
-import signal
 from asgard_alignment.PDU_telnet import AtenEcoPDU
 import zmq
 import asgard_alignment.controllino as co
@@ -17,10 +15,6 @@ MDS_POLL_INTERVAL_S = 1
 DM_PORT = 6666
 C_RED_PORT = 6667
 C_RED_WAIT_TIMEOUT_S = 10
-ENG_GUI_PORT = 8501
-MDS_EXECUTABLE = "/home/asg/.conda/envs/asgard/bin/mds"
-PROCESS_STOP_TIMEOUT_S = 5
-PROCESS_POLL_INTERVAL_S = 0.1
 
 
 def ping_device(ip):
@@ -154,80 +148,6 @@ def send_server_shutdown_commands(server_name, port, commands):
     return True
 
 
-def read_process_command(pid):
-    try:
-        with open(f"/proc/{pid}/cmdline", "rb") as process_file:
-            return [os.fsdecode(arg) for arg in process_file.read().split(b"\0") if arg]
-    except FileNotFoundError:
-        return []
-
-
-def matches_service_command(service_name, command):
-    if service_name == "MDS":
-        return MDS_EXECUTABLE in command
-    return (
-        "run" in command
-        and any(os.path.basename(arg) == "streamlit" for arg in command)
-        and any(
-            arg.endswith("/asgard_alignment/cmd_scripts/engineering_GUI.py")
-            for arg in command
-        )
-    )
-
-
-def stop_locked_service(service_name, lock_path, host, port):
-    try:
-        with open(lock_path, encoding="utf-8") as lock_file:
-            pid = int(lock_file.read().strip())
-    except FileNotFoundError:
-        pid = None
-    except (OSError, ValueError) as exc:
-        raise RuntimeError(f"Cannot read a valid {service_name} PID from {lock_path}: {exc}") from exc
-
-    if pid is not None and pid <= 0:
-        raise RuntimeError(f"Invalid {service_name} PID {pid} in {lock_path}.")
-
-    try:
-        command = read_process_command(pid) if pid is not None else []
-    except OSError as exc:
-        raise RuntimeError(f"Cannot inspect {service_name} PID {pid}: {exc}") from exc
-
-    if not command:
-        if not is_tcp_port_open(host, port):
-            print(f"{service_name} is already stopped.")
-            return
-        raise RuntimeError(f"{service_name} is still reachable, but has no live PID in {lock_path}.")
-
-    if not matches_service_command(service_name, command):
-        raise RuntimeError(f"{service_name} lock PID {pid} belongs to another process.")
-
-    try:
-        os.kill(pid, signal.SIGKILL)
-    except ProcessLookupError:
-        if not is_tcp_port_open(host, port):
-            print(f"{service_name} is already stopped.")
-            return
-        raise RuntimeError(f"{service_name} PID {pid} disappeared while its port is still open.")
-    except OSError as exc:
-        raise RuntimeError(f"Could not kill {service_name} PID {pid}: {exc}") from exc
-
-    deadline = time.monotonic() + PROCESS_STOP_TIMEOUT_S
-    while True:
-        try:
-            command = read_process_command(pid)
-        except OSError as exc:
-            raise RuntimeError(f"Cannot inspect {service_name} PID {pid}: {exc}") from exc
-        if not command and not is_tcp_port_open(host, port, timeout_s=0.2):
-            print(f"Stopped {service_name} (PID {pid}).")
-            return
-        if time.monotonic() >= deadline:
-            raise RuntimeError(
-                f"{service_name} PID {pid} or port {port} is still active after "
-                f"{PROCESS_STOP_TIMEOUT_S}s."
-            )
-        time.sleep(PROCESS_POLL_INTERVAL_S)
-
-
 def shutdown(inc_CRED):
     try:
         mds_connection = get_mds_connection_or_recover()
@@ -327,16 +247,7 @@ def shutdown(inc_CRED):
         print("Aborting shutdown before switching off the lower-box outlet.")
         return
 
-    mds_connection.close(linger=0)
-    try:
-        stop_locked_service(
-            "engineering GUI", "/tmp/asg.eng_gui.lock", "127.0.0.1", ENG_GUI_PORT
-        )
-        stop_locked_service("MDS", "/tmp/asg.mds.lock", MDS_HOST, MDS_PORT)
-    except RuntimeError as exc:
-        print(f"Could not stop instrument services: {exc}")
-        print("Aborting shutdown before switching off the lower-box outlet.")
-        return
+    input("Kill the MDS and engineering GUI, then press Enter to continue...")
 
     if not inc_CRED:
         if not send_server_shutdown_commands(
