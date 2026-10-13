@@ -156,11 +156,13 @@ def shutdown(inc_CRED):
         print("Aborting shutdown.")
         return
 
+    is_mds_avail = True
     try:
         standby_status = get_standby_status()
     except zmq.ZMQError as exc:
         print(f"Could not determine MDS standby status: {exc}")
         standby_status = None
+        is_mds_avail = False
 
     if standby_status == "STANDBY":
         print("MDS is in standby; skipping state save.")
@@ -202,14 +204,15 @@ def shutdown(inc_CRED):
     # turn off all sources: SRL, SGL and SBB
     lamps = ["SRL", "SGL", "SBB"]
 
-    for lamp in lamps:
-        try:
-            _, mds_connection = send_with_mds_recovery(mds_connection, f"off {lamp}")
-        except RuntimeError as exc:
-            print(f"Failed to send MDS shutdown command for {lamp}: {exc}")
-            print("Aborting shutdown.")
-            return
-        time.sleep(1)  # wait for the command to be processed
+    if is_mds_avail:
+        for lamp in lamps:
+            try:
+                _, mds_connection = send_with_mds_recovery(mds_connection, f"off {lamp}")
+            except RuntimeError as exc:
+                print(f"Failed to send MDS shutdown command for {lamp}: {exc}")
+                print("Aborting shutdown.")
+                return
+            time.sleep(1)  # wait for the command to be processed
 
     # # flippers up
     # names = [f"SSF{i}" for i in range(1, 5)]
