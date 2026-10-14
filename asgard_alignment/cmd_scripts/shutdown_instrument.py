@@ -270,7 +270,7 @@ def shutdown(inc_CRED):
         print("C RED shutdown command sent.")
 
         pdu.switch_outlet_status(C_RED_OUTLET, "off")
-        time.sleep(7)
+        time.sleep(12)
         res = pdu.read_outlet_status(C_RED_OUTLET)
         if res == "off":
             print("C RED outlet is off.")
@@ -280,7 +280,7 @@ def shutdown(inc_CRED):
 
     print("Turning off PDU outlet...")
     pdu.switch_outlet_status(LOWER_BOX_OUTLET, "off")
-    time.sleep(7)  # wait for PDU to turn off
+    time.sleep(12)  # wait for PDU to turn off
 
     res = pdu.read_outlet_status(LOWER_BOX_OUTLET)
     if res == "off":

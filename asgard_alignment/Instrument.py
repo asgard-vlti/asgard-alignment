@@ -101,7 +101,7 @@ class Instrument:
         self.managed_usb_hub_port = self.find_managed_USB_hub_port()
         logging.info(f"managed port: {self.managed_usb_hub_port}")
         if self.managed_usb_hub_port is None:
-            logging.warning("Could not find managed USB hub port.")
+            logging.error("Could not find managed USB hub port.")
 
             # time.sleep(5)
             sys.exit(1)
